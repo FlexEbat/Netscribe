@@ -93,10 +93,12 @@ func notFound(static fs.FS) http.HandlerFunc {
 			writeError(w, http.StatusNotFound, "not found")
 			return
 		}
+		// path.Clean on a rooted path removes every ".." segment, and fs.ValidPath
+		// refuses anything that could still leave the embedded tree.
 		name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
-		if name != "" && name != "index.html" {
+		if name != "" && name != "index.html" && fs.ValidPath(name) {
 			if info, err := fs.Stat(static, name); err == nil && !info.IsDir() {
-				http.ServeFileFS(w, r, static, name)
+				http.ServeFileFS(w, r, static, name) //nolint:gosec // name is cleaned and checked with fs.ValidPath above
 				return
 			}
 		}
