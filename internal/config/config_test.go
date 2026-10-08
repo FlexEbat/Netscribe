@@ -303,3 +303,26 @@ func TestLoadAcceptsOwnerOnlyPermissions(t *testing.T) {
 		}
 	}
 }
+
+func TestParseTarget(t *testing.T) {
+	p, err := ParseTarget(" 192.168.1.0/24 ", false)
+	if err != nil || p.String() != "192.168.1.0/24" {
+		t.Fatalf("ParseTarget() = %v, %v", p, err)
+	}
+	for _, tt := range []struct {
+		in     string
+		public bool
+		want   error
+	}{
+		{"8.8.8.8/32", false, errTargetPublic},
+		{"8.8.8.8/32", true, nil},
+		{"10.0.0.0/8", false, errTargetWide},
+		{"nonsense", false, errTargetCIDR},
+		{"fd00::/64", false, errTargetIPv4},
+	} {
+		_, err := ParseTarget(tt.in, tt.public)
+		if !errors.Is(err, tt.want) || (tt.want == nil && err != nil) {
+			t.Errorf("ParseTarget(%q, %v) = %v, want %v", tt.in, tt.public, err, tt.want)
+		}
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -241,7 +242,7 @@ func (c Config) Validate() error {
 	}
 
 	for i, t := range c.Scan.Targets {
-		if err := checkTarget(t, c.AllowPublicTargets); err != nil {
+		if _, err := ParseTarget(t, c.AllowPublicTargets); err != nil {
 			fail(fmt.Sprintf("scan.targets[%d] %q", i, t), err)
 		}
 	}
@@ -282,22 +283,23 @@ func (c Config) Validate() error {
 	return errors.Join(errs...)
 }
 
-// checkTarget accepts IPv4 CIDRs only: discovery relies on ARP, which has no IPv6 form.
-func checkTarget(t string, allowPublic bool) error {
-	p, err := netip.ParsePrefix(t)
+// ParseTarget parses and checks one scan target, from the config or from a CLI argument.
+// It accepts IPv4 CIDRs only: discovery relies on ARP, which has no IPv6 form.
+func ParseTarget(t string, allowPublic bool) (netip.Prefix, error) {
+	p, err := netip.ParsePrefix(strings.TrimSpace(t))
 	if err != nil {
-		return errTargetCIDR
+		return netip.Prefix{}, errTargetCIDR
 	}
 	if !p.Addr().Is4() {
-		return errTargetIPv4
+		return netip.Prefix{}, errTargetIPv4
 	}
 	if p.Bits() < 16 {
-		return errTargetWide
+		return netip.Prefix{}, errTargetWide
 	}
 	if !allowPublic && !isPrivate(p) {
-		return errTargetPublic
+		return netip.Prefix{}, errTargetPublic
 	}
-	return nil
+	return p, nil
 }
 
 func isPrivate(p netip.Prefix) bool {
