@@ -30,7 +30,7 @@ func TestValidate(t *testing.T) {
 		{"no targets", func(c *Config) { c.Scan.Targets = nil }, nil},
 		{"target is not a CIDR", func(c *Config) { c.Scan.Targets = []string{"192.168.1.0"} }, errTargetCIDR},
 		{"target is not a CIDR at all", func(c *Config) { c.Scan.Targets = []string{"lan"} }, errTargetCIDR},
-		{"IPv6 target", func(c *Config) { c.Scan.Targets = []string{"fd00::/64"} }, errTargetCIDR},
+		{"IPv6 target", func(c *Config) { c.Scan.Targets = []string{"fd00::/64"} }, errTargetIPv4},
 		{"target wider than /16", func(c *Config) { c.Scan.Targets = []string{"10.0.0.0/8"} }, errTargetWide},
 		{"target exactly /16", func(c *Config) { c.Scan.Targets = []string{"10.1.0.0/16"} }, nil},
 		{"172.16 range is private", func(c *Config) { c.Scan.Targets = []string{"172.31.4.0/24"} }, nil},

@@ -212,6 +212,7 @@ func redact(msg string) string { return quotedValue.ReplaceAllString(msg, "value
 
 var (
 	errTargetCIDR   = errors.New("target is not a valid CIDR")
+	errTargetIPv4   = errors.New("only IPv4 targets are supported")
 	errTargetWide   = errors.New("target is wider than /16")
 	errTargetPublic = errors.New("target is outside private ranges")
 	errInterval     = errors.New("scan interval is below 1m")
@@ -221,7 +222,6 @@ var (
 	errArgon2       = errors.New("argon2 parameters are below the minimum")
 	errTLS          = errors.New("tls needs both certFile and keyFile")
 
-	// The messages below are not in section 8 of tech.md yet (see CONTRACT GAP).
 	errMinPassword = errors.New("min password length is below 12")
 	errMaxFailed   = errors.New("max failed logins is out of range")
 	errProxyCIDR   = errors.New("trusted proxy is not a valid CIDR")
@@ -285,8 +285,11 @@ func (c Config) Validate() error {
 // checkTarget accepts IPv4 CIDRs only: discovery relies on ARP, which has no IPv6 form.
 func checkTarget(t string, allowPublic bool) error {
 	p, err := netip.ParsePrefix(t)
-	if err != nil || !p.Addr().Is4() {
+	if err != nil {
 		return errTargetCIDR
+	}
+	if !p.Addr().Is4() {
+		return errTargetIPv4
 	}
 	if p.Bits() < 16 {
 		return errTargetWide
