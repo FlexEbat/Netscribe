@@ -1,0 +1,55 @@
+# Netscribe example configuration.
+# The file holds secrets (SNMP communities, SSH key paths): keep it at mode 0600.
+listen: 127.0.0.1:8080
+database: ./netscribe.db
+allowPublicTargets: false # true allows scan targets outside RFC 1918
+
+scan:
+  targets: [192.168.1.0/24]
+  interval: 15m # 0 turns the schedule off, the minimum is 1m
+  ports: [22, 53, 80, 443, 445, 3389, 8080] # an empty list turns the port scan off
+
+snmp:
+  communities: [public] # use a read-only community and restrict it by ACL on the device
+  timeout: 2s
+
+ssh:
+  knownHosts: ~/.ssh/known_hosts
+  hosts:
+    - address: 192.168.1.10
+      user: audit
+      keyFile: ~/.ssh/netscribe_ed25519 # keys only, no passwords
+
+docker:
+  enabled: true
+  socket: /var/run/docker.sock
+
+history:
+  keepScans: 200
+
+audit:
+  keepDays: 365
+
+auth:
+  sessionIdleTimeout: 8h # 15m to 24h
+  sessionMaxAge: 168h # not below sessionIdleTimeout, at most 720h
+  minPasswordLength: 12 # at least 12
+  maxFailedLogins: 5 # 3 to 20
+  lockoutDuration: 15m
+  argon2:
+    memoryKiB: 65536 # at least 19456
+    iterations: 3 # at least 2
+    parallelism: 2 # at least 1
+
+tls:
+  certFile: "" # certFile and keyFile are set together or not at all
+  keyFile: ""
+
+trustedProxies: [] # CIDRs of reverse proxies whose X-Forwarded-* headers are trusted
+
+discovery:
+  routerTables: true # ARP and FDB over SNMP from known routers and switches
+  probeRoutedTargets: false # ICMP and TCP probes of subnets behind a router
+
+export:
+  chromePath: "" # empty: look for chromium and google-chrome in PATH
