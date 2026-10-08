@@ -1,4 +1,6 @@
 GO_DIRS := cmd internal web/embed.go
+# Explicit packages: ./... would also walk web/node_modules, where npm packages may ship .go files.
+GO_PKGS := ./cmd/... ./internal/... ./web
 SQLC_QUERIES := $(wildcard internal/store/queries/*.sql)
 
 .PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build
@@ -18,8 +20,8 @@ fmt: web/node_modules
 
 lint: web/dist web/node_modules
 	@out="$$(gofmt -l $(GO_DIRS))"; if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; fi
-	go vet ./...
-	golangci-lint run
+	go vet $(GO_PKGS)
+	golangci-lint run $(GO_PKGS)
 ifneq ($(SQLC_QUERIES),)
 	sqlc diff
 endif
@@ -29,14 +31,14 @@ check: web/node_modules
 	cd web && npm run typecheck
 
 test: web/dist web/node_modules
-	go test -race ./...
+	go test -race $(GO_PKGS)
 	cd web && npm test
 
 gate: lint check test
 
 # Needs network access, runs in CI, not part of gate.
 audit:
-	govulncheck ./...
+	govulncheck $(GO_PKGS)
 	cd web && npm audit --omit=dev --audit-level=high
 
 gen:

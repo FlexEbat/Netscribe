@@ -206,7 +206,7 @@ func TestMigrateAppliesFilesOnce(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 
 	fsys := fstest.MapFS{
-		"0001_probe.sql": {Data: []byte("-- +goose Up\nCREATE TABLE probe (id INTEGER PRIMARY KEY);\n-- +goose Down\nDROP TABLE probe;\n")},
+		"9001_probe.sql": {Data: []byte("-- +goose Up\nCREATE TABLE probe (id INTEGER PRIMARY KEY);\n-- +goose Down\nDROP TABLE probe;\n")},
 	}
 	for i := 0; i < 2; i++ { // the second run must be a no-op, not a "table exists" error
 		if err := migrate(ctx, db, fsys); err != nil {
@@ -236,7 +236,7 @@ func TestMigrateReportsBrokenSQL(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	fsys := fstest.MapFS{
-		"0001_broken.sql": {Data: []byte("-- +goose Up\nCREATE TABEL nope (id INTEGER);\n-- +goose Down\nSELECT 1;\n")},
+		"9002_broken.sql": {Data: []byte("-- +goose Up\nCREATE TABEL nope (id INTEGER);\n-- +goose Down\nSELECT 1;\n")},
 	}
 	if err := migrate(context.Background(), db, fsys); err == nil {
 		t.Fatal("migrate() accepted invalid SQL")
