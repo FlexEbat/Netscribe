@@ -30,7 +30,7 @@ jobs:
           go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
       - name: A release must pass the same gate as a pull request
         run: make gate
-      - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6
+      - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
           version: v2.18.2
