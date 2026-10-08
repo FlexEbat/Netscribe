@@ -1,0 +1,12 @@
+# database
+netscribe.db*
+
+# local config holds secrets
+/netscribe.yaml
+
+# build output
+/netscribe
+web/dist
+web/node_modules
+tmp
+coverage
