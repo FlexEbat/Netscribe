@@ -21,7 +21,7 @@ func scanString(t *testing.T, row *sql.Row) string {
 
 func TestOpenMemoryGivesWorkingDatabase(t *testing.T) {
 	ctx := context.Background()
-	db, err := Open(":memory:")
+	db, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,12 +43,12 @@ func TestOpenMemoryGivesWorkingDatabase(t *testing.T) {
 
 func TestOpenMemoryDatabasesAreIndependent(t *testing.T) {
 	ctx := context.Background()
-	a, err := Open(":memory:")
+	a, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = a.Close() })
-	b, err := Open(":memory:")
+	b, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,15 @@ func TestOpenMemoryDatabasesAreIndependent(t *testing.T) {
 
 func TestOpenMemoryLeavesNoFileOnDisk(t *testing.T) {
 	dir := t.TempDir()
-	t.Chdir(dir)
-	db, err := Open(":memory:")
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(old) })
+	db, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,12 +83,12 @@ func TestOpenMemoryLeavesNoFileOnDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(entries) != 0 {
-		t.Errorf("Open(\":memory:\") left files behind: %v", entries)
+		t.Errorf("openDB(\":memory:\") left files behind: %v", entries)
 	}
 }
 
 func TestOpenMemorySetsPragmas(t *testing.T) {
-	db, err := Open(":memory:")
+	db, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +108,7 @@ func TestOpenFileCreatesPrivateFilesWithPragmasOnEveryConnection(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "data")
 	path := filepath.Join(dir, "netscribe.db")
 
-	db, err := Open(path)
+	db, err := openDB(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +149,7 @@ func TestOpenFileKeepsDataAcrossReopen(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "netscribe.db")
 
-	db, err := Open(path)
+	db, err := openDB(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +163,7 @@ func TestOpenFileKeepsDataAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, err = Open(path)
+	db, err = openDB(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +175,7 @@ func TestOpenFileKeepsDataAcrossReopen(t *testing.T) {
 
 func TestOpenFileWithSpecialCharactersInPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "a b?c#d%e.db")
-	db, err := Open(path)
+	db, err := openDB(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,16 +190,16 @@ func TestOpenFailsWhenDirectoryCannotBeCreated(t *testing.T) {
 	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := Open(filepath.Join(blocker, "sub", "netscribe.db"))
+	db, err := openDB(filepath.Join(blocker, "sub", "netscribe.db"))
 	if err == nil {
 		_ = db.Close()
-		t.Fatal("Open() succeeded below a regular file")
+		t.Fatal("openDB() succeeded below a regular file")
 	}
 }
 
 func TestMigrateAppliesFilesOnce(t *testing.T) {
 	ctx := context.Background()
-	db, err := Open(":memory:")
+	db, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +219,7 @@ func TestMigrateAppliesFilesOnce(t *testing.T) {
 }
 
 func TestMigrateWithoutFilesIsANoOp(t *testing.T) {
-	db, err := Open(":memory:")
+	db, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +230,7 @@ func TestMigrateWithoutFilesIsANoOp(t *testing.T) {
 }
 
 func TestMigrateReportsBrokenSQL(t *testing.T) {
-	db, err := Open(":memory:")
+	db, err := openDB(":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}

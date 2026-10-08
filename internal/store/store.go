@@ -11,9 +11,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
+
+	"github.com/FlexEbat/Netscribe/internal/collector"
+	"github.com/FlexEbat/Netscribe/internal/model"
+	dbgen "github.com/FlexEbat/Netscribe/internal/store/db"
 )
 
 //go:embed all:migrations
@@ -22,12 +27,50 @@ var migrationsFS embed.FS
 // ErrNotFound is returned when a row does not exist.
 var ErrNotFound = errors.New("not found")
 
+// Repo is the data access contract. It grows by the methods each slice implements.
+type Repo interface {
+	ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device, error)
+
+	StartScan(ctx context.Context, target string) (model.Scan, error)
+	FinishScan(ctx context.Context, id int64, status, errMsg string) error
+	GetScan(ctx context.Context, id int64) (model.Scan, error) // ErrNotFound
+
+	ApplyResult(ctx context.Context, scanID int64, r collector.Result) error
+}
+
+var _ Repo = (*Store)(nil)
+
+// DeviceFilter narrows ListDevices. The zero value matches every device.
+type DeviceFilter struct {
+	Online *bool
+	Kind   model.DeviceKind
+	Query  string
+}
+
+// Store is the SQLite implementation of Repo.
+type Store struct {
+	db  *sql.DB
+	q   *dbgen.Queries
+	now func() time.Time
+}
+
+// Close closes the database.
+func (s *Store) Close() error { return s.db.Close() }
+
 const memoryPath = ":memory:"
 
 // Open opens the database at path, creates it when missing and applies migrations.
 // The file is created with mode 0600 and its directory with mode 0700.
 // A path of ":memory:" gives a private in-memory database.
-func Open(path string) (*sql.DB, error) {
+func Open(path string) (*Store, error) {
+	db, err := openDB(path)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{db: db, q: dbgen.New(db), now: time.Now}, nil
+}
+
+func openDB(path string) (*sql.DB, error) {
 	dsn := memoryPath
 	if path != memoryPath {
 		if err := prepareFile(path); err != nil {
@@ -91,7 +134,7 @@ func fileDSN(path string) string {
 	// Escape the characters that would end the path inside a URI.
 	escaped := strings.NewReplacer("%", "%25", "?", "%3f", "#", "%23").Replace(path)
 	return "file:" + escaped +
-		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate"
 }
 
 // migrate applies the goose migrations found in fsys.
