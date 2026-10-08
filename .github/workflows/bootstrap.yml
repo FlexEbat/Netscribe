@@ -48,6 +48,7 @@ jobs:
           set +e
           make audit > audit.log 2>&1
           code=$?
+          govulncheck -show verbose ./cmd/... ./internal/... ./web > audit-verbose.log 2>&1
           msg=$(tail -n 80 audit.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
           if [ $code -ne 0 ]; then echo "::error title=audit failed (exit $code)::${msg}"; else echo "::notice title=audit passed::${msg}"; fi
       - name: Publish logs to the ci-logs branch
@@ -56,7 +57,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir /tmp/logs
-          cp tidy.log gate.log audit.log /tmp/logs/ 2>/dev/null || true
+          cp tidy.log gate.log audit.log audit-verbose.log /tmp/logs/ 2>/dev/null || true
           cd /tmp/logs
           git init -q
           git checkout -q -b ci-logs
