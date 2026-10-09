@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,6 +15,7 @@ import (
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 
+	"github.com/FlexEbat/Netscribe/internal/auth"
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/model"
 	dbgen "github.com/FlexEbat/Netscribe/internal/store/db"
@@ -24,8 +24,12 @@ import (
 //go:embed all:migrations
 var migrationsFS embed.FS
 
-// ErrNotFound is returned when a row does not exist.
-var ErrNotFound = errors.New("not found")
+// Errors of the store. They are shared with auth and api through the model package.
+var (
+	ErrNotFound  = model.ErrNotFound
+	ErrConflict  = model.ErrConflict  // a uniqueness rule was violated
+	ErrLastAdmin = model.ErrLastAdmin // the change would leave no enabled administrator
+)
 
 // Repo is the data access contract. It grows by the methods each slice implements.
 type Repo interface {
@@ -38,7 +42,47 @@ type Repo interface {
 	ApplyResult(ctx context.Context, scanID int64, r collector.Result) error
 }
 
-var _ Repo = (*Store)(nil)
+// AuthRepo holds users, sessions and the audit log. Access tokens join it in slice 6.
+type AuthRepo interface {
+	CountUsers(ctx context.Context) (int, error)
+	CreateUser(ctx context.Context, u model.UserRecord) (model.User, error)       // ErrConflict
+	GetUserByName(ctx context.Context, username string) (model.UserRecord, error) // ErrNotFound
+	GetUser(ctx context.Context, id int64) (model.User, error)                    // ErrNotFound
+	ListUsers(ctx context.Context) ([]model.User, error)
+	UpdateUser(ctx context.Context, id int64, role *model.Role, disabled *bool) (model.User, error) // ErrNotFound, ErrLastAdmin
+	SetPassword(ctx context.Context, id int64, hash string, mustChange bool) error                  // revokes the user's sessions
+	RecordLogin(ctx context.Context, id int64, ok bool, lockAfter int, lockFor time.Duration) error
+	DeleteUser(ctx context.Context, id int64) error // ErrNotFound, ErrLastAdmin
+
+	CreateSession(ctx context.Context, s SessionRecord) error
+	GetSession(ctx context.Context, idHash string) (SessionRecord, model.User, error) // ErrNotFound
+	TouchSession(ctx context.Context, idHash string, now time.Time) error
+	DeleteSession(ctx context.Context, idHash string) error
+	DeleteUserSessions(ctx context.Context, userID int64) error
+	PruneSessions(ctx context.Context, now time.Time) error
+
+	AddAudit(ctx context.Context, e model.AuditEntry) error
+	ListAudit(ctx context.Context, f AuditFilter) ([]model.AuditEntry, error)
+	PruneAudit(ctx context.Context, keepDays int) error
+}
+
+// SessionRecord is declared in auth, which cannot import store. This alias keeps the
+// name the data layer uses.
+type SessionRecord = auth.SessionRecord
+
+// AuditFilter narrows ListAudit. Zero values mean no restriction.
+type AuditFilter struct {
+	Limit    int   // 1 to 500, default 50
+	BeforeID int64 // only entries with a smaller id, for paging
+	Action   string
+	Username string
+}
+
+var (
+	_ Repo      = (*Store)(nil)
+	_ AuthRepo  = (*Store)(nil)
+	_ auth.Repo = (*Store)(nil)
+)
 
 // DeviceFilter narrows ListDevices. The zero value matches every device.
 type DeviceFilter struct {
@@ -53,6 +97,9 @@ type Store struct {
 	q   *dbgen.Queries
 	now func() time.Time
 }
+
+// SetClock replaces the time source. Tests use it to move time without waiting.
+func (s *Store) SetClock(now func() time.Time) { s.now = now }
 
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }

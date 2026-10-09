@@ -8,6 +8,19 @@ import (
 	"database/sql"
 )
 
+type AuditLog struct {
+	ID       int64
+	At       string
+	UserID   sql.NullInt64
+	Username string
+	Action   string
+	Entity   string
+	EntityID string
+	Result   string
+	Ip       string
+	Detail   string
+}
+
 type Device struct {
 	ID          int64
 	Mac         string
@@ -34,4 +47,29 @@ type Scan struct {
 	DeviceCount    int64
 	LinkCount      int64
 	ContainerCount int64
+}
+
+type Session struct {
+	IDHash     string
+	UserID     int64
+	CsrfToken  string
+	CreatedAt  string
+	LastSeenAt string
+	ExpiresAt  string
+	Ip         string
+	UserAgent  string
+}
+
+type User struct {
+	ID                 int64
+	Username           string
+	DisplayName        string
+	PasswordHash       string
+	Role               string
+	Disabled           int64
+	MustChangePassword int64
+	FailedLogins       int64
+	LockedUntil        sql.NullString
+	CreatedAt          string
+	LastLoginAt        sql.NullString
 }
