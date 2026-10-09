@@ -480,7 +480,9 @@ func TestMustChangePasswordAllowsOnlyThePasswordChange(t *testing.T) {
 		t.Fatalf("login = %d", rec.Code)
 	}
 	var me meResponse
-	json.Unmarshal(rec.Body.Bytes(), &me)
+	if err := json.Unmarshal(rec.Body.Bytes(), &me); err != nil {
+		t.Fatal(err)
+	}
 	if !me.User.MustChangePassword {
 		t.Fatal("the response does not tell the interface to ask for a new password")
 	}

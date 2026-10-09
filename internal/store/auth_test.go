@@ -159,7 +159,7 @@ func TestRecordLoginSuccessClearsFailuresAndStampsTheTime(t *testing.T) {
 	ctx := context.Background()
 	u := mkUser(t, s, "alice", model.RoleViewer)
 	for range 3 {
-		s.RecordLogin(ctx, u.ID, false, 5, time.Minute)
+		_ = s.RecordLogin(ctx, u.ID, false, 5, time.Minute)
 	}
 	if err := s.RecordLogin(ctx, u.ID, true, 5, time.Minute); err != nil {
 		t.Fatal(err)

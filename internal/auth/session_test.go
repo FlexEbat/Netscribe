@@ -291,11 +291,11 @@ func TestFailedLoginsAreIndistinguishable(t *testing.T) {
 func TestOnlyAWrongPasswordCountsAsAFailure(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	addUser(t, svc, "alice", model.RoleViewer)
-	svc.Login(context.Background(), "nobody", "whatever password", "", "")
+	_, _, _ = svc.Login(context.Background(), "nobody", "whatever password", "", "")
 	if len(repo.recorded) != 0 {
 		t.Fatalf("an unknown user was recorded: %+v", repo.recorded)
 	}
-	svc.Login(context.Background(), "alice", "wrong wrong wrong", "", "")
+	_, _, _ = svc.Login(context.Background(), "alice", "wrong wrong wrong", "", "")
 	if len(repo.recorded) != 1 || repo.recorded[0].ok || repo.recorded[0].lockAfter != 5 || repo.recorded[0].lockFor != 15*time.Minute {
 		t.Errorf("recorded = %+v, want one failure with lock after 5 for 15m", repo.recorded)
 	}
@@ -329,13 +329,13 @@ func TestSuccessfulLoginResetsTheFailureCounter(t *testing.T) {
 	addUser(t, svc, "alice", model.RoleViewer)
 	ctx := context.Background()
 	for range 4 {
-		svc.Login(ctx, "alice", "wrong wrong wrong", "", "")
+		_, _, _ = svc.Login(ctx, "alice", "wrong wrong wrong", "", "")
 	}
 	if _, _, err := svc.Login(ctx, "alice", goodPassword, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	for range 4 { // four more would lock the account if the counter had not been reset
-		svc.Login(ctx, "alice", "wrong wrong wrong", "", "")
+		_, _, _ = svc.Login(ctx, "alice", "wrong wrong wrong", "", "")
 	}
 	if _, _, err := svc.Login(ctx, "alice", goodPassword, "", ""); err != nil {
 		t.Errorf("the counter was not reset by the successful login: %v", err)
@@ -456,13 +456,13 @@ func TestActivityIsRecordedAtMostOncePerMinute(t *testing.T) {
 
 	for range 20 {
 		clk.advance(2 * time.Second)
-		svc.Authenticate(ctx, sess.ID)
+		_, _ = svc.Authenticate(ctx, sess.ID)
 	}
 	if repo.touchCalls != 0 {
 		t.Errorf("%d writes within the first minute, want 0", repo.touchCalls)
 	}
 	clk.advance(time.Minute)
-	svc.Authenticate(ctx, sess.ID)
+	_, _ = svc.Authenticate(ctx, sess.ID)
 	if repo.touchCalls != 1 {
 		t.Errorf("%d writes after a minute, want 1", repo.touchCalls)
 	}
@@ -473,7 +473,7 @@ func TestDisabledUsersSessionIsRefused(t *testing.T) {
 	u := addUser(t, svc, "alice", model.RoleViewer)
 	ctx := context.Background()
 	sess, _, _ := svc.Login(ctx, "alice", goodPassword, "", "")
-	repo.UpdateUser(ctx, u.ID, nil, ptr(true))
+	_, _ = repo.UpdateUser(ctx, u.ID, nil, ptr(true))
 	if _, err := svc.Authenticate(ctx, sess.ID); err != ErrUnauthenticated {
 		t.Errorf("a disabled user's session = %v", err)
 	}
@@ -577,7 +577,7 @@ func TestCreateUserValidatesAndNormalizes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := svc.CreateUser(ctx, tt.in)
-			if !errors.Is(err, tt.want) && !(tt.want == nil && err == nil) {
+			if !errors.Is(err, tt.want) && (tt.want != nil || err != nil) {
 				t.Errorf("CreateUser() = %v, want %v", err, tt.want)
 			}
 		})

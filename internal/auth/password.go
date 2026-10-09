@@ -144,7 +144,7 @@ func Verify(password, encoded string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	got := argon2.IDKey([]byte(password), h.salt, h.params.Iterations, h.params.MemoryKiB, h.params.Parallelism, uint32(len(h.key)))
+	got := argon2.IDKey([]byte(password), h.salt, h.params.Iterations, h.params.MemoryKiB, h.params.Parallelism, uint32(len(h.key))) //nolint:gosec // parseHash bounds the key to 16..64 bytes
 	return subtle.ConstantTimeCompare(got, h.key) == 1, nil
 }
 

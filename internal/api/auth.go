@@ -125,7 +125,7 @@ func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) setSessionCookie(w http.ResponseWriter, r *http.Request, sess auth.Session) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the request scheme: a plain-HTTP deployment cannot use Secure cookies
 		Name:     sessionCookie,
 		Value:    sess.ID,
 		Path:     "/",
@@ -137,7 +137,7 @@ func (s *server) setSessionCookie(w http.ResponseWriter, r *http.Request, sess a
 }
 
 func (s *server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // see setSessionCookie
 		Name:     sessionCookie,
 		Value:    "",
 		Path:     "/",
