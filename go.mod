@@ -7,6 +7,8 @@ toolchain go1.26.8
 require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/pressly/goose/v3 v3.28.0
+	golang.org/x/crypto v0.55.0
+	golang.org/x/term v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.60.1
 )
