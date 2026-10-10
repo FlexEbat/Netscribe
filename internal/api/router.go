@@ -18,6 +18,7 @@ import (
 
 	"github.com/FlexEbat/Netscribe/internal/auth"
 	"github.com/FlexEbat/Netscribe/internal/model"
+	"github.com/FlexEbat/Netscribe/internal/store"
 )
 
 const (
@@ -44,6 +45,12 @@ type Auditor interface {
 	AddAudit(ctx context.Context, e model.AuditEntry) error
 }
 
+// Topology is the read side of the network data. *store.Store implements it.
+type Topology interface {
+	ListDevices(ctx context.Context, f store.DeviceFilter) ([]model.Device, error)
+	GetScan(ctx context.Context, id int64) (model.Scan, error) // model.ErrNotFound
+}
+
 // Options configures NewRouter.
 type Options struct {
 	// Static is the built web interface with index.html at its root.
@@ -52,6 +59,8 @@ type Options struct {
 	Auth *auth.Service
 	// Audit receives security events. Required.
 	Audit Auditor
+	// Topology serves devices and scans. Without it those routes are not registered.
+	Topology Topology
 	// TrustedProxies are the addresses whose X-Forwarded-For and X-Forwarded-Proto are believed.
 	TrustedProxies []netip.Prefix
 	// Logger receives server-side errors. Nil discards them.
@@ -61,11 +70,12 @@ type Options struct {
 }
 
 type server struct {
-	auth    *auth.Service
-	audit   Auditor
-	trusted []netip.Prefix
-	log     *slog.Logger
-	limiter *auth.Limiter // sign-in attempts per client address
+	auth     *auth.Service
+	audit    Auditor
+	topology Topology
+	trusted  []netip.Prefix
+	log      *slog.Logger
+	limiter  *auth.Limiter // sign-in attempts per client address
 }
 
 const (
@@ -73,13 +83,20 @@ const (
 )
 
 func (s *server) routes() []Route {
-	return []Route{
+	table := []Route{
 		route(http.MethodGet, "/healthz", permPublic, healthz),
 		route(http.MethodPost, "/api/auth/login", permPublic, s.login),
 		route(http.MethodPost, "/api/auth/logout", permSession, s.logout),
 		route(http.MethodGet, "/api/auth/me", permSession, s.me),
 		route(http.MethodPut, "/api/auth/password", permSession, s.changePassword),
 	}
+	if s.topology != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
+			route(http.MethodGet, "/api/scans/{id}", model.PermTopologyRead, s.getScan),
+		)
+	}
+	return table
 }
 
 // NewRouter builds the HTTP handler for the whole service.
@@ -97,11 +114,12 @@ func newServer(opts Options) *server {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &server{
-		auth:    opts.Auth,
-		audit:   opts.Audit,
-		trusted: opts.TrustedProxies,
-		log:     log,
-		limiter: auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
+		auth:     opts.Auth,
+		audit:    opts.Audit,
+		topology: opts.Topology,
+		trusted:  opts.TrustedProxies,
+		log:      log,
+		limiter:  auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
 	}
 }
 
