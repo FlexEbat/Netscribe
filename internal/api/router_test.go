@@ -110,7 +110,7 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 		aud = o.audit
 	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, Topology: st, TrustedProxies: trusted, Now: clk.now,
+		Static: o.static, Auth: svc, Audit: aud, Repo: st, TrustedProxies: trusted, Now: clk.now,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}
@@ -245,7 +245,7 @@ func TestNewRouterRequiresAuth(t *testing.T) {
 
 func TestEveryRegisteredRouteHasAPermission(t *testing.T) {
 	e := newEnv(t)
-	s := newServer(Options{Auth: e.svc, Audit: e.store, Topology: e.store})
+	s := newServer(Options{Auth: e.svc, Audit: e.store, Repo: e.store})
 	for _, rt := range s.routes() {
 		if rt.Permission == "" {
 			t.Errorf("%s %s has no permission", rt.Method, rt.Path)
@@ -257,7 +257,7 @@ func TestEveryRegisteredRouteHasAPermission(t *testing.T) {
 // of section 10: no sign-in is 401, a role without the right is 403, a role with it is neither.
 func TestPermissionsAcrossTheWholeRouteTable(t *testing.T) {
 	e := newEnv(t, withRoutes(permissionRoutes()...))
-	s := newServer(Options{Auth: e.svc, Audit: e.store, Topology: e.store})
+	s := newServer(Options{Auth: e.svc, Audit: e.store, Repo: e.store})
 	table := append(s.routes(), permissionRoutes()...)
 
 	roles := []model.Role{model.RoleViewer, model.RoleOperator, model.RoleAdmin}

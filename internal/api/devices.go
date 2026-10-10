@@ -1,12 +1,8 @@
 package api
 
 import (
-	"errors"
 	"net/http"
-	"strconv"
 	"strings"
-
-	"github.com/go-chi/chi/v5"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/store"
@@ -14,7 +10,16 @@ import (
 
 const maxQueryLength = 100
 
-// listDevices answers GET /api/devices?online=true|false&kind=router&q=text.
+func validKind(k model.DeviceKind) bool {
+	switch k {
+	case model.KindRouter, model.KindSwitch, model.KindAP, model.KindFirewall, model.KindServer,
+		model.KindNAS, model.KindPrinter, model.KindCamera, model.KindIoT, model.KindHost, model.KindUnknown:
+		return true
+	}
+	return false
+}
+
+// listDevices answers GET /api/devices?online=true|false&kind=router&q=text with {"devices": [...]}.
 func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	var f store.DeviceFilter
@@ -30,7 +35,7 @@ func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := q.Get("kind"); v != "" {
 		kind := model.DeviceKind(v)
-		if !kind.Valid() {
+		if !validKind(kind) {
 			writeError(w, http.StatusBadRequest, "kind is unknown")
 			return
 		}
@@ -42,29 +47,10 @@ func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	devices, err := s.topology.ListDevices(r.Context(), f)
+	devices, err := s.repo.ListDevices(r.Context(), f)
 	if err != nil {
 		s.internalError(w, "list devices", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"devices": devices})
-}
-
-// getScan answers GET /api/scans/{id}.
-func (s *server) getScan(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || id < 1 {
-		writeError(w, http.StatusBadRequest, "invalid scan id")
-		return
-	}
-	scan, err := s.topology.GetScan(r.Context(), id)
-	if errors.Is(err, model.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "not found")
-		return
-	}
-	if err != nil {
-		s.internalError(w, "get scan", err)
-		return
-	}
-	writeJSON(w, http.StatusOK, scan)
+	writeJSON(w, http.StatusOK, map[string][]model.Device{"devices": devices})
 }

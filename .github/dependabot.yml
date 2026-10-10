@@ -1,3 +1,4 @@
+# Commit prefixes follow the scopes of tech.md section 12.
 # Dependabot is tuned to be quiet: one grouped pull request per ecosystem per
 # month, majors never arrive on their own, and a new release has to age a few
 # days before it is proposed. Security updates are a separate mechanism and are
@@ -16,7 +17,7 @@ updates:
     cooldown:
       default-days: 7
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore(config)"
     labels: [dependencies, go]
     groups:
       go-minor-and-patch:
@@ -38,8 +39,8 @@ updates:
       default-days: 7
       semver-major-days: 30
     commit-message:
-      prefix: "chore(deps)"
-      prefix-development: "chore(deps-dev)"
+      prefix: "chore(web)"
+      prefix-development: "chore(web)"
     labels: [dependencies, web]
     groups:
       npm-minor-and-patch:
@@ -59,7 +60,7 @@ updates:
     cooldown:
       default-days: 7
     commit-message:
-      prefix: "chore(ci)"
+      prefix: "chore(deploy)"
     labels: [dependencies, ci]
     groups:
       # All action bumps, majors included, arrive as ONE pull request:

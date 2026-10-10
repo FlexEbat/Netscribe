@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"strconv"
 	"testing"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
@@ -41,7 +40,7 @@ type devicesBody struct {
 	Devices []model.Device `json:"devices"`
 }
 
-func listDevices(t *testing.T, e *env, s session, query string) devicesBody {
+func listDevices(t *testing.T, e *env, s session, query string) []model.Device {
 	t.Helper()
 	rec := e.as(s, http.MethodGet, "/api/devices"+query, nil)
 	if rec.Code != http.StatusOK {
@@ -51,7 +50,7 @@ func listDevices(t *testing.T, e *env, s session, query string) devicesBody {
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	return out
+	return out.Devices
 }
 
 func TestDevicesAndScansNeedASession(t *testing.T) {
@@ -83,9 +82,9 @@ func TestListDevicesOrdersAndFilters(t *testing.T) {
 	e.addUser("vera", model.RoleViewer)
 	s := e.mustLogin("vera")
 
-	ips := func(b devicesBody) []string {
+	ips := func(devs []model.Device) []string {
 		var out []string
-		for _, d := range b.Devices {
+		for _, d := range devs {
 			out = append(out, d.IP)
 		}
 		return out
@@ -142,47 +141,12 @@ func TestListDevicesRejectsBadFilters(t *testing.T) {
 	}
 }
 
-func TestGetScan(t *testing.T) {
-	e := newEnv(t)
-	scan := seedScan(t, e, device("aa:aa:aa:aa:aa:02", "192.168.1.2", "gw", model.KindRouter))
-	s := e.mustLogin("admin")
-
-	rec := e.as(s, http.MethodGet, "/api/scans/"+strconv.FormatInt(scan.ID, 10), nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
-	}
-	var got model.Scan
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.ID != scan.ID || got.Status != "done" || got.DeviceCount != 1 || got.Target != "192.168.1.0/24" {
-		t.Errorf("scan = %+v", got)
-	}
-
-	for name, tc := range map[string]struct {
-		id   string
-		code int
-	}{
-		"unknown scan": {"9999", http.StatusNotFound},
-		"not a number": {"abc", http.StatusBadRequest},
-		"zero":         {"0", http.StatusBadRequest},
-		"negative":     {"-4", http.StatusBadRequest},
-		"overflow":     {"99999999999999999999", http.StatusBadRequest},
-	} {
-		t.Run(name, func(t *testing.T) {
-			if rec := e.as(s, http.MethodGet, "/api/scans/"+tc.id, nil); rec.Code != tc.code {
-				t.Errorf("GET /api/scans/%s = %d, want %d", tc.id, rec.Code, tc.code)
-			}
-		})
-	}
-}
-
-func TestTopologyRoutesAreAbsentWithoutAStore(t *testing.T) {
+func TestRepoRoutesAreAbsentWithoutARepo(t *testing.T) {
 	e := newEnv(t)
 	s := newServer(Options{Auth: e.svc, Audit: e.store})
 	for _, rt := range s.routes() {
 		if rt.Path == "/api/devices" || rt.Path == "/api/scans/{id}" {
-			t.Errorf("route %s registered without a topology store", rt.Path)
+			t.Errorf("route %s registered without a repo", rt.Path)
 		}
 	}
 }
