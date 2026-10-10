@@ -1,23 +1,69 @@
+# Dependabot is tuned to be quiet: one grouped pull request per ecosystem per
+# month, majors never arrive on their own, and a new release has to age a few
+# days before it is proposed. Security updates are a separate mechanism and are
+# NOT slowed down by this file: GitHub opens those immediately.
 version: 2
+
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+      day: monday
+      time: "05:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+    labels: [dependencies, go]
     groups:
       go-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Major bumps are reviewed by hand, not proposed one by one.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /web
     schedule:
-      interval: weekly
+      interval: monthly
+      day: monday
+      time: "05:30"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    labels: [dependencies, web]
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(ci)"
+    labels: [dependencies, ci]
+    groups:
+      # All action bumps, majors included, arrive as ONE pull request:
+      # they are pinned by SHA and the CI run is the test.
+      github-actions:
+        patterns: ["*"]
 # Add the docker ecosystem together with deploy/Dockerfile.

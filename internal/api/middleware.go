@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/netip"
@@ -90,7 +91,7 @@ func (s *server) authenticate(next http.Handler) http.Handler {
 			return
 		}
 		p, err := s.auth.Authenticate(r.Context(), c.Value)
-		if err == auth.ErrUnauthenticated {
+		if errors.Is(err, auth.ErrUnauthenticated) {
 			s.clearSessionCookie(w, r) // a stale cookie only causes more failed requests
 			writeError(w, http.StatusUnauthorized, "authentication required")
 			return

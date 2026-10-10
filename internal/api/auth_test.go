@@ -231,18 +231,19 @@ func TestLoginRejectsMalformedRequests(t *testing.T) {
 	e := newEnv(t)
 	long := func(n int) string { return strings.Repeat("a", n) }
 	for name, body := range map[string]string{
-		"not json":          "not json",
-		"empty body":        "",
-		"empty object":      "{}",
-		"array":             `["admin", "x"]`,
-		"unknown field":     `{"username":"admin","password":"` + goodPassword + `","admin":true}`,
-		"missing password":  `{"username":"admin"}`,
-		"missing username":  `{"password":"` + goodPassword + `"}`,
-		"wrong types":       `{"username":1,"password":2}`,
-		"trailing data":     `{"username":"admin","password":"` + goodPassword + `"} {}`,
-		"huge username":     `{"username":"` + long(65) + `","password":"x"}`,
-		"huge password":     `{"username":"admin","password":"` + long(1025) + `"}`,
-		"body over the cap": `{"username":"admin","password":"` + long(maxBodyBytes) + `"}`,
+		"not json":           "not json",
+		"empty body":         "",
+		"empty object":       "{}",
+		"array":              `["admin", "x"]`,
+		"unknown field":      `{"username":"admin","password":"` + goodPassword + `","admin":true}`,
+		"missing password":   `{"username":"admin"}`,
+		"missing username":   `{"password":"` + goodPassword + `"}`,
+		"wrong types":        `{"username":1,"password":2}`,
+		"trailing data":      `{"username":"admin","password":"` + goodPassword + `"} {}`,
+		"garbage after data": `{"username":"admin","password":"` + goodPassword + `"} x`,
+		"huge username":      `{"username":"` + long(65) + `","password":"x"}`,
+		"huge password":      `{"username":"admin","password":"` + long(1025) + `"}`,
+		"body over the cap":  `{"username":"admin","password":"` + long(maxBodyBytes) + `"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			rec := e.do(http.MethodPost, "/api/auth/login", body, from("198.51.100."+strconv.Itoa(len(name))+":1"))

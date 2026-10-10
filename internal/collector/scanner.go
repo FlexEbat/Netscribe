@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -156,6 +158,18 @@ func cleanHostname(name string) string {
 	name = strings.TrimSuffix(strings.TrimSpace(name), ".")
 	if len(name) > maxHostname {
 		name = name[:maxHostname]
+		// Do not leave half of a multi-byte character at the end.
+		for name != "" {
+			if r, size := utf8.DecodeLastRuneInString(name); r != utf8.RuneError || size > 1 {
+				break
+			}
+			name = name[:len(name)-1]
+		}
 	}
-	return name
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1 // names come from the network and end up in logs and terminals
+		}
+		return r
+	}, name)
 }
