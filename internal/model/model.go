@@ -19,16 +19,6 @@ const (
 	KindUnknown  DeviceKind = "unknown"
 )
 
-// Valid reports whether k is one of the known kinds.
-func (k DeviceKind) Valid() bool {
-	switch k {
-	case KindRouter, KindSwitch, KindAP, KindFirewall, KindServer, KindNAS,
-		KindPrinter, KindCamera, KindIoT, KindHost, KindUnknown:
-		return true
-	}
-	return false
-}
-
 type Device struct {
 	ID          int64      `json:"id"`
 	MAC         string     `json:"mac"`

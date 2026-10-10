@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -111,6 +113,8 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 	if in.Source == "" {
 		return 0, errors.New("device has no source")
 	}
+	// Names and descriptions come from the network, so a third party controls them.
+	in.Hostname, in.Vendor, in.Description = cleanText(in.Hostname), cleanText(in.Vendor), cleanText(in.Description)
 	kind := string(in.Kind)
 	if kind == "" {
 		kind = string(model.KindUnknown)
@@ -173,6 +177,23 @@ func findDevice(ctx context.Context, q *dbgen.Queries, mac, ip string) (dbgen.De
 		}
 	}
 	return dbgen.Device{}, false, nil
+}
+
+// maxTextRunes is the longest text taken from the network (section 9.5 of the spec).
+const maxTextRunes = 255
+
+// cleanText removes control characters, trims the ends and cuts s to maxTextRunes characters.
+func cleanText(s string) string {
+	s = strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s))
+	if utf8.RuneCountInString(s) <= maxTextRunes {
+		return s
+	}
+	return string([]rune(s)[:maxTextRunes])
 }
 
 func firstNonEmpty(preferred, fallback string) string {

@@ -149,7 +149,7 @@ func serve(args []string, e streams) error {
 		return err
 	}
 	router := api.NewRouter(api.Options{
-		Static: static, Auth: svc, Audit: db, Topology: db, TrustedProxies: proxies, Logger: logger,
+		Static: static, Auth: svc, Audit: db, Repo: db, TrustedProxies: proxies, Logger: logger,
 	})
 	srv := newServer(cfg, router)
 

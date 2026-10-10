@@ -82,3 +82,50 @@ function retryAfter(response: Response): number | null {
   const value = Number(response.headers.get("Retry-After"))
   return Number.isFinite(value) && value > 0 ? value : null
 }
+
+export type DeviceKind =
+  | "router"
+  | "switch"
+  | "ap"
+  | "firewall"
+  | "server"
+  | "nas"
+  | "printer"
+  | "camera"
+  | "iot"
+  | "host"
+  | "unknown"
+
+export interface Device {
+  id: number
+  mac: string
+  ip: string
+  hostname: string
+  vendor: string
+  kind: DeviceKind
+  description: string
+  source: string
+  online: boolean
+  manual: boolean
+  label: string
+  notes: string
+  kindLocked: boolean
+  version: number
+  firstSeenAt: string
+  lastSeenAt: string
+  x: number | null
+  y: number | null
+}
+
+export interface DeviceQuery {
+  q?: string
+  online?: boolean
+}
+
+export function listDevices(query: DeviceQuery = {}): Promise<Device[]> {
+  const params = new URLSearchParams()
+  if (query.q) params.set("q", query.q)
+  if (query.online !== undefined) params.set("online", String(query.online))
+  const suffix = params.size > 0 ? `?${params.toString()}` : ""
+  return api<Device[]>("GET", `/api/devices${suffix}`)
+}
