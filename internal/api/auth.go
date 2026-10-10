@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -34,8 +35,10 @@ func decode(r *http.Request, v any) bool {
 	if err := dec.Decode(v); err != nil {
 		return false
 	}
+	// Only a clean end of input may follow the object. Any other result, a second
+	// value or garbage that does not even parse, means trailing data.
 	var extra json.RawMessage
-	return dec.Decode(&extra) != nil // only io.EOF is acceptable here
+	return errors.Is(dec.Decode(&extra), io.EOF)
 }
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {

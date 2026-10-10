@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -284,6 +285,18 @@ func TestCleanHostname(t *testing.T) {
 		if got := cleanHostname(in); got != want {
 			t.Errorf("cleanHostname(%.20q) = %.20q, want %.20q", in, got, want)
 		}
+	}
+}
+
+func TestCleanHostnameKeepsValidUTF8AndDropsControlCharacters(t *testing.T) {
+	// "é" is two bytes: a cut at byte 253 would split it.
+	split := strings.Repeat("a", 252) + "é"
+	got := cleanHostname(split)
+	if !utf8.ValidString(got) || len(got) > maxHostname {
+		t.Errorf("cleanHostname(long name) = %d bytes, valid UTF-8 = %v", len(got), utf8.ValidString(got))
+	}
+	if got := cleanHostname("host\x1b[31m.lan\n"); got != "host[31m.lan" {
+		t.Errorf("cleanHostname(escape sequence) = %q, want control characters removed", got)
 	}
 }
 

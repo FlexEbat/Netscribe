@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -332,9 +333,14 @@ func randomToken() string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// truncate cuts s to at most n bytes without splitting a multi-byte character,
+// so the stored value is always valid UTF-8.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
 	}
 	return s[:n]
 }
