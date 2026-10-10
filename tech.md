@@ -1,8 +1,9 @@
-# tech.md: генератор сетевой документации (рабочее имя netdoc)
+# tech.md: генератор сетевой документации (Netscribe)
 
 **Версия: v0 (черновик)** (2026-10-07)
 
 Changelog:
+- v0 (правка 3) - проект называется Netscribe: везде заменено рабочее имя netdoc (модуль, бинарник, cookie, переменные, тексты). Вопрос 1 раздела 18 закрыт.
 - v0 (правка 2) - добавлены раздел 9 «Безопасность», аутентификация, роли и многопользовательский режим, ручное добавление устройств, расширенное обнаружение. Слайсы 2, 5, 6, 8 новые, остальные сдвинуты.
 - v0 - черновик для финализации. Контракты не заморожены. Раздел 18 перечисляет открытые вопросы. После ответов на них версия поднимается до v1 и контракты замораживаются.
 
@@ -70,10 +71,10 @@ Changelog:
 
 ```
 cmd/
-  netdoc/
+  netscribe/
     main.go                   подкоманды serve, scan, devices, export, user
   seed/
-    main.go                   демо-сеть для разработки и скриншотов, учётка dev из NETDOC_DEV_PASSWORD
+    main.go                   демо-сеть для разработки и скриншотов, учётка dev из NETSCRIBE_DEV_PASSWORD
 internal/
   config/
     config.go                 структуры конфига, загрузка YAML, Validate, тип Secret
@@ -147,7 +148,7 @@ deploy/
   compose.lab.yaml            тестовая лаборатория
   lab/                        конфиги лаборатории
 testdata/                     фикстуры snmpwalk, /proc/net/arp, golden-файлы
-netdoc.example.yaml
+netscribe.example.yaml
 Makefile
 .air.toml, .golangci.yml, sqlc.yaml
 SECURITY.md
@@ -590,7 +591,7 @@ type ContainerInput struct {
 
 ```yaml
 listen: 127.0.0.1:8080
-database: ./netdoc.db
+database: ./netscribe.db
 allowPublicTargets: false
 
 scan:
@@ -607,7 +608,7 @@ ssh:
   hosts:
     - address: 192.168.1.10
       user: audit
-      keyFile: ~/.ssh/netdoc_ed25519    # только ключи, паролей нет
+      keyFile: ~/.ssh/netscribe_ed25519    # только ключи, паролей нет
 
 docker:
   enabled: true
@@ -946,7 +947,7 @@ type Collector interface {
 | блокировка учётки         | 5 неудачных входов подряд, блокировка на 15 минут, успешный вход сбрасывает счётчик                            |
 | лимит по IP               | 10 попыток входа в минуту с одного IP, ответ 429 с заголовком `Retry-After`                                    |
 | идентификатор сессии      | 32 случайных байта из `crypto/rand`, base64url, в базе только SHA-256                                          |
-| cookie сессии             | `netdoc_session`, `HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure` при HTTPS                                  |
+| cookie сессии             | `netscribe_session`, `HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure` при HTTPS                                  |
 | срок сессии               | 8 часов без активности, 7 дней абсолютно, новый идентификатор при каждом входе                                 |
 | лимит сессий              | 10 на пользователя, самая старая вытесняется                                                                   |
 | отзыв сессий              | при выходе, смене пароля, смене роли, отключении и удалении пользователя                                       |
@@ -957,8 +958,8 @@ type Collector interface {
 
 Первый запуск и служебные правила:
 
-- Пароля по умолчанию нет. Пока в базе нет пользователей, все маршруты кроме `/healthz` отвечают 503 с текстом `no users: run "netdoc user add"`.
-- `netdoc user add <name> --role admin` читает пароль с терминала без эха или из stdin (`--password-stdin`). Аргумента с паролем нет.
+- Пароля по умолчанию нет. Пока в базе нет пользователей, все маршруты кроме `/healthz` отвечают 503 с текстом `no users: run "netscribe user add"`.
+- `netscribe user add <name> --role admin` читает пароль с терминала без эха или из stdin (`--password-stdin`). Аргумента с паролем нет.
 - Учётная запись с `must_change_password` может только сменить пароль.
 - Последнего администратора нельзя удалить, отключить или понизить.
 - Отключить аутентификацию нельзя.
@@ -1065,7 +1066,7 @@ type Collector interface {
 
 Как строить тесты:
 
-- База: `store.Open(":memory:")`, новая на каждый тест. Файл `netdoc.db` тесты не трогают.
+- База: `store.Open(":memory:")`, новая на каждый тест. Файл `netscribe.db` тесты не трогают.
 - Сеть: коллекторы принимают интерфейсы (`snmpClient`, `dialer`, `sshRunner`, `dockerAPI`), тесты подставляют фейки. Ответы SNMP берутся из записанного вывода `snmpwalk` в `testdata/`.
 - HTTP: `httptest` поверх `api.NewRouter` с базой в памяти и фейковым сканером.
 - Время: пакеты принимают `clock func() time.Time`, тесты подставляют фиксированное.
@@ -1167,7 +1168,7 @@ CONTRACT GAP
 - Хирургические правки: соседний рабочий код не улучшать и не рефакторить. Каждая изменённая строка следует из текущей задачи.
 - Один слайс за заход. Не выкатывай всё приложение сразу.
 - Сетевой код не запускай против чужих сетей. Все проверки идут против лаборатории (`deploy/compose.lab.yaml`), фикстур или сети владельца проекта.
-- Параметры безопасности из раздела 9 не ослабляй ради удобства. Для разработки `cmd/seed --dev-user` создаёт учётку `dev` с ролью `admin`, пароль берётся из переменной `NETDOC_DEV_PASSWORD`, пароля по умолчанию нет.
+- Параметры безопасности из раздела 9 не ослабляй ради удобства. Для разработки `cmd/seed --dev-user` создаёт учётку `dev` с ролью `admin`, пароль берётся из переменной `NETSCRIBE_DEV_PASSWORD`, пароля по умолчанию нет.
 - Ревью идёт вторым заходом, после того как слайс готов, а не в том же сообщении, где написан код.
 
 ---
@@ -1192,12 +1193,12 @@ CONTRACT GAP
 
 **Что собрать:**
 
-- Go-модуль `netdoc`, `Makefile` с целями из раздела 11, `.air.toml`, `.golangci.yml`, `sqlc.yaml`, `.gitignore` (`netdoc.db*`, `web/dist`, `web/node_modules`, `tmp`).
+- Go-модуль `netscribe`, `Makefile` с целями из раздела 11, `.air.toml`, `.golangci.yml`, `sqlc.yaml`, `.gitignore` (`netscribe.db*`, `web/dist`, `web/node_modules`, `tmp`).
 - `internal/model/model.go` - типы и константы из раздела 4.2.
-- `internal/config` - загрузка YAML, `Validate` по разделу 8, тип `Secret`, `netdoc.example.yaml`.
+- `internal/config` - загрузка YAML, `Validate` по разделу 8, тип `Secret`, `netscribe.example.yaml`.
 - `internal/store/store.go` - `Open(path)`, `ErrNotFound`, подключение `goose`. Миграций таблиц пока нет.
 - `internal/api/router.go` - таблица маршрутов `route(method, path, permission, handler)`: `GET /healthz` помечен публичным, маршрут без права не регистрируется. Раздача встроенного фронтенда с откатом на `index.html`.
-- `cmd/netdoc/main.go` - подкоманда `serve` с флагом `--config`.
+- `cmd/netscribe/main.go` - подкоманда `serve` с флагом `--config`.
 - `web/` - Vite + React + TypeScript strict + Tailwind + shadcn/ui (инициализация), React Router, `web/embed.go`.
 - Каркас интерфейса: боковая панель с названием и ссылками на существующие страницы, страница `/` с `EmptyState` «No scans yet».
 - Прокси Vite на `/api` и `/healthz` в бэкенд для разработки.
@@ -1206,9 +1207,9 @@ CONTRACT GAP
 
 1. `make gate` зелёный на пустом проекте.
 2. `make dev`: правка `.go` файла перезапускает сервер (air), правка `.tsx` обновляет страницу без перезагрузки (HMR). Проверено руками.
-3. `make build` даёт один бинарник. `./netdoc serve` открывает `/` без ошибок в консоли, `GET /healthz` отвечает 200.
+3. `make build` даёт один бинарник. `./netscribe serve` открывает `/` без ошибок в консоли, `GET /healthz` отвечает 200.
 4. `store.Open(":memory:")` даёт рабочую базу без файла на диске.
-5. `netdoc.example.yaml` проходит `Validate`.
+5. `netscribe.example.yaml` проходит `Validate`.
 
 **Тесты:** `internal/config/config_test.go` - валидный конфиг, цель не CIDR, цель шире `/16`, публичная цель без флага, публичная цель с флагом, интервал меньше `1m`, интервал `0`, таймаут SNMP вне диапазона, хост SSH без ключа, `Secret` скрывает значение в `String()`, JSON и `slog`. `internal/store/store_test.go` - `Open(":memory:")` работает. `internal/api/router_test.go` - регистрация маршрута без права паникует, `/healthz` отвечает 200 без входа.
 
@@ -1218,16 +1219,16 @@ CONTRACT GAP
 
 ### Слайс 1 - ARP-обнаружение и CLI
 
-**Файлы:** `internal/store/migrations/0001_devices_scans.sql` (таблицы `devices` и `scans`, `devices` без колонок ручного ввода, раздел 4.1), `internal/store/queries/*.sql`, `internal/store/apply.go`, `internal/collector/collector.go`, `arp.go`, `scanner.go`, `cmd/netdoc/main.go` (подкоманды `scan`, `devices`).
+**Файлы:** `internal/store/migrations/0001_devices_scans.sql` (таблицы `devices` и `scans`, `devices` без колонок ручного ввода, раздел 4.1), `internal/store/queries/*.sql`, `internal/store/apply.go`, `internal/collector/collector.go`, `arp.go`, `scanner.go`, `cmd/netscribe/main.go` (подкоманды `scan`, `devices`).
 
-**Что делает:** `netdoc scan` берёт цели из конфига, шлёт UDP-пакет на порт 9 каждого адреса цели с ограничением в 128 одновременных отправок (ядро выполняет ARP-запрос перед отправкой, права root не нужны), ждёт 2 секунды и читает `/proc/net/arp`. Записи с флагом `0x2` считаются живыми. Для каждого живого адреса выполняется обратный DNS с таймаутом 1 секунда. `netdoc devices` печатает таблицу: IP, MAC, hostname, online. Обнаружение работает для адресов того же L2-сегмента, что и хост netdoc.
+**Что делает:** `netscribe scan` берёт цели из конфига, шлёт UDP-пакет на порт 9 каждого адреса цели с ограничением в 128 одновременных отправок (ядро выполняет ARP-запрос перед отправкой, права root не нужны), ждёт 2 секунды и читает `/proc/net/arp`. Записи с флагом `0x2` считаются живыми. Для каждого живого адреса выполняется обратный DNS с таймаутом 1 секунда. `netscribe devices` печатает таблицу: IP, MAC, hostname, online. Обнаружение работает для адресов того же L2-сегмента, что и хост netscribe.
 
 **Критерии приёмки:**
 
-1. `netdoc scan` на сети /24 сохраняет найденные устройства, `netdoc devices` показывает их.
+1. `netscribe scan` на сети /24 сохраняет найденные устройства, `netscribe devices` показывает их.
 2. Повторный скан не создаёт дублей. Устройство с тем же MAC и новым IP обновляет строку.
 3. Устройство, которого нет в следующем завершённом скане, получает `online = false` и остаётся в базе.
-4. `netdoc scan 8.8.8.8/32` без `allowPublicTargets` завершается ошибкой `target is outside private ranges`.
+4. `netscribe scan 8.8.8.8/32` без `allowPublicTargets` завершается ошибкой `target is outside private ranges`.
 5. Ctrl+C останавливает скан не дольше чем за 2 секунды, статус скана `failed`, ошибка `canceled`, состояние устройств не изменилось.
 6. Hostname из обратного DNS попадает в таблицу, недоступный DNS не замедляет скан дольше таймаута.
 
@@ -1239,11 +1240,11 @@ CONTRACT GAP
 
 ### Слайс 2 - аутентификация, роли и сессии
 
-**Файлы:** `internal/store/migrations/NNNN_auth.sql` (таблицы `users`, `sessions`, `audit_log`), `internal/auth/` (`password.go`, `session.go`, `rbac.go`, `ratelimit.go`), реализация `AuthRepo` в `internal/store/`, `internal/api/router.go` (проверка права), `middleware.go`, `auth.go`, `cmd/netdoc/main.go` (подкоманда `user`), `web/src/pages/Login.tsx`, `Account.tsx`, `web/src/components/UserMenu.tsx`, `RequirePermission.tsx`, `web/src/lib/permissions.ts`, `web/src/api/client.ts` (заголовок CSRF, обработка 401).
+**Файлы:** `internal/store/migrations/NNNN_auth.sql` (таблицы `users`, `sessions`, `audit_log`), `internal/auth/` (`password.go`, `session.go`, `rbac.go`, `ratelimit.go`), реализация `AuthRepo` в `internal/store/`, `internal/api/router.go` (проверка права), `middleware.go`, `auth.go`, `cmd/netscribe/main.go` (подкоманда `user`), `web/src/pages/Login.tsx`, `Account.tsx`, `web/src/components/UserMenu.tsx`, `RequirePermission.tsx`, `web/src/lib/permissions.ts`, `web/src/api/client.ts` (заголовок CSRF, обработка 401).
 
 **Что делает:**
 
-- Подкоманды `netdoc user add <name> --role <role>`, `user list`, `user disable <name>`, `user passwd <name>`. Пароль читается с терминала без эха или из stdin.
+- Подкоманды `netscribe user add <name> --role <role>`, `user list`, `user disable <name>`, `user passwd <name>`. Пароль читается с терминала без эха или из stdin.
 - API `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `PUT /api/auth/password`.
 - Цепочка middleware в таком порядке: заголовки безопасности, лимиты тела и таймауты, аутентификация (сессия, токены доступа добавляет слайс 6), CSRF, проверка права, обработчик, аудит.
 - Проверка права по таблице маршрутов из слайса 0 включается в middleware: маршрут с правом без входа даёт 401, при недостатке прав 403.
@@ -1252,9 +1253,9 @@ CONTRACT GAP
 
 **Критерии приёмки:**
 
-1. Пока пользователей нет, все маршруты кроме `/healthz` отвечают 503 с текстом `no users: run "netdoc user add"`.
-2. `netdoc user add` создаёт пользователя. Пароль не принимается аргументом командной строки. В базе лежит хеш argon2id в формате PHC.
-3. Вход с верными данными отвечает 200 и ставит cookie `netdoc_session` с `HttpOnly` и `SameSite=Strict`. Неверный пароль, неизвестный пользователь и заблокированная учётка дают одинаковый ответ 401 `invalid username or password`.
+1. Пока пользователей нет, все маршруты кроме `/healthz` отвечают 503 с текстом `no users: run "netscribe user add"`.
+2. `netscribe user add` создаёт пользователя. Пароль не принимается аргументом командной строки. В базе лежит хеш argon2id в формате PHC.
+3. Вход с верными данными отвечает 200 и ставит cookie `netscribe_session` с `HttpOnly` и `SameSite=Strict`. Неверный пароль, неизвестный пользователь и заблокированная учётка дают одинаковый ответ 401 `invalid username or password`.
 4. Пятая неудачная попытка подряд блокирует учётку на 15 минут (вход с верным паролем в это время тоже даёт 401), успешный вход сбрасывает счётчик. Больше 10 попыток в минуту с одного IP дают 429 с `Retry-After`.
 5. Запрос без сессии к защищённому маршруту даёт 401, с неверным или истёкшим идентификатором тоже.
 6. Небезопасный метод с сессией и без верного `X-CSRF-Token` даёт 403.
@@ -1273,7 +1274,7 @@ CONTRACT GAP
 
 ### Слайс 3 - API, SSE и таблица устройств
 
-**Файлы:** `internal/api/router.go`, `devices.go`, `scans.go`, `sse.go`, `internal/events/hub.go`, `cmd/netdoc/main.go` (`serve` запускает сканер), `web/src/api/client.ts` (дополняется), `events.ts`, `web/src/pages/Inventory.tsx`, `web/src/lib/` (сортировка IP), компоненты `ScanBar`, `StatusBadge`, `EmptyState`, примитивы `table`, `badge`, `button`, `input`, `skeleton`.
+**Файлы:** `internal/api/router.go`, `devices.go`, `scans.go`, `sse.go`, `internal/events/hub.go`, `cmd/netscribe/main.go` (`serve` запускает сканер), `web/src/api/client.ts` (дополняется), `events.ts`, `web/src/pages/Inventory.tsx`, `web/src/lib/` (сортировка IP), компоненты `ScanBar`, `StatusBadge`, `EmptyState`, примитивы `table`, `badge`, `button`, `input`, `skeleton`.
 
 **Что делает:** маршруты `GET /api/devices`, `GET /api/devices/{id}`, `GET /api/scans`, `POST /api/scans`, `GET /api/scans/{id}`, `GET /api/events`. Все маршруты объявлены в таблице с правами `topology:read` (чтение и события) и `scans:run` (`POST /api/scans`). Кнопка запуска скана видна только при праве `scans:run`. Страница `/inventory` показывает таблицу устройств с поиском и фильтром online. `ScanBar` запускает скан и показывает прогресс из SSE. Таблица обновляется по событию `topology.changed`.
 
@@ -1298,7 +1299,7 @@ CONTRACT GAP
 
 **Файлы:** `internal/render/layout.go`, `internal/api/topology.go`, `cmd/seed/main.go`, `web/src/pages/Topology.tsx`, компоненты `TopologyCanvas`, `DeviceNode`, `DevicePanel`, примитивы `sheet`, `tooltip`.
 
-**Что делает:** `GET /api/topology` отдаёт устройства, связи и контейнеры (связи и контейнеры пока пустые). Координаты в ответе заполнены всегда: сохранённые `x`, `y` остаются как есть, у остальных устройств их считает `render.Layout`. Раскладка по слоям: ряды по виду (router, firewall, switch, ap, server, nas, printer, camera, iot, host, unknown), внутри ряда порядок по IP, шаг 220 на 140, ряд переносится после 8 узлов. Раскладка детерминирована. Страница `/` рисует узлы на React Flow с зумом, панорамой и мини-картой. Перетаскивание сохраняет позицию через `PUT /api/devices/{id}/position` (право `devices:write`). Для роли без этого права узлы не перетаскиваются. Клик по узлу открывает `DevicePanel`. `cmd/seed` создаёт демо-сеть (роутер, 2 коммутатора, 20 хостов, 4 сервера) и дополняется в слайсах 7 и 11. Флаг `--dev-user` создаёт учётную запись `dev` с ролью `admin` и паролем из `NETDOC_DEV_PASSWORD`.
+**Что делает:** `GET /api/topology` отдаёт устройства, связи и контейнеры (связи и контейнеры пока пустые). Координаты в ответе заполнены всегда: сохранённые `x`, `y` остаются как есть, у остальных устройств их считает `render.Layout`. Раскладка по слоям: ряды по виду (router, firewall, switch, ap, server, nas, printer, camera, iot, host, unknown), внутри ряда порядок по IP, шаг 220 на 140, ряд переносится после 8 узлов. Раскладка детерминирована. Страница `/` рисует узлы на React Flow с зумом, панорамой и мини-картой. Перетаскивание сохраняет позицию через `PUT /api/devices/{id}/position` (право `devices:write`). Для роли без этого права узлы не перетаскиваются. Клик по узлу открывает `DevicePanel`. `cmd/seed` создаёт демо-сеть (роутер, 2 коммутатора, 20 хостов, 4 сервера) и дополняется в слайсах 7 и 11. Флаг `--dev-user` создаёт учётную запись `dev` с ролью `admin` и паролем из `NETSCRIBE_DEV_PASSWORD`.
 
 **Критерии приёмки:**
 
@@ -1458,7 +1459,7 @@ CONTRACT GAP
 
 **Файлы:** `internal/store/migrations/NNNN_containers.sql`, `internal/collector/docker.go`, `internal/api/containers.go`, `web/src/pages/Containers.tsx`, обновление `TopologyCanvas`, `DeviceNode`, `layout.go`, `cmd/seed`.
 
-**Что делает:** коллектор подключается к сокету из `docker.socket`, читает все контейнеры (любые состояния), их порты, сети и метку `com.docker.compose.project`. Хостом контейнеров служит устройство, чей IP совпадает с локальным адресом netdoc. Если его нет в таблице, коллектор создаёт его с источником `local`. Подписка на события Docker (`create`, `start`, `stop`, `die`, `destroy`) обновляет базу между сканами и публикует `topology.changed`. На холсте контейнеры стоят под узлом хоста (по 6 в ряд), от хоста к контейнеру идёт ребро, цвет зависит от состояния. Режим только чтение: запуск, остановка и логи не реализуются. Данные о контейнерах отдаются по праву `topology:read`.
+**Что делает:** коллектор подключается к сокету из `docker.socket`, читает все контейнеры (любые состояния), их порты, сети и метку `com.docker.compose.project`. Хостом контейнеров служит устройство, чей IP совпадает с локальным адресом netscribe. Если его нет в таблице, коллектор создаёт его с источником `local`. Подписка на события Docker (`create`, `start`, `stop`, `die`, `destroy`) обновляет базу между сканами и публикует `topology.changed`. На холсте контейнеры стоят под узлом хоста (по 6 в ряд), от хоста к контейнеру идёт ребро, цвет зависит от состояния. Режим только чтение: запуск, остановка и логи не реализуются. Данные о контейнерах отдаются по праву `topology:read`.
 
 **Критерии приёмки:**
 
@@ -1477,18 +1478,18 @@ CONTRACT GAP
 
 ### Слайс 12 - экспорт Markdown и Draw.io
 
-**Файлы:** `internal/render/mermaid.go`, `markdown.go`, `drawio.go`, `internal/api/export.go`, `cmd/netdoc/main.go` (подкоманда `export`), `web/src/components/ExportMenu.tsx`, примитив `dropdown-menu`.
+**Файлы:** `internal/render/mermaid.go`, `markdown.go`, `drawio.go`, `internal/api/export.go`, `cmd/netscribe/main.go` (подкоманда `export`), `web/src/components/ExportMenu.tsx`, примитив `dropdown-menu`.
 
-**Что делает:** Markdown содержит заголовок, дату генерации, сводку по количеству, топологию в блоке Mermaid (`graph LR`), таблицы устройств (имя, IP, MAC, вид, вендор, состояние), IP по интерфейсам, сервисов и контейнеров. Draw.io - несжатый XML mxGraph: по вершине на устройство и контейнер с координатами из `render.Layout`, по ребру на связь с подписями портов, цвет по виду. `netdoc export --format md|drawio --out <файл>` и `GET /api/export/{format}` дают один и тот же результат. CLI читает локальную базу напрямую, права проверяет ОС (доступ к файлу базы).
+**Что делает:** Markdown содержит заголовок, дату генерации, сводку по количеству, топологию в блоке Mermaid (`graph LR`), таблицы устройств (имя, IP, MAC, вид, вендор, состояние), IP по интерфейсам, сервисов и контейнеров. Draw.io - несжатый XML mxGraph: по вершине на устройство и контейнер с координатами из `render.Layout`, по ребру на связь с подписями портов, цвет по виду. `netscribe export --format md|drawio --out <файл>` и `GET /api/export/{format}` дают один и тот же результат. CLI читает локальную базу напрямую, права проверяет ОС (доступ к файлу базы).
 
 **Критерии приёмки:**
 
-1. `GET /api/export/md` отдаёт Markdown с `Content-Disposition` вида `netdoc-<дата>.md`. Блок Mermaid отображается на GitHub (проверка руками).
+1. `GET /api/export/md` отдаёт Markdown с `Content-Disposition` вида `netscribe-<дата>.md`. Блок Mermaid отображается на GitHub (проверка руками).
 2. `GET /api/export/drawio` отдаёт XML, который открывается в diagrams.net без ошибок, позиции совпадают с панелью.
 3. Одно и то же состояние базы даёт одинаковые байты, кроме строки с датой генерации (она берётся из подставляемых часов).
 4. Пустая база даёт документ с пометкой «no devices», а не ошибку.
 5. Символы `<`, `&`, `"`, `|` в hostname экранируются в XML, в таблицах Markdown и в метках Mermaid.
-6. `netdoc export` и API дают одинаковый результат.
+6. `netscribe export` и API дают одинаковый результат.
 7. `GET /api/export/{format}` без права `export:run` отвечает 403, успешный экспорт пишется в аудит. Файл отдаётся с `Content-Disposition: attachment`.
 
 **Тесты:** golden-файлы на небольшой фикстуре, разбор XML и подсчёт ячеек, тесты экранирования (критерий 5), детерминизм (3), пустая база (4).
@@ -1570,16 +1571,16 @@ CONTRACT GAP
 **Что делает:**
 
 - `Dockerfile`: многоступенчатая сборка (фронтенд, статический бинарник Go), минимальный итоговый образ.
-- `compose.yaml`: один сервис `netdoc`, `network_mode: host`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, `read_only: true`, том для базы, конфиг только на чтение, Docker-сокет только на чтение (в README описан риск доступа к сокету и вариант с `docker-socket-proxy`).
+- `compose.yaml`: один сервис `netscribe`, `network_mode: host`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, `read_only: true`, том для базы, конфиг только на чтение, Docker-сокет только на чтение (в README описан риск доступа к сокету и вариант с `docker-socket-proxy`).
 - `compose.lab.yaml`: сеть-мост с фиксированными адресами и контейнеры `snmpd`, `sshd` и `nginx` для проверки ARP, SNMP, SSH и сервисов.
 - `goreleaser`: статические бинарники linux/amd64 и linux/arm64.
 - CI: `make gate` и `make audit` на каждый pull request, релиз по тегу.
 - `SECURITY.md` с порядком сообщения об уязвимостях и `.github/dependabot.yml` для go, npm и docker.
-- README по правилам раздела 12: описание, скриншот, установка (бинарник и Docker), создание первого пользователя (`docker compose exec netdoc netdoc user add`), конфиг, TLS и обратный прокси, безопасность (риск Docker-сокета, SNMP v2c открытым текстом), примеры экспорта.
+- README по правилам раздела 12: описание, скриншот, установка (бинарник и Docker), создание первого пользователя (`docker compose exec netscribe netscribe user add`), конфиг, TLS и обратный прокси, безопасность (риск Docker-сокета, SNMP v2c открытым текстом), примеры экспорта.
 
 **Критерии приёмки:**
 
-1. `docker compose -f deploy/compose.yaml up --build` из чистого клона поднимает сервис, `GET /healthz` отвечает 200. Остальные маршруты отвечают 503, пока `docker compose exec netdoc netdoc user add` не создаст первого пользователя.
+1. `docker compose -f deploy/compose.yaml up --build` из чистого клона поднимает сервис, `GET /healthz` отвечает 200. Остальные маршруты отвечают 503, пока `docker compose exec netscribe netscribe user add` не создаст первого пользователя.
 2. `compose.lab.yaml` поднимает лабораторию, скан находит её контейнеры, SNMP-данные от `snmpd`, сервисы от `nginx` и `sshd`.
 3. `goreleaser build --snapshot --clean` даёт бинарники linux/amd64 и linux/arm64, `ldd` сообщает, что файл не динамический.
 4. CI запускает `make gate` и `make audit` на pull request.
@@ -1641,7 +1642,7 @@ CONTRACT GAP
 
 ## 18. Открытые вопросы (удалить после финализации)
 
-1. **Имя проекта.** Рабочее имя `netdoc`. Нужно финальное имя, оно попадёт в модуль, бинарник, образ и README.
+1. ~~Имя проекта~~ Закрыт: Netscribe.
 2. **Язык интерфейса.** В черновике интерфейс на английском без i18n. Альтернатива: сразу русский и английский через i18n.
 3. **Раскладка топологии.** В черновике одна детерминированная раскладка по слоям на Go, её используют панель и все экспорты. Альтернатива: `elkjs` в интерфейсе для красивой авто-раскладки по кнопке, тогда координаты сохраняются в базе и экспорты берут их оттуда.
 4. **PDF.** В черновике через `chromedp` и внешний Chrome. Альтернатива: только стили печати в HTML, без зависимости от браузера. Если Chrome нужен в Docker-образе, образ становится заметно больше, возможен отдельный тег.
