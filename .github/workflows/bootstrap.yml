@@ -25,7 +25,8 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: go mod tidy and commit go.mod, go.sum
         run: |
-          go mod tidy 2>&1 | tee tidy.log || true
+          go get golang.org/x/crypto@v0.56.0 2>&1 | tee tidy.log || true
+          go mod tidy 2>&1 | tee -a tidy.log || true
           if ! git diff --quiet -- go.mod go.sum; then
             git config user.name FlexEbat
             git config user.email 52438328+FlexEbat@users.noreply.github.com
