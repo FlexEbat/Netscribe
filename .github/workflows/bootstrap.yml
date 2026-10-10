@@ -43,13 +43,14 @@ jobs:
           set +e
           make audit > audit.log 2>&1
           echo $? > audit.code
+          govulncheck -show verbose ./cmd/... ./internal/... ./web > audit-verbose.log 2>&1
       - name: Publish logs to the ci-logs branch
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir /tmp/logs
-          cp tidy.log gate.log gate.code audit.log audit.code /tmp/logs/ 2>/dev/null || true
+          cp tidy.log gate.log gate.code audit.log audit.code audit-verbose.log /tmp/logs/ 2>/dev/null || true
           cd /tmp/logs
           git init -q
           git checkout -q -b ci-logs
