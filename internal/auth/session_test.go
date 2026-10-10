@@ -380,7 +380,7 @@ func TestLoginUpgradesAWeakHash(t *testing.T) {
 func TestLoginKeepsAStrongHashAsItIs(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	addUser(t, svc, "alice", model.RoleViewer)
-	svc.Login(context.Background(), "alice", goodPassword, "", "")
+	_, _, _ = svc.Login(context.Background(), "alice", goodPassword, "", "")
 	if len(repo.passwordSet) != 0 {
 		t.Error("a current hash was rewritten at login")
 	}
