@@ -36,17 +36,21 @@ func device(mac, ip, host string, kind model.DeviceKind) model.DeviceInput {
 	return model.DeviceInput{Key: model.DeviceKey{MAC: mac, IP: ip}, Hostname: host, Kind: kind, Source: "arp"}
 }
 
+type devicesBody struct {
+	Devices []model.Device `json:"devices"`
+}
+
 func listDevices(t *testing.T, e *env, s session, query string) []model.Device {
 	t.Helper()
 	rec := e.as(s, http.MethodGet, "/api/devices"+query, nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/devices%s: %d %s", query, rec.Code, rec.Body)
 	}
-	var out []model.Device
+	var out devicesBody
 	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	return out
+	return out.Devices
 }
 
 func TestDevicesAndScansNeedASession(t *testing.T) {
@@ -61,7 +65,7 @@ func TestDevicesAndScansNeedASession(t *testing.T) {
 func TestListDevicesIsEmptyArrayWithoutData(t *testing.T) {
 	e := newEnv(t)
 	rec := e.as(e.mustLogin("admin"), http.MethodGet, "/api/devices", nil)
-	if rec.Code != http.StatusOK || rec.Body.String() != "[]\n" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"devices\":[]}\n" {
 		t.Errorf("empty list: %d %q", rec.Code, rec.Body)
 	}
 }

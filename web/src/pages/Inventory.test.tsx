@@ -64,10 +64,12 @@ function open(devices: (path: string) => Response) {
 describe("Inventory", () => {
   it("lists devices in numeric IP order with their status", async () => {
     open(() =>
-      json(200, [
-        device({ id: 1, ip: "192.168.1.10", hostname: "nas" }),
-        device({ id: 2, ip: "192.168.1.9", hostname: "printer", online: false }),
-      ]),
+      json(200, {
+        devices: [
+          device({ id: 1, ip: "192.168.1.10", hostname: "nas" }),
+          device({ id: 2, ip: "192.168.1.9", hostname: "printer", online: false }),
+        ],
+      }),
     )
     const table = await screen.findByRole("table")
     const rows = within(table).getAllByRole("row").slice(1)
@@ -78,7 +80,7 @@ describe("Inventory", () => {
   })
 
   it("asks the server to search and filter", async () => {
-    const mock = open(() => json(200, [device({})]))
+    const mock = open(() => json(200, { devices: [device({})] }))
     await screen.findByRole("table")
     const user = userEvent.setup()
     await user.selectOptions(screen.getByLabelText("Filter by status"), "offline")
@@ -92,7 +94,7 @@ describe("Inventory", () => {
   })
 
   it("shows an empty state, and a different one when a filter hides everything", async () => {
-    open(() => json(200, []))
+    open(() => json(200, { devices: [] }))
     expect(await screen.findByText("No devices yet")).toBeInTheDocument()
     await userEvent.setup().type(screen.getByLabelText("Search devices"), "x")
     expect(await screen.findByText("No matches")).toBeInTheDocument()

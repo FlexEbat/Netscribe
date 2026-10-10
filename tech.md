@@ -3,6 +3,7 @@
 **Версия: v0 (черновик)** (2026-10-07)
 
 Changelog:
+- v0 (правка 4) - ответ `GET /api/devices` имеет вид `{ "devices": [...] }`. Лимит попыток входа реализован собственным лимитером (`internal/auth/ratelimit.go`), `golang.org/x/time/rate` не используется.
 - v0 (правка 3) - проект называется Netscribe: везде заменено рабочее имя netdoc (модуль, бинарник, cookie, переменные, тексты). Вопрос 1 раздела 18 закрыт.
 - v0 (правка 2) - добавлены раздел 9 «Безопасность», аутентификация, роли и многопользовательский режим, ручное добавление устройств, расширенное обнаружение. Слайсы 2, 5, 6, 8 новые, остальные сдвинуты.
 - v0 - черновик для финализации. Контракты не заморожены. Раздел 18 перечисляет открытые вопросы. После ответов на них версия поднимается до v1 и контракты замораживаются.
@@ -48,7 +49,7 @@ Changelog:
 - `net/http` + `chi`, логи через `log/slog`
 - SQLite через `modernc.org/sqlite` (чистый Go, без CGO), миграции `goose`, запросы через `sqlc`
 - `gosnmp` (SNMP v2c), `golang.org/x/crypto/ssh`, официальный Docker Go client, `fsnotify`, `gopkg.in/yaml.v3`
-- `golang.org/x/crypto/argon2` (пароли), `golang.org/x/time/rate` (лимиты попыток входа), `crypto/tls` из стандартной библиотеки
+- `golang.org/x/crypto/argon2` (пароли), `crypto/tls` из стандартной библиотеки
 - `chromedp` только для экспорта в PDF
 
 Фронтенд:
@@ -805,7 +806,7 @@ type Collector interface {
 | `GET /api/auth/me`                   | текущий пользователь, его права, CSRF-токен                       | только вход     | 200, 401               |
 | `PUT /api/auth/password`             | смена своего пароля (текущий и новый)                             | только вход     | 204, 400, 401          |
 | `GET /api/topology`                  | устройства, связи, контейнеры одним ответом                       | `topology:read` | 200                    |
-| `GET /api/devices?online=&kind=&q=`  | список устройств                                                  | `topology:read` | 200, 400               |
+| `GET /api/devices?online=&kind=&q=`  | список устройств, ответ `{ "devices": [...] }`                    | `topology:read` | 200, 400               |
 | `POST /api/devices`                  | ручное добавление устройства                                      | `devices:write` | 201, 400, 409          |
 | `GET /api/devices/{id}`              | устройство, его интерфейсы и сервисы                              | `topology:read` | 200, 404               |
 | `PATCH /api/devices/{id}`            | правка `label`, `notes`, `kind`, поле `version` обязательно       | `devices:write` | 200, 400, 404, 409     |

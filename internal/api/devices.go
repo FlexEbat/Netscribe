@@ -19,7 +19,7 @@ func validKind(k model.DeviceKind) bool {
 	return false
 }
 
-// listDevices answers GET /api/devices?online=true|false&kind=router&q=text with a JSON array.
+// listDevices answers GET /api/devices?online=true|false&kind=router&q=text with {"devices": [...]}.
 func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	var f store.DeviceFilter
@@ -52,5 +52,5 @@ func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "list devices", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, devices)
+	writeJSON(w, http.StatusOK, map[string][]model.Device{"devices": devices})
 }

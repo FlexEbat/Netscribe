@@ -127,5 +127,5 @@ export function listDevices(query: DeviceQuery = {}): Promise<Device[]> {
   if (query.q) params.set("q", query.q)
   if (query.online !== undefined) params.set("online", String(query.online))
   const suffix = params.size > 0 ? `?${params.toString()}` : ""
-  return api<Device[]>("GET", `/api/devices${suffix}`)
+  return api<{ devices: Device[] }>("GET", `/api/devices${suffix}`).then((body) => body.devices)
 }
