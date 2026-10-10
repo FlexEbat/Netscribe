@@ -43,7 +43,10 @@ describe("routing", () => {
   })
 
   it("shows the topology page and the user menu to a signed-in user", async () => {
-    mockFetch({ "GET /api/auth/me": () => json(200, meBody(makeUser({ role: "operator" }))) })
+    mockFetch({
+      "GET /api/auth/me": () => json(200, meBody(makeUser({ role: "operator" }))),
+      "GET /api/devices": () => json(200, { devices: [] }),
+    })
     renderApp("/")
     expect(await screen.findByText("No scans yet")).toBeInTheDocument()
     const nav = screen.getByRole("navigation", { name: "Main" })
