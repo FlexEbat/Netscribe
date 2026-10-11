@@ -1,6 +1,10 @@
-import { useEffect, useState } from "react"
-import { listDevices, type Device } from "@/api/client"
+import { useCallback, useEffect, useState } from "react"
+import { ApiError, listDevices, listScans, startScan, type Device, type Scan } from "@/api/client"
+import { openEvents, type ScanProgress } from "@/api/events"
+import { useSession } from "@/api/session"
 import { EmptyState } from "@/components/EmptyState"
+import { ScanBar } from "@/components/ScanBar"
+import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Alert } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
@@ -15,15 +19,24 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { sortByIp } from "@/lib/ip"
+import { can } from "@/lib/permissions"
 
 type Filter = "all" | "online" | "offline"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; devices: Device[] }
 
 export function Inventory() {
+  const { state: session } = useSession()
+  const canRun = session.status === "signedIn" && can(session.session.permissions, "scans:run")
+
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
   const [state, setState] = useState<State>({ status: "loading" })
+  const [refresh, setRefresh] = useState(0)
+  const [scan, setScan] = useState<Scan | null>(null)
+  const [progress, setProgress] = useState<ScanProgress | null>(null)
+  const [starting, setStarting] = useState(false)
+  const [scanError, setScanError] = useState("")
 
   useEffect(() => {
     let cancelled = false
@@ -38,13 +51,67 @@ export function Inventory() {
     return () => {
       cancelled = true
     }
-  }, [search, filter])
+  }, [search, filter, refresh])
+
+  useEffect(() => {
+    let cancelled = false
+    listScans()
+      .then((scans) => {
+        if (!cancelled) setScan(scans[0] ?? null)
+      })
+      .catch(() => {
+        // The bar then says no scan has run; the device list reports its own failure.
+      })
+    const close = openEvents({
+      "scan.started": (s) => {
+        setScan(s)
+        setProgress(null)
+        setStarting(false)
+      },
+      "scan.progress": setProgress,
+      "scan.finished": (s) => {
+        setScan(s)
+        setProgress(null)
+      },
+      "topology.changed": () => setRefresh((n) => n + 1),
+    })
+    return () => {
+      cancelled = true
+      close()
+    }
+  }, [])
+
+  const run = useCallback(async () => {
+    setScanError("")
+    setStarting(true)
+    try {
+      setScan(await startScan())
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setScanError("A scan is already running.")
+      } else if (error instanceof ApiError && error.status === 400) {
+        setScanError("No scan targets are configured.")
+      } else {
+        setScanError("The scan could not be started.")
+      }
+    } finally {
+      setStarting(false)
+    }
+  }, [])
 
   const filtering = search.trim() !== "" || filter !== "all"
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-lg font-semibold">Inventory</h1>
+      <ScanBar
+        scan={scan}
+        progress={progress}
+        canRun={canRun}
+        starting={starting}
+        error={scanError}
+        onStart={() => void run()}
+      />
       <div className="flex flex-wrap gap-3">
         <Input
           type="search"
@@ -65,12 +132,24 @@ export function Inventory() {
           <option value="offline">Offline</option>
         </select>
       </div>
-      <Results state={state} filtering={filtering} />
+      <Results
+        state={state}
+        filtering={filtering}
+        firstScan={canRun && scan === null ? () => void run() : undefined}
+      />
     </div>
   )
 }
 
-function Results({ state, filtering }: { state: State; filtering: boolean }) {
+function Results({
+  state,
+  filtering,
+  firstScan,
+}: {
+  state: State
+  filtering: boolean
+  firstScan?: () => void
+}) {
   if (state.status === "loading") {
     return (
       <div role="status" aria-label="Loading devices" className="flex flex-col gap-2">
@@ -90,6 +169,7 @@ function Results({ state, filtering }: { state: State; filtering: boolean }) {
       <EmptyState
         title="No devices yet"
         text="Run a scan to discover the devices on your network."
+        action={firstScan ? <Button onClick={firstScan}>Run first scan</Button> : undefined}
       />
     )
   }

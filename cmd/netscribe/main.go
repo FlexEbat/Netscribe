@@ -27,6 +27,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/auth"
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/config"
+	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/store"
 	"github.com/FlexEbat/Netscribe/web"
@@ -148,13 +149,22 @@ func serve(args []string, e streams) error {
 	if err != nil {
 		return err
 	}
-	router := api.NewRouter(api.Options{
-		Static: static, Auth: svc, Audit: db, Repo: db, TrustedProxies: proxies, Logger: logger,
-	})
-	srv := newServer(cfg, router)
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	targets, err := configuredTargets(cfg)
+	if err != nil {
+		return err
+	}
+	hub := events.NewHub()
+	scanner := collector.NewScanner(db, cfg, logger)
+	scanner.SetEvents(hub)
+	router := api.NewRouter(api.Options{
+		Static: static, Auth: svc, Audit: db, Repo: db, Events: hub,
+		Scanner:        scanStarter{scanner: scanner, ctx: ctx, targets: targets},
+		TrustedProxies: proxies, Logger: logger,
+	})
+	srv := newServer(cfg, router)
 	go maintain(ctx, db, cfg.Audit.KeepDays, time.Hour, logger)
 
 	errc := make(chan error, 1)
@@ -176,6 +186,30 @@ func serve(args []string, e streams) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// scanStarter runs scans for the API over the configured targets. A scan lives as long as
+// the server does, not as long as the request that started it.
+type scanStarter struct {
+	scanner *collector.Scanner
+	ctx     context.Context
+	targets []netip.Prefix
+}
+
+func (s scanStarter) Start() (model.Scan, error) { return s.scanner.Start(s.ctx, s.targets) }
+
+// configuredTargets parses scan.targets. An empty list is allowed: scans then answer
+// collector.ErrNoTargets until targets are configured.
+func configuredTargets(cfg config.Config) ([]netip.Prefix, error) {
+	targets := make([]netip.Prefix, 0, len(cfg.Scan.Targets))
+	for _, t := range cfg.Scan.Targets {
+		p, err := config.ParseTarget(t, cfg.AllowPublicTargets)
+		if err != nil {
+			return nil, fmt.Errorf("scan target %q: %w", t, err)
+		}
+		targets = append(targets, p)
+	}
+	return targets, nil
 }
 
 // newServer applies the timeouts and limits of section 9.5 and the TLS floor of section 9.4.

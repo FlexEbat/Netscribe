@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"testing"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
@@ -148,5 +149,43 @@ func TestRepoRoutesAreAbsentWithoutARepo(t *testing.T) {
 		if rt.Path == "/api/devices" || rt.Path == "/api/scans/{id}" {
 			t.Errorf("route %s registered without a repo", rt.Path)
 		}
+	}
+}
+
+func TestGetDevice(t *testing.T) {
+	e := newEnv(t)
+	seedScan(t, e, device("aa:aa:aa:aa:aa:02", "192.168.1.2", "gw", model.KindRouter))
+	s := e.mustLogin("admin")
+
+	list := listDevices(t, e, s, "")
+	if len(list) != 1 {
+		t.Fatalf("seeded %d devices, want 1", len(list))
+	}
+	rec := e.as(s, http.MethodGet, "/api/devices/"+strconv.FormatInt(list[0].ID, 10), nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
+	}
+	var body struct {
+		Device model.Device `json:"device"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Device.ID != list[0].ID || body.Device.Hostname != "gw" {
+		t.Errorf("device = %+v", body.Device)
+	}
+
+	for name, id := range map[string]string{
+		"unknown":      "9999",
+		"not a number": "abc",
+		"zero":         "0",
+		"negative":     "-1",
+		"overflow":     "99999999999999999999",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if rec := e.as(s, http.MethodGet, "/api/devices/"+id, nil); rec.Code != http.StatusNotFound {
+				t.Errorf("GET /api/devices/%s = %d, want 404", id, rec.Code)
+			}
+		})
 	}
 }

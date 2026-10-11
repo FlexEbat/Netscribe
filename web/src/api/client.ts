@@ -129,3 +129,26 @@ export function listDevices(query: DeviceQuery = {}): Promise<Device[]> {
   const suffix = params.size > 0 ? `?${params.toString()}` : ""
   return api<{ devices: Device[] }>("GET", `/api/devices${suffix}`).then((body) => body.devices)
 }
+
+export type ScanStatus = "running" | "done" | "failed"
+
+export interface Scan {
+  id: number
+  target: string
+  status: ScanStatus
+  startedAt: string
+  finishedAt: string | null
+  error: string
+  deviceCount: number
+  linkCount: number
+  containerCount: number
+}
+
+export async function listScans(): Promise<Scan[]> {
+  const body = await api<{ scans: Scan[] }>("GET", "/api/scans")
+  return body.scans
+}
+
+export function startScan(): Promise<Scan> {
+  return api<Scan>("POST", "/api/scans")
+}

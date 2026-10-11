@@ -51,6 +51,18 @@ func (s *Store) ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device
 	return out, nil
 }
 
+// GetDevice returns one device, or ErrNotFound.
+func (s *Store) GetDevice(ctx context.Context, id int64) (model.Device, error) {
+	row, err := s.q.GetDeviceByID(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Device{}, ErrNotFound
+	}
+	if err != nil {
+		return model.Device{}, fmt.Errorf("get device: %w", err)
+	}
+	return toDevice(row)
+}
+
 func matches(d model.Device, lowerQuery string) bool {
 	for _, field := range []string{d.IP, d.MAC, d.Hostname, d.Vendor} {
 		if strings.Contains(strings.ToLower(field), lowerQuery) {
@@ -144,6 +156,23 @@ func (s *Store) FinishScan(ctx context.Context, id int64, status, errMsg string)
 		return fmt.Errorf("finish scan: scan %d is not running", id)
 	}
 	return nil
+}
+
+// ListScans returns the most recent scans, newest first.
+func (s *Store) ListScans(ctx context.Context, limit int) ([]model.Scan, error) {
+	rows, err := s.q.ListScans(ctx, int64(limit))
+	if err != nil {
+		return nil, fmt.Errorf("list scans: %w", err)
+	}
+	out := make([]model.Scan, 0, len(rows))
+	for _, r := range rows {
+		sc, err := toScan(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sc)
+	}
+	return out, nil
 }
 
 // GetScan returns one scan, or ErrNotFound.
