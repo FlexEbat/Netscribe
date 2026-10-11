@@ -59,7 +59,13 @@ describe("toEdges", () => {
       },
       { id: 6, aDeviceId: 2, aPort: "", bDeviceId: 3, bPort: "", source: "lldp", lastSeenAt: "" },
     ])
-    expect(edges[0]).toEqual({ id: "link-5", source: "1", target: "2", label: "Gi0/1 - eth0" })
+    expect(edges[0]).toEqual({
+      id: "link-5",
+      source: "1",
+      target: "2",
+      label: "Gi0/1 - eth0",
+      data: { linkId: 5, source: "lldp" },
+    })
     expect(edges[1]?.label).toBe("")
   })
 })

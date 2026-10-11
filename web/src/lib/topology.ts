@@ -17,6 +17,7 @@ export interface CanvasEdge {
   source: string
   target: string
   label: string
+  data: { linkId: number; source: string }
 }
 
 /** The name a device is shown under: the label somebody set, else the hostname, else the IP. */
@@ -43,6 +44,7 @@ export function toEdges(links: readonly Link[]): CanvasEdge[] {
     source: String(l.aDeviceId),
     target: String(l.bDeviceId),
     label: [l.aPort, l.bPort].filter(Boolean).join(" - "),
+    data: { linkId: l.id, source: l.source },
   }))
 }
 

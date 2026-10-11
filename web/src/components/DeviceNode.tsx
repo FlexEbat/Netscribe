@@ -1,5 +1,5 @@
 import { memo } from "react"
-import type { NodeProps } from "@xyflow/react"
+import { Handle, Position, type NodeProps } from "@xyflow/react"
 import {
   Camera,
   CircleHelp,
@@ -45,6 +45,8 @@ function DeviceNodeView({ data, selected }: NodeProps) {
             selected ? "ring-2 ring-ring" : ""
           } ${device.online ? "" : "opacity-60"}`}
         >
+          <Handle type="target" position={Position.Top} className="!size-2.5" />
+          <Handle type="source" position={Position.Bottom} className="!size-2.5" />
           <Icon
             className="size-6 shrink-0 text-muted-foreground"
             aria-label={kindLabels[device.kind]}

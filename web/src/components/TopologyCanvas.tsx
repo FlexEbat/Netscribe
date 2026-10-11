@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import {
   Background,
   Controls,
+  ConnectionMode,
   MiniMap,
   ReactFlow,
   useEdgesState,
@@ -20,7 +21,11 @@ interface TopologyCanvasProps {
   topology: Topology
   onMove: (id: number, x: number, y: number) => void
   onSelect: (id: number | null) => void
-  /** Nodes cannot be dragged when the user may not save positions. */
+  /** A person dragged a connection from one node to another. */
+  onConnectNodes?: (aDeviceId: number, bDeviceId: number) => void
+  /** A link was clicked, or null when the selection was cleared. */
+  onSelectLink?: (linkId: number | null) => void
+  /** Nodes cannot be dragged or connected when the user may not change devices. */
   readOnly?: boolean
 }
 
@@ -28,6 +33,8 @@ export function TopologyCanvas({
   topology,
   onMove,
   onSelect,
+  onConnectNodes,
+  onSelectLink,
   readOnly = false,
 }: TopologyCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(toNodes(topology) as Node[])
@@ -50,10 +57,23 @@ export function TopologyCanvas({
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
           nodesDraggable={!readOnly}
-          nodesConnectable={false}
+          nodesConnectable={!readOnly}
+          connectionMode={ConnectionMode.Loose}
           elementsSelectable
-          onNodeClick={(_, node) => onSelect(Number(node.id))}
-          onPaneClick={() => onSelect(null)}
+          onConnect={(c) => {
+            const a = Number(c.source)
+            const b = Number(c.target)
+            if (a !== b) onConnectNodes?.(a, b)
+          }}
+          onNodeClick={(_, node) => {
+            onSelectLink?.(null)
+            onSelect(Number(node.id))
+          }}
+          onEdgeClick={(_, edge) => onSelectLink?.((edge.data as { linkId: number }).linkId)}
+          onPaneClick={() => {
+            onSelect(null)
+            onSelectLink?.(null)
+          }}
           onNodeDragStop={(_, node) => onMove(Number(node.id), node.position.x, node.position.y)}
           onlyRenderVisibleElements
           fitView
