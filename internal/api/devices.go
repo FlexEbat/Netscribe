@@ -43,6 +43,116 @@ func (s *server) getDevice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]model.Device{"device": device})
 }
 
+// changed tells the open event streams that the topology is different now.
+func (s *server) changed() {
+	if s.hub != nil {
+		s.hub.Publish("topology.changed", struct{}{})
+	}
+}
+
+func deviceDetail(d model.Device) string {
+	name := d.Label
+	if name == "" {
+		name = d.IP
+	}
+	if name == "" {
+		name = d.MAC
+	}
+	return "device " + strconv.FormatInt(d.ID, 10) + " " + name
+}
+
+// createDevice answers POST /api/devices with 201 and {"device": {...}}.
+func (s *server) createDevice(w http.ResponseWriter, r *http.Request) {
+	var body deviceBody
+	if !decode(r, &body) {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	in, err := body.manualDevice()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	p, _ := principal(r)
+	d, err := s.repo.CreateDevice(r.Context(), in, p.User.ID)
+	if errors.Is(err, model.ErrConflict) {
+		writeError(w, http.StatusConflict, "a device with this address already exists")
+		return
+	}
+	if err != nil {
+		s.internalError(w, "create device", err)
+		return
+	}
+	s.record(r, "device_create", "ok", deviceDetail(d))
+	s.changed()
+	writeJSON(w, http.StatusCreated, map[string]model.Device{"device": d})
+}
+
+// updateDevice answers PATCH /api/devices/{id}: 200 with the new state, 409 when the
+// version the editor saw is no longer the current one.
+func (s *server) updateDevice(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	var body editBody
+	if !decode(r, &body) {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	edit, err := body.deviceEdit()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	p, _ := principal(r)
+	d, err := s.repo.UpdateDevice(r.Context(), id, edit, p.User.ID)
+	switch {
+	case errors.Is(err, model.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	case errors.Is(err, model.ErrVersionConflict):
+		writeError(w, http.StatusConflict, "the device was changed by someone else")
+		return
+	case err != nil:
+		s.internalError(w, "update device", err)
+		return
+	}
+	s.record(r, "device_edit", "ok", deviceDetail(d))
+	s.changed()
+	writeJSON(w, http.StatusOK, map[string]model.Device{"device": d})
+}
+
+// deleteDevice answers DELETE /api/devices/{id} with 204.
+func (s *server) deleteDevice(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	d, err := s.repo.GetDevice(r.Context(), id)
+	if errors.Is(err, model.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		s.internalError(w, "delete device", err)
+		return
+	}
+	if err := s.repo.DeleteDevice(r.Context(), id); err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "not found")
+			return
+		}
+		s.internalError(w, "delete device", err)
+		return
+	}
+	s.record(r, "device_delete", "ok", deviceDetail(d))
+	s.changed()
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // listDevices answers GET /api/devices?online=true|false&kind=router&q=text with {"devices": [...]}.
 func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
