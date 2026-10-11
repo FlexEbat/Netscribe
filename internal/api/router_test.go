@@ -259,9 +259,10 @@ func TestEveryRegisteredRouteHasAPermission(t *testing.T) {
 // TestPermissionsAcrossTheWholeRouteTable walks every route and checks the three cases
 // of section 10: no sign-in is 401, a role without the right is 403, a role with it is neither.
 func TestPermissionsAcrossTheWholeRouteTable(t *testing.T) {
-	e := newEnv(t, withRoutes(permissionRoutes()...))
+	scanner := &fakeScanner{}
+	e := newEnv(t, withRoutes(permissionRoutes()...), func(o *envOptions) { o.scanner = scanner })
 	// No event hub here: an event stream never ends, so it has its own tests in sse_test.go.
-	s := newServer(Options{Auth: e.svc, Audit: e.store, Repo: e.store, Scanner: &fakeScanner{}})
+	s := newServer(Options{Auth: e.svc, Audit: e.store, Repo: e.store, Scanner: scanner})
 	table := append(s.routes(), permissionRoutes()...)
 
 	roles := []model.Role{model.RoleViewer, model.RoleOperator, model.RoleAdmin}
