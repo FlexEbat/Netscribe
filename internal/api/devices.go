@@ -1,8 +1,12 @@
 package api
 
 import (
+	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/store"
@@ -17,6 +21,26 @@ func validKind(k model.DeviceKind) bool {
 		return true
 	}
 	return false
+}
+
+// getDevice answers GET /api/devices/{id} with {"device": {...}}. A malformed id is a
+// missing device, not a bad request (section 7.2 of the spec).
+func (s *server) getDevice(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	device, err := s.repo.GetDevice(r.Context(), id)
+	if errors.Is(err, model.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if err != nil {
+		s.internalError(w, "get device", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]model.Device{"device": device})
 }
 
 // listDevices answers GET /api/devices?online=true|false&kind=router&q=text with {"devices": [...]}.

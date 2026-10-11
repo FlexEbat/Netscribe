@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/FlexEbat/Netscribe/internal/auth"
+	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/store"
 )
@@ -45,6 +46,13 @@ type Auditor interface {
 	AddAudit(ctx context.Context, e model.AuditEntry) error
 }
 
+// Scanner starts scans. The scanner behind it is told which targets to use.
+type Scanner interface {
+	// Start records a scan and returns it while it continues in the background.
+	// collector.ErrBusy means a scan is already running.
+	Start() (model.Scan, error)
+}
+
 // Options configures NewRouter.
 type Options struct {
 	// Static is the built web interface with index.html at its root.
@@ -55,6 +63,10 @@ type Options struct {
 	Audit Auditor
 	// Repo serves devices and scans. Without it those routes are not registered.
 	Repo store.Repo
+	// Scanner runs scans for POST /api/scans. Without it that route is not registered.
+	Scanner Scanner
+	// Events feeds GET /api/events. Without it that route is not registered.
+	Events *events.Hub
 	// TrustedProxies are the addresses whose X-Forwarded-For and X-Forwarded-Proto are believed.
 	TrustedProxies []netip.Prefix
 	// Logger receives server-side errors. Nil discards them.
@@ -67,6 +79,9 @@ type server struct {
 	auth    *auth.Service
 	audit   Auditor
 	repo    store.Repo
+	scanner Scanner
+	hub     *events.Hub
+	streams *streamCounter
 	trusted []netip.Prefix
 	log     *slog.Logger
 	limiter *auth.Limiter // sign-in attempts per client address
@@ -87,8 +102,16 @@ func (s *server) routes() []Route {
 	if s.repo != nil {
 		table = append(table,
 			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
+			route(http.MethodGet, "/api/devices/{id}", model.PermTopologyRead, s.getDevice),
+			route(http.MethodGet, "/api/scans", model.PermTopologyRead, s.listScans),
 			route(http.MethodGet, "/api/scans/{id}", model.PermTopologyRead, s.getScan),
 		)
+		if s.scanner != nil {
+			table = append(table, route(http.MethodPost, "/api/scans", model.PermScansRun, s.startScan))
+		}
+	}
+	if s.hub != nil {
+		table = append(table, route(http.MethodGet, "/api/events", model.PermTopologyRead, s.streamEvents))
 	}
 	return table
 }
@@ -111,6 +134,9 @@ func newServer(opts Options) *server {
 		auth:    opts.Auth,
 		audit:   opts.Audit,
 		repo:    opts.Repo,
+		scanner: opts.Scanner,
+		hub:     opts.Events,
+		streams: newStreamCounter(),
 		trusted: opts.TrustedProxies,
 		log:     log,
 		limiter: auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
