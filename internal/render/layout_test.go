@@ -25,7 +25,8 @@ func TestLayoutIsDeterministic(t *testing.T) {
 	want := Layout(network())
 	for seed := int64(0); seed < 20; seed++ {
 		shuffled := network()
-		rand.New(rand.NewSource(seed)).Shuffle(len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
+		rand.New(rand.NewSource(seed)).Shuffle( //nolint:gosec // a seeded shuffle keeps the test repeatable
+			len(shuffled), func(i, j int) { shuffled[i], shuffled[j] = shuffled[j], shuffled[i] })
 		byID := map[int64]model.Device{}
 		for _, d := range Layout(shuffled) {
 			byID[d.ID] = d

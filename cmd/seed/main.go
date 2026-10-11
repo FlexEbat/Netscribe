@@ -18,7 +18,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/store"
 )
 
-const devPasswordEnv = "NETSCRIBE_DEV_PASSWORD"
+const devPasswordEnv = "NETSCRIBE_DEV_PASSWORD" //nolint:gosec // the name of an environment variable, not a credential
 
 func main() {
 	if err := run(os.Args[1:], os.Getenv, os.Stdout, os.Stderr); err != nil {
@@ -51,7 +51,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) er
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(stdout, "demo network stored: %d devices\n", n)
+	_, _ = fmt.Fprintf(stdout, "demo network stored: %d devices\n", n)
 
 	if *devUser {
 		svc, err := auth.NewService(st, cfg.Auth, nil)
@@ -61,7 +61,7 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) er
 		if err := createDevUser(ctx, svc, getenv(devPasswordEnv)); err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, `account "dev" is ready (role admin)`)
+		_, _ = fmt.Fprintln(stdout, `account "dev" is ready (role admin)`)
 	}
 	return nil
 }
