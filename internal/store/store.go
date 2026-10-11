@@ -34,7 +34,9 @@ var (
 // Repo is the data access contract. It grows by the methods each slice implements.
 type Repo interface {
 	ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device, error)
-	GetDevice(ctx context.Context, id int64) (model.Device, error) // ErrNotFound
+	GetDevice(ctx context.Context, id int64) (model.Device, error)       // ErrNotFound
+	SetDevicePosition(ctx context.Context, id int64, x, y float64) error // ErrNotFound
+	Topology(ctx context.Context) (model.Topology, error)
 
 	StartScan(ctx context.Context, target string) (model.Scan, error)
 	FinishScan(ctx context.Context, id int64, status, errMsg string) error

@@ -28,3 +28,6 @@ SELECT id, ip FROM devices WHERE online = 1;
 
 -- name: SetDeviceOffline :exec
 UPDATE devices SET online = 0 WHERE id = ?;
+
+-- name: SetDevicePosition :execrows
+UPDATE devices SET x = ?, y = ? WHERE id = ?;
