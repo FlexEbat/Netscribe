@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -45,6 +46,8 @@ type Scanner struct {
 	cfg       config.Config
 	log       *slog.Logger
 	dnsWait   time.Duration
+	events    Publisher
+	busy      atomic.Bool
 }
 
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
@@ -52,30 +55,101 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	return &Scanner{store: store, discovery: NewARP(), resolver: net.DefaultResolver, cfg: cfg, log: log, dnsWait: dnsTimeout}
 }
 
-// Run scans the targets. The discovery stage decides the outcome: when it fails,
-// or the scan is canceled before the result is stored, the scan ends as failed
-// and the device state stays as it was.
-func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
+// ErrBusy means another scan is running: one scan at a time (section 9.6 of the spec).
+var ErrBusy = errors.New("a scan is already running")
+
+// ErrNoTargets means there is nothing to scan: no targets are configured.
+var ErrNoTargets = errors.New("no scan targets")
+
+// Publisher receives scan events. *events.Hub satisfies it. A nil Publisher drops them.
+type Publisher interface {
+	Publish(name string, data any)
+}
+
+// Progress is the data of a scan.progress event.
+type Progress struct {
+	ScanID int64  `json:"scanId"`
+	Stage  string `json:"stage"`
+	Done   int    `json:"done"`
+	Total  int    `json:"total"`
+}
+
+const progressStages = 3 // discovery, dns, store
+
+// SetEvents sets the receiver of scan events.
+func (s *Scanner) SetEvents(p Publisher) { s.events = p }
+
+func (s *Scanner) publish(name string, data any) {
+	if s.events != nil {
+		s.events.Publish(name, data)
+	}
+}
+
+func (s *Scanner) progress(scanID int64, stage string, done int) {
+	s.publish("scan.progress", Progress{ScanID: scanID, Stage: stage, Done: done, Total: progressStages})
+}
+
+// begin takes the single scan slot and records the new scan. The caller releases the
+// slot with s.busy.Store(false) once the scan has ended.
+func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
 	if len(targets) == 0 {
-		return model.Scan{}, errors.New("no scan targets")
+		return model.Scan{}, ErrNoTargets
+	}
+	if !s.busy.CompareAndSwap(false, true) {
+		return model.Scan{}, ErrBusy
 	}
 	scan, err := s.store.StartScan(ctx, joinTargets(targets))
 	if err != nil {
+		s.busy.Store(false)
 		return model.Scan{}, fmt.Errorf("start scan: %w", err)
 	}
 	s.log.Info("scan started", "scan", scan.ID, "target", scan.Target)
+	s.publish("scan.started", scan)
+	return scan, nil
+}
 
+// Run scans the targets and waits for the result. The discovery stage decides the
+// outcome: when it fails, or the scan is canceled before the result is stored, the
+// scan ends as failed and the device state stays as it was.
+func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
+	scan, err := s.begin(ctx, targets)
+	if err != nil {
+		return model.Scan{}, err
+	}
+	defer s.busy.Store(false)
+	return s.execute(ctx, scan, targets)
+}
+
+// Start records the scan and returns it while the scan continues in the background
+// until it ends or ctx is canceled. ErrBusy means a scan is already running.
+func (s *Scanner) Start(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
+	scan, err := s.begin(ctx, targets)
+	if err != nil {
+		return model.Scan{}, err
+	}
+	go func() {
+		defer s.busy.Store(false)
+		// execute records its own failure in the log and in the scan row.
+		_, _ = s.execute(ctx, scan, targets)
+	}()
+	return scan, nil
+}
+
+func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.Prefix) (model.Scan, error) {
 	res, err := s.discovery.Collect(ctx, Input{Targets: targets, Config: s.cfg})
 	if err != nil {
 		return s.fail(ctx, scan.ID, fmt.Errorf("%s: %w", s.discovery.Name(), err))
 	}
+	s.progress(scan.ID, "discovery", 1)
 	s.resolveHostnames(ctx, res.Devices)
 	if err := ctx.Err(); err != nil {
 		return s.fail(ctx, scan.ID, err)
 	}
+	s.progress(scan.ID, "dns", 2)
 	if err := s.store.ApplyResult(ctx, scan.ID, res); err != nil {
 		return s.fail(ctx, scan.ID, fmt.Errorf("store result: %w", err))
 	}
+	s.progress(scan.ID, "store", 3)
 
 	fctx, cancel := detached(ctx)
 	defer cancel()
@@ -87,6 +161,8 @@ func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, 
 		return model.Scan{}, fmt.Errorf("read scan: %w", err)
 	}
 	s.log.Info("scan finished", "scan", final.ID, "devices", final.DeviceCount)
+	s.publish("scan.finished", final)
+	s.publish("topology.changed", struct{}{})
 	return final, nil
 }
 
@@ -108,6 +184,7 @@ func (s *Scanner) fail(ctx context.Context, id int64, cause error) (model.Scan, 
 	if err != nil {
 		return model.Scan{}, cause
 	}
+	s.publish("scan.finished", final)
 	return final, cause
 }
 
