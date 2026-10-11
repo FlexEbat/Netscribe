@@ -24,10 +24,23 @@ WHERE id = ?;
 SELECT * FROM devices;
 
 -- name: ListOnlineDeviceAddrs :many
-SELECT id, ip FROM devices WHERE online = 1;
+SELECT id, ip FROM devices WHERE online = 1 AND manual = 0;
 
 -- name: SetDeviceOffline :exec
 UPDATE devices SET online = 0 WHERE id = ?;
 
 -- name: SetDevicePosition :execrows
 UPDATE devices SET x = ?, y = ? WHERE id = ?;
+
+-- name: InsertManualDevice :one
+INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, manual, label, notes, kind_locked, updated_by, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, '', ?, '', 'manual', 1, 1, ?, ?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: UpdateDeviceEdit :execrows
+UPDATE devices
+SET label = ?, notes = ?, kind = ?, kind_locked = ?, version = version + 1, updated_by = ?
+WHERE id = ? AND version = ?;
+
+-- name: DeleteDevice :execrows
+DELETE FROM devices WHERE id = ?;

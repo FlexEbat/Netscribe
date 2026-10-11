@@ -35,6 +35,22 @@ type Device struct {
 	LastSeenAt  string
 	X           sql.NullFloat64
 	Y           sql.NullFloat64
+	Manual      int64
+	Label       string
+	Notes       string
+	KindLocked  int64
+	Version     int64
+	UpdatedBy   sql.NullInt64
+}
+
+type Link struct {
+	ID         int64
+	ADeviceID  int64
+	APort      string
+	BDeviceID  int64
+	BPort      string
+	Source     string
+	LastSeenAt string
 }
 
 type Scan struct {

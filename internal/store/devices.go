@@ -79,18 +79,22 @@ func (s *Store) SetDevicePosition(ctx context.Context, id int64, x, y float64) e
 	return nil
 }
 
-// Topology returns everything the canvas draws. Links and containers come with the
-// slices that collect them, until then the lists are empty, never nil.
+// Topology returns everything the canvas draws. Containers come with the slice that
+// collects them, until then the list is empty, never nil.
 func (s *Store) Topology(ctx context.Context) (model.Topology, error) {
 	devices, err := s.ListDevices(ctx, DeviceFilter{})
 	if err != nil {
 		return model.Topology{}, err
 	}
-	return model.Topology{Devices: devices, Links: []model.Link{}, Containers: []model.Container{}}, nil
+	links, err := s.ListLinks(ctx)
+	if err != nil {
+		return model.Topology{}, err
+	}
+	return model.Topology{Devices: devices, Links: links, Containers: []model.Container{}}, nil
 }
 
 func matches(d model.Device, lowerQuery string) bool {
-	for _, field := range []string{d.IP, d.MAC, d.Hostname, d.Vendor} {
+	for _, field := range []string{d.IP, d.MAC, d.Hostname, d.Vendor, d.Label} {
 		if strings.Contains(strings.ToLower(field), lowerQuery) {
 			return true
 		}
@@ -140,6 +144,11 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		Description: r.Description,
 		Source:      r.Source,
 		Online:      r.Online != 0,
+		Manual:      r.Manual != 0,
+		Label:       r.Label,
+		Notes:       r.Notes,
+		KindLocked:  r.KindLocked != 0,
+		Version:     r.Version,
 		FirstSeenAt: first,
 		LastSeenAt:  last,
 	}
