@@ -103,6 +103,8 @@ func (s *server) routes() []Route {
 		table = append(table,
 			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
 			route(http.MethodGet, "/api/devices/{id}", model.PermTopologyRead, s.getDevice),
+			route(http.MethodPut, "/api/devices/{id}/position", model.PermDevicesWrite, s.setPosition),
+			route(http.MethodGet, "/api/topology", model.PermTopologyRead, s.getTopology),
 			route(http.MethodGet, "/api/scans", model.PermTopologyRead, s.listScans),
 			route(http.MethodGet, "/api/scans/{id}", model.PermTopologyRead, s.getScan),
 		)
