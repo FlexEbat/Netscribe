@@ -40,29 +40,6 @@ type Device struct {
 	Y           *float64   `json:"y"`
 }
 
-// ManualDevice is a device a person adds by hand.
-type ManualDevice struct {
-	MAC, IP, Hostname, Label, Notes string
-	Kind                            DeviceKind
-}
-
-// DeviceEdit changes the fields a person may edit. A nil field stays as it is.
-type DeviceEdit struct {
-	Label *string
-	Notes *string
-	// Kind, when set to a known kind, locks the kind against scans. An empty kind
-	// unlocks it and leaves the current kind in place.
-	Kind *DeviceKind
-	// Version is the version the editor saw. It is required.
-	Version int64
-}
-
-// ManualLink is a link a person draws between two devices.
-type ManualLink struct {
-	ADeviceID, BDeviceID int64
-	APort, BPort         string
-}
-
 type Interface struct {
 	ID       int64  `json:"id"`
 	DeviceID int64  `json:"deviceId"`
