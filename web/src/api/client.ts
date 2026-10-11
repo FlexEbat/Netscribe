@@ -152,3 +152,40 @@ export async function listScans(): Promise<Scan[]> {
 export function startScan(): Promise<Scan> {
   return api<Scan>("POST", "/api/scans")
 }
+
+export interface Link {
+  id: number
+  aDeviceId: number
+  aPort: string
+  bDeviceId: number
+  bPort: string
+  source: string
+  lastSeenAt: string
+}
+
+export interface Container {
+  id: string
+  deviceId: number
+  name: string
+  image: string
+  state: string
+}
+
+export interface Topology {
+  devices: Device[]
+  links: Link[]
+  containers: Container[]
+}
+
+export function getTopology(): Promise<Topology> {
+  return api<Topology>("GET", "/api/topology")
+}
+
+export function moveDevice(id: number, x: number, y: number): Promise<void> {
+  return api("PUT", `/api/devices/${id}/position`, { body: { x, y } })
+}
+
+export async function getDevice(id: number): Promise<Device> {
+  const body = await api<{ device: Device }>("GET", `/api/devices/${id}`)
+  return body.device
+}

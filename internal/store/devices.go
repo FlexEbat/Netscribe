@@ -63,6 +63,32 @@ func (s *Store) GetDevice(ctx context.Context, id int64) (model.Device, error) {
 	return toDevice(row)
 }
 
+// SetDevicePosition stores the canvas position of a device, or returns ErrNotFound.
+func (s *Store) SetDevicePosition(ctx context.Context, id int64, x, y float64) error {
+	n, err := s.q.SetDevicePosition(ctx, dbgen.SetDevicePositionParams{
+		X:  sql.NullFloat64{Float64: x, Valid: true},
+		Y:  sql.NullFloat64{Float64: y, Valid: true},
+		ID: id,
+	})
+	if err != nil {
+		return fmt.Errorf("set device position: %w", err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Topology returns everything the canvas draws. Links and containers come with the
+// slices that collect them, until then the lists are empty, never nil.
+func (s *Store) Topology(ctx context.Context) (model.Topology, error) {
+	devices, err := s.ListDevices(ctx, DeviceFilter{})
+	if err != nil {
+		return model.Topology{}, err
+	}
+	return model.Topology{Devices: devices, Links: []model.Link{}, Containers: []model.Container{}}, nil
+}
+
 func matches(d model.Device, lowerQuery string) bool {
 	for _, field := range []string{d.IP, d.MAC, d.Hostname, d.Vendor} {
 		if strings.Contains(strings.ToLower(field), lowerQuery) {

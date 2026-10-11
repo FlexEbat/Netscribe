@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const getDeviceByID = `-- name: GetDeviceByID :one
@@ -224,6 +225,24 @@ UPDATE devices SET online = 0 WHERE id = ?
 func (q *Queries) SetDeviceOffline(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, setDeviceOffline, id)
 	return err
+}
+
+const setDevicePosition = `-- name: SetDevicePosition :execrows
+UPDATE devices SET x = ?, y = ? WHERE id = ?
+`
+
+type SetDevicePositionParams struct {
+	X  sql.NullFloat64
+	Y  sql.NullFloat64
+	ID int64
+}
+
+func (q *Queries) SetDevicePosition(ctx context.Context, arg SetDevicePositionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, setDevicePosition, arg.X, arg.Y, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const updateDeviceFromScan = `-- name: UpdateDeviceFromScan :exec

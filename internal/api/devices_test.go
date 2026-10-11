@@ -189,3 +189,30 @@ func TestGetDevice(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchFindsByIPMACAndCyrillicNameIgnoringCase(t *testing.T) {
+	e := newEnv(t)
+	seedScan(t, e,
+		device("aa:bb:cc:00:11:22", "192.168.1.40", "Принтер-бухгалтерия", model.KindPrinter),
+		device("aa:bb:cc:00:11:33", "192.168.1.41", "nas", model.KindNAS),
+	)
+	s := e.mustLogin("admin")
+	for name, tc := range map[string]struct {
+		query string
+		want  string
+	}{
+		"by IP":                  {"192.168.1.40", "192.168.1.40"},
+		"by part of an IP":       {"1.41", "192.168.1.41"},
+		"by MAC":                 {"aa:bb:cc:00:11:22", "192.168.1.40"},
+		"by MAC in upper case":   {"AA:BB:CC:00:11:33", "192.168.1.41"},
+		"by Cyrillic name":       {"принтер", "192.168.1.40"},
+		"by Cyrillic upper case": {"БУХГАЛТЕРИЯ", "192.168.1.40"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := listDevices(t, e, s, "?q="+url.QueryEscape(tc.query))
+			if len(got) != 1 || got[0].IP != tc.want {
+				t.Errorf("search %q found %d devices %v, want only %s", tc.query, len(got), got, tc.want)
+			}
+		})
+	}
+}
