@@ -81,6 +81,43 @@ func (q *Queries) InsertScan(ctx context.Context, arg InsertScanParams) (Scan, e
 	return i, err
 }
 
+const listScans = `-- name: ListScans :many
+SELECT id, target, status, started_at, finished_at, error, device_count, link_count, container_count FROM scans ORDER BY id DESC LIMIT ?
+`
+
+func (q *Queries) ListScans(ctx context.Context, limit int64) ([]Scan, error) {
+	rows, err := q.db.QueryContext(ctx, listScans, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Scan
+	for rows.Next() {
+		var i Scan
+		if err := rows.Scan(
+			&i.ID,
+			&i.Target,
+			&i.Status,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Error,
+			&i.DeviceCount,
+			&i.LinkCount,
+			&i.ContainerCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setScanCounts = `-- name: SetScanCounts :exec
 UPDATE scans SET device_count = ?, link_count = ?, container_count = ? WHERE id = ?
 `

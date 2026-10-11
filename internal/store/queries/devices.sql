@@ -1,3 +1,6 @@
+-- name: GetDeviceByID :one
+SELECT * FROM devices WHERE id = ?;
+
 -- name: GetDeviceByMAC :one
 SELECT * FROM devices WHERE mac = ?;
 

@@ -9,6 +9,31 @@ import (
 	"context"
 )
 
+const getDeviceByID = `-- name: GetDeviceByID :one
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y FROM devices WHERE id = ?
+`
+
+func (q *Queries) GetDeviceByID(ctx context.Context, id int64) (Device, error) {
+	row := q.db.QueryRowContext(ctx, getDeviceByID, id)
+	var i Device
+	err := row.Scan(
+		&i.ID,
+		&i.Mac,
+		&i.Ip,
+		&i.Hostname,
+		&i.Vendor,
+		&i.Kind,
+		&i.Description,
+		&i.Source,
+		&i.Online,
+		&i.FirstSeenAt,
+		&i.LastSeenAt,
+		&i.X,
+		&i.Y,
+	)
+	return i, err
+}
+
 const getDeviceByIP = `-- name: GetDeviceByIP :one
 SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y FROM devices WHERE ip = ? ORDER BY online DESC, last_seen_at DESC, id DESC LIMIT 1
 `
