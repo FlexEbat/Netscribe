@@ -102,7 +102,12 @@ func (s *server) routes() []Route {
 	if s.repo != nil {
 		table = append(table,
 			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
+			route(http.MethodPost, "/api/devices", model.PermDevicesWrite, s.createDevice),
 			route(http.MethodGet, "/api/devices/{id}", model.PermTopologyRead, s.getDevice),
+			route(http.MethodPatch, "/api/devices/{id}", model.PermDevicesWrite, s.updateDevice),
+			route(http.MethodDelete, "/api/devices/{id}", model.PermDevicesWrite, s.deleteDevice),
+			route(http.MethodPost, "/api/links", model.PermDevicesWrite, s.createLink),
+			route(http.MethodDelete, "/api/links/{id}", model.PermDevicesWrite, s.deleteLink),
 			route(http.MethodPut, "/api/devices/{id}/position", model.PermDevicesWrite, s.setPosition),
 			route(http.MethodGet, "/api/topology", model.PermTopologyRead, s.getTopology),
 			route(http.MethodGet, "/api/scans", model.PermTopologyRead, s.listScans),

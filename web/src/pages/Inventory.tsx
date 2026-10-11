@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { ApiError, listDevices, listScans, startScan, type Device, type Scan } from "@/api/client"
 import { openEvents, type ScanProgress } from "@/api/events"
 import { useSession } from "@/api/session"
+import { AddDeviceDialog } from "@/components/AddDeviceDialog"
 import { EmptyState } from "@/components/EmptyState"
 import { ScanBar } from "@/components/ScanBar"
 import { Button } from "@/components/ui/button"
@@ -28,6 +29,8 @@ type State = { status: "loading" } | { status: "failed" } | { status: "ready"; d
 export function Inventory() {
   const { state: session } = useSession()
   const canRun = session.status === "signedIn" && can(session.session.permissions, "scans:run")
+  const canWrite =
+    session.status === "signedIn" && can(session.session.permissions, "devices:write")
 
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
@@ -103,7 +106,10 @@ export function Inventory() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Inventory</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold">Inventory</h1>
+        {canWrite ? <AddDeviceDialog onCreated={() => setRefresh((n) => n + 1)} /> : null}
+      </div>
       <ScanBar
         scan={scan}
         progress={progress}

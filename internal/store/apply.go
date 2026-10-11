@@ -135,8 +135,8 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 		return id, nil
 	}
 
-	if kind == string(model.KindUnknown) {
-		kind = cur.Kind
+	if kind == string(model.KindUnknown) || cur.KindLocked != 0 {
+		kind = cur.Kind // an unknown kind never replaces a known one, a person's choice stays
 	}
 	err = q.UpdateDeviceFromScan(ctx, dbgen.UpdateDeviceFromScanParams{
 		Mac:         firstNonEmpty(mac, cur.Mac),

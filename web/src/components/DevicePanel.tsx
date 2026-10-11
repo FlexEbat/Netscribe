@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react"
-import { getDevice, type Device } from "@/api/client"
+import { Pencil } from "lucide-react"
+import { deleteDevice, getDevice, updateDevice, type Device } from "@/api/client"
+import { DeleteDeviceButton } from "@/components/DeleteDeviceButton"
+import { DeviceForm } from "@/components/DeviceForm"
 import { StatusBadge } from "@/components/StatusBadge"
+import { Button } from "@/components/ui/button"
 import { Alert } from "@/components/ui/alert"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -9,15 +13,21 @@ import { displayName, kindLabels } from "@/lib/topology"
 interface DevicePanelProps {
   deviceId: number
   onClose: () => void
+  /** The user may edit and delete devices. */
+  canEdit?: boolean
+  /** Called after a device was changed or deleted, so the canvas can load the new state. */
+  onChanged?: () => void
 }
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; device: Device }
 
-export function DevicePanel({ deviceId, onClose }: DevicePanelProps) {
+export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: DevicePanelProps) {
   // The state remembers which device it belongs to, so a new deviceId shows the loading
   // state straight away without resetting state from inside the effect.
   const [loaded, setLoaded] = useState<{ id: number; state: State } | null>(null)
   const state: State = loaded?.id === deviceId ? loaded.state : { status: "loading" }
+  const [editing, setEditing] = useState(false)
+  const [reloads, setReloads] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -31,7 +41,7 @@ export function DevicePanel({ deviceId, onClose }: DevicePanelProps) {
     return () => {
       cancelled = true
     }
-  }, [deviceId])
+  }, [deviceId, reloads])
 
   return (
     <Sheet open onOpenChange={(open) => !open && onClose()}>
@@ -40,7 +50,52 @@ export function DevicePanel({ deviceId, onClose }: DevicePanelProps) {
           {state.status === "ready" ? displayName(state.device) : "Device"}
         </SheetTitle>
         <SheetDescription className="sr-only">Details of the selected device</SheetDescription>
-        <Body state={state} />
+        {state.status === "ready" && editing ? (
+          <DeviceForm
+            // A new key when the data was reloaded, so the form starts from the current values.
+            key={`${state.device.id}-${state.device.version}`}
+            mode="edit"
+            submitLabel="Save"
+            initial={{
+              label: state.device.label,
+              notes: state.device.notes,
+              kind: state.device.kind,
+            }}
+            onCancel={() => setEditing(false)}
+            onReload={() => setReloads((n) => n + 1)}
+            onSubmit={async (values) => {
+              const device = await updateDevice(state.device.id, {
+                label: values.label,
+                notes: values.notes,
+                kind: values.kind,
+                version: state.device.version,
+              })
+              setLoaded({ id: deviceId, state: { status: "ready", device } })
+              setEditing(false)
+              onChanged?.()
+            }}
+          />
+        ) : (
+          <>
+            <Body state={state} />
+            {canEdit && state.status === "ready" ? (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil className="size-4" aria-hidden="true" />
+                  Edit
+                </Button>
+                <DeleteDeviceButton
+                  name={displayName(state.device)}
+                  onConfirm={async () => {
+                    await deleteDevice(state.device.id)
+                    onChanged?.()
+                    onClose()
+                  }}
+                />
+              </div>
+            ) : null}
+          </>
+        )}
       </SheetContent>
     </Sheet>
   )
@@ -67,7 +122,7 @@ function Body({ state }: { state: State }) {
     ["MAC", d.mac || "–"],
     ["Hostname", d.hostname || "–"],
     ["Vendor", d.vendor || "–"],
-    ["Source", d.source || "–"],
+    ["Source", d.manual ? "Added by hand" : d.source || "–"],
     ["First seen", formatTime(d.firstSeenAt)],
     ["Last seen", formatTime(d.lastSeenAt)],
   ]
@@ -79,6 +134,12 @@ function Body({ state }: { state: State }) {
           <dd className="font-mono break-all">{value}</dd>
         </div>
       ))}
+      {d.notes ? (
+        <div className="contents">
+          <dt className="text-muted-foreground">Notes</dt>
+          <dd className="break-words whitespace-pre-wrap">{d.notes}</dd>
+        </div>
+      ) : null}
       {d.description ? (
         <div className="contents">
           <dt className="text-muted-foreground">Description</dt>

@@ -82,6 +82,8 @@ type envOptions struct {
 	audit   Auditor
 	scanner Scanner
 	hub     *events.Hub
+	// wrapRepo lets a test replace behaviour of the repository the API talks to.
+	wrapRepo func(store.Repo) store.Repo
 }
 
 func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
@@ -112,8 +114,12 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 	if o.audit != nil {
 		aud = o.audit
 	}
+	var repo store.Repo = st
+	if o.wrapRepo != nil {
+		repo = o.wrapRepo(st)
+	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, Repo: st, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now,
+		Static: o.static, Auth: svc, Audit: aud, Repo: repo, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}

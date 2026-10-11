@@ -29,6 +29,9 @@ var (
 	ErrNotFound  = model.ErrNotFound
 	ErrConflict  = model.ErrConflict  // a uniqueness rule was violated
 	ErrLastAdmin = model.ErrLastAdmin // the change would leave no enabled administrator
+
+	ErrVersionConflict = model.ErrVersionConflict // the editor worked on an old version
+	ErrNotManual       = model.ErrNotManual       // a scan found the link, a person cannot delete it
 )
 
 // Repo is the data access contract. It grows by the methods each slice implements.
@@ -37,6 +40,13 @@ type Repo interface {
 	GetDevice(ctx context.Context, id int64) (model.Device, error)       // ErrNotFound
 	SetDevicePosition(ctx context.Context, id int64, x, y float64) error // ErrNotFound
 	Topology(ctx context.Context) (model.Topology, error)
+	ListLinks(ctx context.Context) ([]model.Link, error)
+
+	CreateDevice(ctx context.Context, in model.ManualDevice, userID int64) (model.Device, error)        // ErrConflict
+	UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, userID int64) (model.Device, error) // ErrNotFound, ErrVersionConflict
+	DeleteDevice(ctx context.Context, id int64) error                                                   // ErrNotFound
+	CreateLink(ctx context.Context, in model.ManualLink) (model.Link, error)                            // ErrNotFound, ErrConflict
+	DeleteLink(ctx context.Context, id int64) error                                                     // ErrNotFound, ErrNotManual
 
 	StartScan(ctx context.Context, target string) (model.Scan, error)
 	FinishScan(ctx context.Context, id int64, status, errMsg string) error

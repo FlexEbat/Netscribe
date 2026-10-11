@@ -189,3 +189,48 @@ export async function getDevice(id: number): Promise<Device> {
   const body = await api<{ device: Device }>("GET", `/api/devices/${id}`)
   return body.device
 }
+
+export interface DeviceInput {
+  label: string
+  notes: string
+  kind: DeviceKind
+  ip: string
+  mac: string
+}
+
+export async function createDevice(input: DeviceInput): Promise<Device> {
+  const body = await api<{ device: Device }>("POST", "/api/devices", { body: input })
+  return body.device
+}
+
+export interface DeviceChanges {
+  label: string
+  notes: string
+  kind: DeviceKind
+  version: number
+}
+
+export async function updateDevice(id: number, changes: DeviceChanges): Promise<Device> {
+  const body = await api<{ device: Device }>("PATCH", `/api/devices/${id}`, { body: changes })
+  return body.device
+}
+
+export function deleteDevice(id: number): Promise<void> {
+  return api("DELETE", `/api/devices/${id}`)
+}
+
+export interface LinkInput {
+  aDeviceId: number
+  aPort: string
+  bDeviceId: number
+  bPort: string
+}
+
+export async function createLink(input: LinkInput): Promise<Link> {
+  const body = await api<{ link: Link }>("POST", "/api/links", { body: input })
+  return body.link
+}
+
+export function deleteLink(id: number): Promise<void> {
+  return api("DELETE", `/api/links/${id}`)
+}
