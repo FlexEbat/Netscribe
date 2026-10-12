@@ -24,8 +24,8 @@ type meResponse struct {
 	CSRFToken   string             `json:"csrfToken"`
 }
 
-func newMe(u model.User, csrf string) meResponse {
-	return meResponse{User: u, Permissions: auth.Permissions(u.Role), CSRFToken: csrf}
+func newMe(p auth.Principal) meResponse {
+	return meResponse{User: p.User, Permissions: p.Permissions(), CSRFToken: p.CSRFToken}
 }
 
 // decode reads one JSON object and rejects unknown fields and trailing data.
@@ -75,7 +75,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 
 	s.setSessionCookie(w, r, sess)
 	s.write(r.Context(), model.AuditEntry{Action: "login", Result: "ok", IP: ip, UserID: &user.ID, Username: user.Username})
-	writeJSON(w, http.StatusOK, newMe(user, sess.CSRFToken))
+	writeJSON(w, http.StatusOK, newMe(auth.Principal{User: user, CSRFToken: sess.CSRFToken}))
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +92,7 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) me(w http.ResponseWriter, r *http.Request) {
 	p, _ := principal(r)
-	writeJSON(w, http.StatusOK, newMe(p.User, p.CSRFToken))
+	writeJSON(w, http.StatusOK, newMe(p))
 }
 
 func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {

@@ -46,6 +46,11 @@ type Auditor interface {
 	AddAudit(ctx context.Context, e model.AuditEntry) error
 }
 
+// AuditReader reads the audit log. *store.Store implements it.
+type AuditReader interface {
+	ListAudit(ctx context.Context, f store.AuditFilter) ([]model.AuditEntry, error)
+}
+
 // Scanner starts scans. The scanner behind it is told which targets to use.
 type Scanner interface {
 	// Start records a scan and returns it while it continues in the background.
@@ -61,6 +66,8 @@ type Options struct {
 	Auth *auth.Service
 	// Audit receives security events. Required.
 	Audit Auditor
+	// AuditLog serves GET /api/audit. Without it that route is not registered.
+	AuditLog AuditReader
 	// Repo serves devices and scans. Without it those routes are not registered.
 	Repo store.Repo
 	// Scanner runs scans for POST /api/scans. Without it that route is not registered.
@@ -76,15 +83,16 @@ type Options struct {
 }
 
 type server struct {
-	auth    *auth.Service
-	audit   Auditor
-	repo    store.Repo
-	scanner Scanner
-	hub     *events.Hub
-	streams *streamCounter
-	trusted []netip.Prefix
-	log     *slog.Logger
-	limiter *auth.Limiter // sign-in attempts per client address
+	auth     *auth.Service
+	audit    Auditor
+	repo     store.Repo
+	auditLog AuditReader
+	scanner  Scanner
+	hub      *events.Hub
+	streams  *streamCounter
+	trusted  []netip.Prefix
+	log      *slog.Logger
+	limiter  *auth.Limiter // sign-in attempts per client address
 }
 
 const (
@@ -98,6 +106,19 @@ func (s *server) routes() []Route {
 		route(http.MethodPost, "/api/auth/logout", permSession, s.logout),
 		route(http.MethodGet, "/api/auth/me", permSession, s.me),
 		route(http.MethodPut, "/api/auth/password", permSession, s.changePassword),
+	}
+	table = append(table,
+		route(http.MethodGet, "/api/users", model.PermUsersManage, s.listUsers),
+		route(http.MethodPost, "/api/users", model.PermUsersManage, s.createUser),
+		route(http.MethodPatch, "/api/users/{id}", model.PermUsersManage, s.updateUser),
+		route(http.MethodPut, "/api/users/{id}/password", model.PermUsersManage, s.resetPassword),
+		route(http.MethodDelete, "/api/users/{id}", model.PermUsersManage, s.deleteUser),
+		route(http.MethodGet, "/api/tokens", model.PermTokensManage, s.listTokens),
+		route(http.MethodPost, "/api/tokens", model.PermTokensManage, s.createToken),
+		route(http.MethodDelete, "/api/tokens/{id}", model.PermTokensManage, s.revokeToken),
+	)
+	if s.auditLog != nil {
+		table = append(table, route(http.MethodGet, "/api/audit", model.PermAuditRead, s.listAudit))
 	}
 	if s.repo != nil {
 		table = append(table,
@@ -138,15 +159,16 @@ func newServer(opts Options) *server {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &server{
-		auth:    opts.Auth,
-		audit:   opts.Audit,
-		repo:    opts.Repo,
-		scanner: opts.Scanner,
-		hub:     opts.Events,
-		streams: newStreamCounter(),
-		trusted: opts.TrustedProxies,
-		log:     log,
-		limiter: auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
+		auth:     opts.Auth,
+		audit:    opts.Audit,
+		repo:     opts.Repo,
+		auditLog: opts.AuditLog,
+		scanner:  opts.Scanner,
+		hub:      opts.Events,
+		streams:  newStreamCounter(),
+		trusted:  opts.TrustedProxies,
+		log:      log,
+		limiter:  auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
 	}
 }
 

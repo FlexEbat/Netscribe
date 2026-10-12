@@ -82,9 +82,29 @@ func principal(r *http.Request) (auth.Principal, bool) {
 	return p, ok
 }
 
-// authenticate resolves the session cookie. Without a valid session the answer is 401.
+// authenticate resolves the caller: an access token in the Authorization header, or else
+// the session cookie. A request that presents a token is never judged by its cookie.
+// Without a valid credential the answer is 401.
 func (s *server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if header := r.Header.Get("Authorization"); header != "" {
+			scheme, value, found := strings.Cut(header, " ")
+			if !found || !strings.EqualFold(scheme, "Bearer") {
+				writeError(w, http.StatusUnauthorized, "authentication required")
+				return
+			}
+			p, err := s.auth.AuthenticateToken(r.Context(), strings.TrimSpace(value))
+			if errors.Is(err, auth.ErrUnauthenticated) {
+				writeError(w, http.StatusUnauthorized, "authentication required")
+				return
+			}
+			if err != nil {
+				s.internalError(w, "authenticate token", err)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
+			return
+		}
 		c, err := r.Cookie(sessionCookie)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "authentication required")
@@ -111,6 +131,9 @@ func (s *server) csrf(next http.Handler) http.Handler {
 		case http.MethodGet, http.MethodHead, http.MethodOptions:
 		default:
 			p, _ := principal(r)
+			if p.Scope != "" {
+				break // a token is sent by a script, not by a browser that could be tricked
+			}
 			if !auth.CSRFMatches(p.CSRFToken, r.Header.Get(csrfHeader)) {
 				s.record(r, "access_denied", "denied", "missing or wrong csrf token")
 				writeError(w, http.StatusForbidden, "forbidden")
@@ -126,12 +149,17 @@ func (s *server) csrf(next http.Handler) http.Handler {
 func (s *server) authorize(rt Route, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, _ := principal(r)
+		if p.Scope != "" && !s.tokenMayCall(p, rt, r.Method) {
+			s.record(r, "access_denied", "denied", rt.Method+" "+rt.Path+" with a token")
+			writeError(w, http.StatusForbidden, "forbidden")
+			return
+		}
 		if rt.Permission != permSession {
 			if p.User.MustChangePassword {
 				writeError(w, http.StatusForbidden, "password change required")
 				return
 			}
-			if !auth.Can(p.User.Role, rt.Permission) {
+			if !p.Can(rt.Permission) {
 				s.record(r, "access_denied", "denied", rt.Method+" "+rt.Path)
 				writeError(w, http.StatusForbidden, "forbidden")
 				return
@@ -139,6 +167,20 @@ func (s *server) authorize(rt Route, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// tokenMayCall applies the limits that hold for every access token. Of the routes that
+// need only a sign-in, a token may call GET /api/auth/me and nothing else under /api/auth,
+// and a token of scope read never changes anything.
+func (s *server) tokenMayCall(p auth.Principal, rt Route, method string) bool {
+	if rt.Permission == permSession && !(rt.Method == http.MethodGet && rt.Path == "/api/auth/me") {
+		return false
+	}
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	}
+	return p.Scope == auth.ScopeWrite
 }
 
 // clientIP is the address of the client. X-Forwarded-For counts only when the
