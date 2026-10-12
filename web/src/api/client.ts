@@ -192,6 +192,7 @@ export async function getDevice(id: number): Promise<Device> {
 
 export interface DeviceInput {
   label: string
+  hostname: string
   notes: string
   kind: DeviceKind
   ip: string

@@ -129,6 +129,7 @@ describe("adding a device", () => {
     await waitFor(() =>
       expect(lastCall(mock, "POST", "/api/devices")).toEqual({
         label: "Patch panel",
+        hostname: "",
         notes: "",
         kind: "unknown",
         ip: "192.168.1.9",

@@ -103,6 +103,7 @@ func TestManualDeviceValidation(t *testing.T) {
 		"long label":     {`{"label":"` + strings.Repeat("a", 101) + `"}`, "label is longer than 100 characters"},
 		"long notes":     {`{"label":"x","notes":"` + strings.Repeat("a", 2001) + `"}`, "notes are longer than 2000 characters"},
 		"unknown kind":   {`{"label":"x","kind":"toaster"}`, "kind is unknown"},
+		"long hostname":  {`{"label":"x","hostname":"` + strings.Repeat("a", 256) + `"}`, "hostname is longer than 255 characters"},
 		"unknown field":  {`{"label":"x","admin":true}`, "invalid request body"},
 		"not json":       {`label`, "invalid request body"},
 	} {
@@ -352,5 +353,23 @@ func TestChangesAreAnnouncedToTheEventStreams(t *testing.T) {
 		}
 	default:
 		t.Error("no event after creating a device")
+	}
+}
+
+func TestManualDeviceKeepsItsHostname(t *testing.T) {
+	e := newEnv(t)
+	s := e.mustLogin("admin")
+	d := createManual(t, e, s, map[string]string{"label": "x", "hostname": "  nas-01.lan\n"})
+	if d.Hostname != "nas-01.lan" {
+		t.Errorf("hostname = %q, want nas-01.lan", d.Hostname)
+	}
+}
+
+func TestManualDeviceWithTheAddressOfADiscoveredDeviceIsAConflict(t *testing.T) {
+	e := newEnv(t)
+	seedScan(t, e, device("aa:aa:aa:aa:aa:02", "192.168.1.2", "gw", model.KindRouter))
+	rec := e.as(e.mustLogin("admin"), http.MethodPost, "/api/devices", map[string]string{"ip": "192.168.1.2", "label": "again"})
+	if rec.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409", rec.Code)
 	}
 }

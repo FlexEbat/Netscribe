@@ -32,7 +32,7 @@ func (s *Store) CreateDevice(ctx context.Context, in model.ManualDevice, userID 
 	row, err := s.q.InsertManualDevice(ctx, dbgen.InsertManualDeviceParams{
 		Mac:         mac,
 		Ip:          ip,
-		Hostname:    in.Hostname,
+		Hostname:    cleanText(in.Hostname),
 		Kind:        string(kind),
 		Label:       in.Label,
 		Notes:       in.Notes,
