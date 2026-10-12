@@ -16,6 +16,7 @@ import { kindLabels } from "@/lib/topology"
 
 export interface DeviceFormValues {
   label: string
+  hostname: string
   notes: string
   kind: DeviceKind
   ip: string
@@ -48,6 +49,7 @@ export function DeviceForm({
   const id = useId()
   const [values, setValues] = useState<DeviceFormValues>({
     label: initial?.label ?? "",
+    hostname: initial?.hostname ?? "",
     notes: initial?.notes ?? "",
     kind: initial?.kind ?? "unknown",
     ip: initial?.ip ?? "",
@@ -121,6 +123,18 @@ export function DeviceForm({
           </SelectContent>
         </Select>
       </div>
+      {mode === "create" ? (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${id}-hostname`}>Hostname</Label>
+          <Input
+            id={`${id}-hostname`}
+            value={values.hostname}
+            maxLength={255}
+            placeholder="optional"
+            onChange={(e) => set("hostname", e.target.value)}
+          />
+        </div>
+      ) : null}
       {mode === "create" ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
