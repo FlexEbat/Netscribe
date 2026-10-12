@@ -3,6 +3,7 @@
 **Версия: v0 (черновик)** (2026-10-07)
 
 Changelog:
+- v0 (правка 9) - ручное устройство принимает необязательное поле `hostname` (до 255 символов). Явно записано, что ручное устройство с MAC или IP, уже занятым другой записью, отвечает 409. В раздел 8 добавлено сообщение `hostname is longer than 255 characters`.
 - v0 (правка 8) - слайс 5 смержен в `main` (PR #16). Таблицу `links` создаёт миграция слайса 5, а не слайса 7, потому что ручные связи нужны раньше. В раздел 8 добавлены два сообщения, которых не было в списке: `port is longer than 64 characters` и `version is required`.
 - v0 (правка 7) - слайсы 3 и 4 смержены в `main` (PR #13 и #14), в разделе 16 добавлена строка статуса.
 - v0 (правка 6) - слайс 4, критерий 3: гарантия «не сдвигаются» относится к узлам с сохранёнными координатами.
@@ -811,7 +812,7 @@ type Collector interface {
 | `PUT /api/auth/password`             | смена своего пароля (текущий и новый)                             | только вход     | 204, 400, 401          |
 | `GET /api/topology`                  | устройства, связи, контейнеры одним ответом                       | `topology:read` | 200                    |
 | `GET /api/devices?online=&kind=&q=`  | список устройств, ответ `{ "devices": [...] }`                    | `topology:read` | 200, 400               |
-| `POST /api/devices`                  | ручное добавление устройства                                      | `devices:write` | 201, 400, 409          |
+| `POST /api/devices`                  | ручное добавление; 409, если MAC или IP занят другой записью  | `devices:write` | 201, 400, 409          |
 | `GET /api/devices/{id}`              | устройство, его интерфейсы и сервисы                              | `topology:read` | 200, 404               |
 | `PATCH /api/devices/{id}`            | правка `label`, `notes`, `kind`, поле `version` обязательно       | `devices:write` | 200, 400, 404, 409     |
 | `DELETE /api/devices/{id}`           | удаление устройства                                               | `devices:write` | 204, 404               |
@@ -895,11 +896,11 @@ type Collector interface {
 - Неизвестный `format` экспорта - 404.
 - Имя пользователя `^[a-z0-9._-]{3,32}$`, роль из набора `viewer`, `operator`, `admin`.
 - Пароль от `auth.minPasswordLength` до 128 символов и не равен имени пользователя.
-- Ручное устройство: `ip` пустой или корректный адрес, `mac` пустой или корректный (приводится к нижнему регистру с двоеточиями), хотя бы одно из полей `ip`, `mac`, `label` не пусто, `label` до 100 символов, `notes` до 2000, `kind` из набора `DeviceKind`.
+- Ручное устройство: `ip` пустой или корректный адрес, `mac` пустой или корректный (приводится к нижнему регистру с двоеточиями), хотя бы одно из полей `ip`, `mac`, `label` не пусто, `label` до 100 символов, `notes` до 2000, `hostname` до 255 символов (необязательное), `kind` из набора `DeviceKind`.
 - Связь: оба устройства существуют и различны, порт до 64 символов.
 - Токен: имя от 1 до 64 символов, область `read` или `write`, срок от 1 до 365 дней.
 
-Сообщения об ошибках на английском, по одной строке: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `port is longer than 64 characters`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
+Сообщения об ошибках на английском, по одной строке: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `port is longer than 64 characters`, `hostname is longer than 255 characters`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
 
 ---
 
