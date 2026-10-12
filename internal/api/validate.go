@@ -16,6 +16,7 @@ const (
 	maxLabelRunes = 100
 	maxNotesRunes = 2000
 	maxPortRunes  = 64
+	maxHostRunes  = 255
 )
 
 // The messages are one line of English each, as section 8 lists them. The few that the
@@ -26,6 +27,7 @@ var (
 	errNoIdentity    = errors.New("device has no ip, mac or label")
 	errLabelLong     = errors.New("label is longer than 100 characters")
 	errNotesLong     = errors.New("notes are longer than 2000 characters")
+	errHostnameLong  = errors.New("hostname is longer than 255 characters") // not in the list of section 8
 	errKindUnknown   = errors.New("kind is unknown")
 	errSelfLink      = errors.New("link connects a device to itself")
 	errPortLong      = errors.New("port is longer than 64 characters") // not in the list of section 8
@@ -94,11 +96,12 @@ func validNotes(s string) error {
 }
 
 type deviceBody struct {
-	MAC   string `json:"mac"`
-	IP    string `json:"ip"`
-	Label string `json:"label"`
-	Notes string `json:"notes"`
-	Kind  string `json:"kind"`
+	MAC      string `json:"mac"`
+	IP       string `json:"ip"`
+	Hostname string `json:"hostname"`
+	Label    string `json:"label"`
+	Notes    string `json:"notes"`
+	Kind     string `json:"kind"`
 }
 
 // manualDevice validates the body of POST /api/devices.
@@ -121,6 +124,10 @@ func (b deviceBody) manualDevice() (model.ManualDevice, error) {
 	if err := validNotes(notes); err != nil {
 		return model.ManualDevice{}, err
 	}
+	hostname := cleanLabel(b.Hostname)
+	if utf8.RuneCountInString(hostname) > maxHostRunes {
+		return model.ManualDevice{}, errHostnameLong
+	}
 	kind := model.DeviceKind(b.Kind)
 	if kind == "" {
 		kind = model.KindUnknown
@@ -128,7 +135,7 @@ func (b deviceBody) manualDevice() (model.ManualDevice, error) {
 	if !validKind(kind) {
 		return model.ManualDevice{}, errKindUnknown
 	}
-	return model.ManualDevice{MAC: mac, IP: ip, Label: label, Notes: notes, Kind: kind}, nil
+	return model.ManualDevice{MAC: mac, IP: ip, Hostname: hostname, Label: label, Notes: notes, Kind: kind}, nil
 }
 
 type editBody struct {
