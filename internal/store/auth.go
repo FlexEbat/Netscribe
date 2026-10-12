@@ -420,6 +420,14 @@ func (s *Store) AddAudit(ctx context.Context, e model.AuditEntry) error {
 }
 
 // ListAudit returns entries, newest first.
+// auditBound is the text of a period boundary, or the empty string for "no boundary".
+func auditBound(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return formatTime(t)
+}
+
 func (s *Store) ListAudit(ctx context.Context, f AuditFilter) ([]model.AuditEntry, error) {
 	limit := f.Limit
 	if limit <= 0 {
@@ -427,7 +435,8 @@ func (s *Store) ListAudit(ctx context.Context, f AuditFilter) ([]model.AuditEntr
 	}
 	limit = min(limit, maxAuditRows)
 	rows, err := s.q.ListAudit(ctx, dbgen.ListAuditParams{
-		BeforeID: f.BeforeID, Action: f.Action, Username: f.Username, MaxRows: int64(limit),
+		BeforeID: f.BeforeID, Action: f.Action, Username: f.Username, Result: f.Result,
+		FromAt: auditBound(f.From), ToAt: auditBound(f.To), MaxRows: int64(limit),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list audit: %w", err)

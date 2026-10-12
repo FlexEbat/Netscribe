@@ -56,7 +56,7 @@ type Repo interface {
 	ApplyResult(ctx context.Context, scanID int64, r collector.Result) error
 }
 
-// AuthRepo holds users, sessions and the audit log. Access tokens join it in slice 6.
+// AuthRepo holds users, sessions, access tokens and the audit log.
 type AuthRepo interface {
 	CountUsers(ctx context.Context) (int, error)
 	CreateUser(ctx context.Context, u model.UserRecord) (model.User, error)       // ErrConflict
@@ -75,6 +75,12 @@ type AuthRepo interface {
 	DeleteUserSessions(ctx context.Context, userID int64) error
 	PruneSessions(ctx context.Context, now time.Time) error
 
+	CreateToken(ctx context.Context, t TokenRecord) (model.APIToken, error)           // ErrConflict at the limit
+	GetTokenByHash(ctx context.Context, hash string) (TokenRecord, model.User, error) // ErrNotFound
+	ListTokens(ctx context.Context, userID int64) ([]model.APIToken, error)
+	RevokeToken(ctx context.Context, id, userID int64) error // ErrNotFound
+	TouchToken(ctx context.Context, id int64, now time.Time) error
+
 	AddAudit(ctx context.Context, e model.AuditEntry) error
 	ListAudit(ctx context.Context, f AuditFilter) ([]model.AuditEntry, error)
 	PruneAudit(ctx context.Context, keepDays int) error
@@ -84,12 +90,17 @@ type AuthRepo interface {
 // name the data layer uses.
 type SessionRecord = auth.SessionRecord
 
+// TokenRecord is declared in auth for the same reason.
+type TokenRecord = auth.TokenRecord
+
 // AuditFilter narrows ListAudit. Zero values mean no restriction.
 type AuditFilter struct {
 	Limit    int   // 1 to 500, default 50
 	BeforeID int64 // only entries with a smaller id, for paging
 	Action   string
 	Username string
+	Result   string    // ok, denied, error
+	From, To time.Time // From is included, To is not; a zero time means no boundary
 }
 
 var (

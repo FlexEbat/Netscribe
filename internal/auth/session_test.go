@@ -19,12 +19,14 @@ type fakeRepo struct {
 	now      func() time.Time
 	users    map[string]*model.UserRecord
 	sessions map[string]SessionRecord
+	tokens   map[string]*TokenRecord // by hash
 	nextID   int64
 
-	countCalls  int
-	touchCalls  int
-	recorded    []recordedLogin
-	passwordSet []passwordSet
+	countCalls   int
+	touchCalls   int
+	tokenTouches int
+	recorded     []recordedLogin
+	passwordSet  []passwordSet
 }
 
 type recordedLogin struct {
@@ -40,7 +42,7 @@ type passwordSet struct {
 }
 
 func newFakeRepo(now func() time.Time) *fakeRepo {
-	return &fakeRepo{now: now, users: map[string]*model.UserRecord{}, sessions: map[string]SessionRecord{}}
+	return &fakeRepo{now: now, users: map[string]*model.UserRecord{}, sessions: map[string]SessionRecord{}, tokens: map[string]*TokenRecord{}}
 }
 
 func (r *fakeRepo) CountUsers(context.Context) (int, error) {

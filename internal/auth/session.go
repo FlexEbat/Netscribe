@@ -42,11 +42,28 @@ type SessionRecord struct {
 	UserAgent  string
 }
 
+// TokenRecord is a row of the api_tokens table. The token itself is never stored, only
+// its SHA-256 hash and the first characters, which identify it in a list.
+type TokenRecord struct {
+	ID         int64
+	UserID     int64
+	Name       string
+	Prefix     string
+	Hash       string
+	Scope      string // read or write
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	LastUsedAt *time.Time
+	Revoked    bool
+}
+
 // Repo is the part of the data layer the auth package uses.
 type Repo interface {
 	CountUsers(ctx context.Context) (int, error)
 	CreateUser(ctx context.Context, u model.UserRecord) (model.User, error) // model.ErrConflict
 	GetUserByName(ctx context.Context, username string) (model.UserRecord, error)
+	GetUser(ctx context.Context, id int64) (model.User, error) // model.ErrNotFound
+	DeleteUser(ctx context.Context, id int64) error            // model.ErrNotFound, model.ErrLastAdmin
 	ListUsers(ctx context.Context) ([]model.User, error)
 	UpdateUser(ctx context.Context, id int64, role *model.Role, disabled *bool) (model.User, error)
 	SetPassword(ctx context.Context, id int64, hash string, mustChange bool) error // revokes the user's sessions
@@ -56,6 +73,12 @@ type Repo interface {
 	GetSession(ctx context.Context, idHash string) (SessionRecord, model.User, error) // model.ErrNotFound
 	TouchSession(ctx context.Context, idHash string, now time.Time) error
 	DeleteSession(ctx context.Context, idHash string) error
+
+	CreateToken(ctx context.Context, t TokenRecord) (model.APIToken, error)           // model.ErrConflict at the limit
+	GetTokenByHash(ctx context.Context, hash string) (TokenRecord, model.User, error) // model.ErrNotFound
+	ListTokens(ctx context.Context, userID int64) ([]model.APIToken, error)
+	RevokeToken(ctx context.Context, id, userID int64) error // model.ErrNotFound
+	TouchToken(ctx context.Context, id int64, now time.Time) error
 }
 
 // Session is what a successful login hands to the client.
@@ -69,6 +92,9 @@ type Session struct {
 type Principal struct {
 	User      model.User
 	CSRFToken string
+	// Scope is "read" or "write" for a caller that used an access token, empty for a
+	// session. A token holds at most the rights its scope names.
+	Scope string
 }
 
 // NewUser describes an account to create.

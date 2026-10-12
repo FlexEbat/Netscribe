@@ -47,14 +47,20 @@ SELECT id, at, user_id, username, "action", entity, entity_id, result, ip, detai
 WHERE (?1 = 0 OR id < ?1)
   AND (?2 = '' OR action = ?2)
   AND (?3 = '' OR username = ?3)
+  AND (?4 = '' OR result = ?4)
+  AND (?5 = '' OR at >= ?5)
+  AND (?6 = '' OR at < ?6)
 ORDER BY id DESC
-LIMIT ?4
+LIMIT ?7
 `
 
 type ListAuditParams struct {
 	BeforeID interface{}
 	Action   interface{}
 	Username interface{}
+	Result   interface{}
+	FromAt   interface{}
+	ToAt     interface{}
 	MaxRows  int64
 }
 
@@ -63,6 +69,9 @@ func (q *Queries) ListAudit(ctx context.Context, arg ListAuditParams) ([]AuditLo
 		arg.BeforeID,
 		arg.Action,
 		arg.Username,
+		arg.Result,
+		arg.FromAt,
+		arg.ToAt,
 		arg.MaxRows,
 	)
 	if err != nil {
