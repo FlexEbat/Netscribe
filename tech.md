@@ -3,6 +3,7 @@
 **Версия: v0 (черновик)** (2026-10-07)
 
 Changelog:
+- v0 (правка 10) - слайс 6 смержен в `main` (PR #19). Токен никогда не открывает `users:manage`, `audit:read` и `tokens:manage`: украденный токен не может создавать новые токены. Из маршрутов `/api/auth/*` токену доступен только `GET /api/auth/me`. Права токена - пересечение его области и текущей роли владельца. В раздел 8 добавлены сообщения слайса 6.
 - v0 (правка 9) - ручное устройство принимает необязательное поле `hostname` (до 255 символов). Явно записано, что ручное устройство с MAC или IP, уже занятым другой записью, отвечает 409. В раздел 8 добавлено сообщение `hostname is longer than 255 characters`.
 - v0 (правка 8) - слайс 5 смержен в `main` (PR #16). Таблицу `links` создаёт миграция слайса 5, а не слайса 7, потому что ручные связи нужны раньше. В раздел 8 добавлены два сообщения, которых не было в списке: `port is longer than 64 characters` и `version is required`.
 - v0 (правка 7) - слайсы 3 и 4 смержены в `main` (PR #13 и #14), в разделе 16 добавлена строка статуса.
@@ -900,7 +901,7 @@ type Collector interface {
 - Связь: оба устройства существуют и различны, порт до 64 символов.
 - Токен: имя от 1 до 64 символов, область `read` или `write`, срок от 1 до 365 дней.
 
-Сообщения об ошибках на английском, по одной строке: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `port is longer than 64 characters`, `hostname is longer than 255 characters`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
+Сообщения об ошибках на английском, по одной строке: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `port is longer than 64 characters`, `hostname is longer than 255 characters`, `token name is invalid`, `scope is unknown`, `scope is above your role`, `token lifetime is out of range`, `too many active tokens`, `before is not valid`, `result is unknown`, `from is not a date`, `to is not a date`, `filter is too long`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
 
 ---
 
@@ -1182,7 +1183,7 @@ CONTRACT GAP
 
 ## 16. Стадии и слайсы
 
-Статус: слайсы 0-5 смержены в `main`, следующий слайс - 6.
+Статус: слайсы 0-6 смержены в `main`, следующий слайс - 7.
 
 Порядок жёсткий, сверху вниз. Один слайс за один заход сессии. Слайс закрыт, когда выполнен Definition of Done из раздела 13.
 
@@ -1361,7 +1362,7 @@ CONTRACT GAP
 2. Смена роли, отключение, удаление и сброс пароля отзывают активные сессии пользователя.
 3. Последнего администратора нельзя удалить, отключить или понизить (409), в том числе самому себе.
 4. Operator и viewer не открывают `/users` и `/audit` и получают 403 на соответствующие маршруты.
-5. Токен показывается один раз при создании, в списке виден только префикс, в базе лежит только хеш. Токен с областью `read` получает 403 на небезопасных методах. Токен никогда не открывает `users:manage` и `audit:read`.
+5. Токен показывается один раз при создании, в списке виден только префикс, в базе лежит только хеш. Токен с областью `read` получает 403 на небезопасных методах. Токен никогда не открывает `users:manage`, `audit:read` и `tokens:manage`, а из `/api/auth/*` ему доступен только `GET /api/auth/me`. Права токена - пересечение его области и текущей роли владельца.
 6. Отозванный и просроченный токены дают 401. Срок по умолчанию 90 дней, максимум 365, бессрочный токен не выдаётся.
 7. Журнал показывает события из раздела 9.8 с фильтрами и пагинацией через `before`. Через API записи нельзя изменить или удалить.
 8. Не больше 20 активных токенов и 10 сессий на пользователя.
