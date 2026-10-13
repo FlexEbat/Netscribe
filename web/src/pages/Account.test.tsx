@@ -14,6 +14,7 @@ afterEach(() => {
 
 async function openAccount(handlers: Parameters<typeof mockFetch>[0] = {}, mustChange = false) {
   const mock = mockFetch({
+    "GET /api/tokens": () => json(200, { tokens: [] }),
     "GET /api/auth/me": () =>
       json(200, meBody(makeUser({ mustChangePassword: mustChange }), undefined, "csrf-9")),
     ...handlers,

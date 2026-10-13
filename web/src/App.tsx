@@ -1,5 +1,5 @@
 import { NavLink, Outlet, type RouteObject } from "react-router-dom"
-import { List, Network } from "lucide-react"
+import { List, Network, ScrollText, Users as UsersIcon } from "lucide-react"
 import { useSession } from "@/api/session"
 import { EmptyState } from "@/components/EmptyState"
 import { RequirePermission } from "@/components/RequirePermission"
@@ -8,6 +8,8 @@ import { UserMenu } from "@/components/UserMenu"
 import { can, type Permission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
 import { Account } from "@/pages/Account"
+import { Audit } from "@/pages/Audit"
+import { Users } from "@/pages/Users"
 import { Inventory } from "@/pages/Inventory"
 import { Login } from "@/pages/Login"
 import { Topology } from "@/pages/Topology"
@@ -16,6 +18,8 @@ import { Topology } from "@/pages/Topology"
 const navItems: { to: string; label: string; icon: typeof Network; permission: Permission }[] = [
   { to: "/", label: "Topology", icon: Network, permission: "topology:read" },
   { to: "/inventory", label: "Inventory", icon: List, permission: "topology:read" },
+  { to: "/users", label: "Users", icon: UsersIcon, permission: "users:manage" },
+  { to: "/audit", label: "Audit log", icon: ScrollText, permission: "audit:read" },
 ]
 
 function Layout() {
@@ -85,6 +89,22 @@ export const routes: RouteObject[] = [
         element: (
           <RequirePermission permission="topology:read">
             <Inventory />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: "users",
+        element: (
+          <RequirePermission permission="users:manage">
+            <Users />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: "audit",
+        element: (
+          <RequirePermission permission="audit:read">
+            <Audit />
           </RequirePermission>
         ),
       },

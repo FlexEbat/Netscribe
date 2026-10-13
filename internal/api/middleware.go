@@ -173,7 +173,7 @@ func (s *server) authorize(rt Route, next http.Handler) http.Handler {
 // need only a sign-in, a token may call GET /api/auth/me and nothing else under /api/auth,
 // and a token of scope read never changes anything.
 func (s *server) tokenMayCall(p auth.Principal, rt Route, method string) bool {
-	if rt.Permission == permSession && !(rt.Method == http.MethodGet && rt.Path == "/api/auth/me") {
+	if rt.Permission == permSession && (rt.Method != http.MethodGet || rt.Path != "/api/auth/me") {
 		return false
 	}
 	switch method {

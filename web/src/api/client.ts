@@ -1,3 +1,5 @@
+import type { Role, User } from "@/lib/permissions"
+
 export class ApiError extends Error {
   readonly status: number
   /** Seconds to wait, from a Retry-After header. */
@@ -234,4 +236,95 @@ export async function createLink(input: LinkInput): Promise<Link> {
 
 export function deleteLink(id: number): Promise<void> {
   return api("DELETE", `/api/links/${id}`)
+}
+
+export async function listUsers(): Promise<User[]> {
+  const body = await api<{ users: User[] }>("GET", "/api/users")
+  return body.users
+}
+
+export async function createUser(input: {
+  username: string
+  role: Role
+  password: string
+}): Promise<User> {
+  const body = await api<{ user: User }>("POST", "/api/users", { body: input })
+  return body.user
+}
+
+export async function updateUser(
+  id: number,
+  changes: { role?: Role; disabled?: boolean },
+): Promise<User> {
+  const body = await api<{ user: User }>("PATCH", `/api/users/${id}`, { body: changes })
+  return body.user
+}
+
+export function resetPassword(id: number, password: string): Promise<void> {
+  return api("PUT", `/api/users/${id}/password`, { body: { password } })
+}
+
+export function deleteUser(id: number): Promise<void> {
+  return api("DELETE", `/api/users/${id}`)
+}
+
+export interface AccessToken {
+  id: number
+  name: string
+  prefix: string
+  scope: "read" | "write"
+  createdAt: string
+  expiresAt: string
+  lastUsedAt: string | null
+  revoked: boolean
+}
+
+export async function listTokens(): Promise<AccessToken[]> {
+  const body = await api<{ tokens: AccessToken[] }>("GET", "/api/tokens")
+  return body.tokens
+}
+
+export function createToken(input: {
+  name: string
+  scope: "read" | "write"
+  days: number
+}): Promise<{ value: string; token: AccessToken }> {
+  return api("POST", "/api/tokens", { body: input })
+}
+
+export function revokeToken(id: number): Promise<void> {
+  return api("DELETE", `/api/tokens/${id}`)
+}
+
+export interface AuditEntry {
+  id: number
+  at: string
+  userId: number | null
+  username: string
+  action: string
+  entity: string
+  entityId: string
+  result: "ok" | "denied" | "error"
+  ip: string
+  detail: string
+}
+
+export interface AuditQuery {
+  user?: string
+  action?: string
+  result?: string
+  from?: string
+  to?: string
+  before?: number
+  limit?: number
+}
+
+export async function listAudit(query: AuditQuery = {}): Promise<AuditEntry[]> {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== "") params.set(key, String(value))
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : ""
+  const body = await api<{ entries: AuditEntry[] }>("GET", `/api/audit${suffix}`)
+  return body.entries
 }
