@@ -101,7 +101,7 @@ func TestCreateUserValidationAndConflict(t *testing.T) {
 	if err := json.Unmarshal(list.Body.Bytes(), &body); err != nil || len(body.Users) != 2 {
 		t.Errorf("users = %+v, %v, want admin and taken only", body.Users, err)
 	}
-	if strings.Contains(list.Body.String(), "assword") || strings.Contains(list.Body.String(), "argon") {
+	if text := strings.ToLower(list.Body.String()); strings.Contains(text, "hash") || strings.Contains(text, "argon") || strings.Contains(text, `"password"`) {
 		t.Errorf("the list shows credential material: %s", list.Body)
 	}
 }
