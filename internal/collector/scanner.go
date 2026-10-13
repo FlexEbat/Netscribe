@@ -48,11 +48,19 @@ type Scanner struct {
 	dnsWait   time.Duration
 	events    Publisher
 	busy      atomic.Bool
+
+	// enrichers run after the discovery stage, in order: SNMP first, because LLDP uses
+	// what it learned. An error of an enricher is logged, the scan goes on.
+	enrichers []Collector
 }
 
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
 func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
-	return &Scanner{store: store, discovery: NewARP(), resolver: net.DefaultResolver, cfg: cfg, log: log, dnsWait: dnsTimeout}
+	snmp := NewSNMP(log)
+	return &Scanner{
+		store: store, discovery: NewARP(), resolver: net.DefaultResolver, cfg: cfg, log: log, dnsWait: dnsTimeout,
+		enrichers: []Collector{snmp, NewLLDP(snmp, log)},
+	}
 }
 
 // ErrBusy means another scan is running: one scan at a time (section 9.6 of the spec).
@@ -74,7 +82,14 @@ type Progress struct {
 	Total  int    `json:"total"`
 }
 
-const progressStages = 3 // discovery, dns, store
+// stages is the number of progress steps of a scan: discovery, dns, store, and snmp
+// (with lldp) when enrichers are set.
+func (s *Scanner) stages() int {
+	if len(s.enrichers) > 0 {
+		return 4
+	}
+	return 3
+}
 
 // SetEvents sets the receiver of scan events.
 func (s *Scanner) SetEvents(p Publisher) { s.events = p }
@@ -86,7 +101,7 @@ func (s *Scanner) publish(name string, data any) {
 }
 
 func (s *Scanner) progress(scanID int64, stage string, done int) {
-	s.publish("scan.progress", Progress{ScanID: scanID, Stage: stage, Done: done, Total: progressStages})
+	s.publish("scan.progress", Progress{ScanID: scanID, Stage: stage, Done: done, Total: s.stages()})
 }
 
 // begin takes the single scan slot and records the new scan. The caller releases the
@@ -146,10 +161,17 @@ func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.
 		return s.fail(ctx, scan.ID, err)
 	}
 	s.progress(scan.ID, "dns", 2)
+	if len(s.enrichers) > 0 {
+		res = s.enrich(ctx, targets, res)
+		if err := ctx.Err(); err != nil {
+			return s.fail(ctx, scan.ID, err)
+		}
+		s.progress(scan.ID, "snmp", 3)
+	}
 	if err := s.store.ApplyResult(ctx, scan.ID, res); err != nil {
 		return s.fail(ctx, scan.ID, fmt.Errorf("store result: %w", err))
 	}
-	s.progress(scan.ID, "store", 3)
+	s.progress(scan.ID, "store", s.stages())
 
 	fctx, cancel := detached(ctx)
 	defer cancel()
@@ -164,6 +186,36 @@ func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.
 	s.publish("scan.finished", final)
 	s.publish("topology.changed", struct{}{})
 	return final, nil
+}
+
+// enrich runs the enrichers on the devices the discovery stage found and appends what
+// they learn. The store applies the inputs in order and a later non-empty value wins, so
+// a name read over SNMP replaces the name from reverse DNS. A failing enricher costs only
+// its own facts.
+func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Result) Result {
+	devices := make([]model.Device, 0, len(base.Devices))
+	for _, d := range base.Devices {
+		devices = append(devices, model.Device{MAC: d.Key.MAC, IP: d.Key.IP, Hostname: d.Hostname})
+	}
+	res := base
+	for _, c := range s.enrichers {
+		if ctx.Err() != nil {
+			return res
+		}
+		out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.cfg})
+		if err != nil {
+			if ctx.Err() == nil {
+				s.log.Warn("collector failed", "collector", c.Name(), "err", err)
+			}
+			continue
+		}
+		res.Devices = append(res.Devices, out.Devices...)
+		res.Interfaces = append(res.Interfaces, out.Interfaces...)
+		res.Links = append(res.Links, out.Links...)
+		res.LinksPolled = append(res.LinksPolled, out.LinksPolled...)
+	}
+	fillVendors(res.Devices)
+	return res
 }
 
 // fail records the failure with a context that survives cancellation, because

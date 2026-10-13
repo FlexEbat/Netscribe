@@ -41,6 +41,24 @@ func TestSeedNetworkStoresTheDemoNetworkOnce(t *testing.T) {
 			t.Errorf("%s devices = %d, want %d", k, kinds[k], n)
 		}
 	}
+
+	links, err := st.ListLinks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 16 {
+		t.Errorf("links = %d, want 16 after two runs", len(links))
+	}
+	var core model.Device
+	for _, d := range devs {
+		if d.Hostname == "switch-core" {
+			core = d
+		}
+	}
+	ifaces, err := st.ListInterfaces(ctx, core.ID)
+	if err != nil || len(ifaces) != 7 {
+		t.Errorf("core interfaces = %d, %v, want 7 after two runs", len(ifaces), err)
+	}
 }
 
 func TestCreateDevUser(t *testing.T) {

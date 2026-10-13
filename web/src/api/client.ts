@@ -187,9 +187,31 @@ export function moveDevice(id: number, x: number, y: number): Promise<void> {
   return api("PUT", `/api/devices/${id}/position`, { body: { x, y } })
 }
 
+/** A network interface read from a device over SNMP. */
+export interface DeviceInterface {
+  id: number
+  deviceId: number
+  name: string
+  mac: string
+  ip: string
+  up: boolean
+}
+
+export interface DeviceDetail {
+  device: Device
+  interfaces: DeviceInterface[]
+}
+
+export async function getDeviceDetail(id: number): Promise<DeviceDetail> {
+  const body = await api<{ device: Device; interfaces?: DeviceInterface[] }>(
+    "GET",
+    `/api/devices/${id}`,
+  )
+  return { device: body.device, interfaces: body.interfaces ?? [] }
+}
+
 export async function getDevice(id: number): Promise<Device> {
-  const body = await api<{ device: Device }>("GET", `/api/devices/${id}`)
-  return body.device
+  return (await getDeviceDetail(id)).device
 }
 
 export interface DeviceInput {

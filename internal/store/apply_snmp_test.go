@@ -1,0 +1,244 @@
+package store
+
+import (
+	"context"
+	"testing"
+
+	"github.com/FlexEbat/Netscribe/internal/collector"
+	"github.com/FlexEbat/Netscribe/internal/model"
+)
+
+// scanResult runs a complete scan of lan with a ready result.
+func scanResult(t *testing.T, s *Store, r collector.Result) model.Scan {
+	t.Helper()
+	ctx := context.Background()
+	sc, err := s.StartScan(ctx, lan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplyResult(ctx, sc.ID, r); err != nil {
+		t.Fatalf("ApplyResult: %v", err)
+	}
+	if err := s.FinishScan(ctx, sc.ID, "done", ""); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetScan(ctx, sc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+var (
+	keyA = model.DeviceKey{MAC: "aa:aa:aa:aa:aa:01", IP: "192.168.1.1"}
+	keyB = model.DeviceKey{MAC: "aa:aa:aa:aa:aa:02", IP: "192.168.1.2"}
+	keyC = model.DeviceKey{MAC: "aa:aa:aa:aa:aa:03", IP: "192.168.1.3"}
+)
+
+func twoDevices() []model.DeviceInput {
+	return []model.DeviceInput{dev(keyA.MAC, keyA.IP), dev(keyB.MAC, keyB.IP)}
+}
+
+func links(t *testing.T, s *Store) []model.Link {
+	t.Helper()
+	out, err := s.ListLinks(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestApplyInterfacesAreReplacedNotDuplicated(t *testing.T) {
+	s := newTestStore(t)
+	ifaces := []model.InterfaceInput{
+		{Device: keyA, Name: "eth0", MAC: "02:11:22:33:44:01", IP: "192.168.1.1", Up: true},
+		{Device: keyA, Name: "eth0", MAC: "02:11:22:33:44:01", IP: "192.168.1.1", Up: true}, // the same row twice
+		{Device: keyA, Name: "eth1", MAC: "02:11:22:33:44:02"},
+		{Device: keyA, Name: "  ", IP: "10.0.0.1"}, // no name, no row
+	}
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Interfaces: ifaces})
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Interfaces: ifaces})
+
+	a := byMAC(t, s, keyA.MAC)
+	got, err := s.ListInterfaces(context.Background(), a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("interfaces = %+v, want 2 after two scans", got)
+	}
+	if got[0].Name != "eth0" || got[0].IP != "192.168.1.1" || !got[0].Up || got[1].Name != "eth1" || got[1].Up {
+		t.Errorf("interfaces = %+v", got)
+	}
+
+	// A scan in which the device reported nothing leaves its interfaces alone.
+	scanResult(t, s, collector.Result{Devices: twoDevices()})
+	if got, _ := s.ListInterfaces(context.Background(), a.ID); len(got) != 2 {
+		t.Errorf("silent scan changed the interfaces: %+v", got)
+	}
+
+	// A scan that reports fewer interfaces replaces the old set.
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Interfaces: ifaces[:1]})
+	if got, _ := s.ListInterfaces(context.Background(), a.ID); len(got) != 1 {
+		t.Errorf("interfaces = %+v, want the one that is left", got)
+	}
+}
+
+func TestListInterfacesOfUnknownDeviceIsEmpty(t *testing.T) {
+	s := newTestStore(t)
+	got, err := s.ListInterfaces(context.Background(), 999)
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("got %#v, err %v, want an empty non-nil list", got, err)
+	}
+}
+
+func TestApplyLinkReportedFromBothEndsIsOneRow(t *testing.T) {
+	s := newTestStore(t)
+	sc := scanResult(t, s, collector.Result{
+		Devices: twoDevices(),
+		Links: []model.LinkInput{
+			{A: keyA, B: keyB, APort: "Gi1", BPort: "Gi24", Source: "lldp"},
+			{A: keyB, B: keyA, APort: "Gi24", BPort: "Gi1", Source: "lldp"},
+		},
+	})
+	got := links(t, s)
+	if len(got) != 1 {
+		t.Fatalf("links = %+v, want one", got)
+	}
+	a, b := byMAC(t, s, keyA.MAC), byMAC(t, s, keyB.MAC)
+	l := got[0]
+	if l.ADeviceID != a.ID || l.BDeviceID != b.ID || l.ADeviceID >= l.BDeviceID || l.APort != "Gi1" || l.BPort != "Gi24" || l.Source != "lldp" {
+		t.Errorf("link = %+v", l)
+	}
+	if sc.LinkCount != 1 {
+		t.Errorf("scan link count = %d, want 1", sc.LinkCount)
+	}
+
+	// The same cable seen again is the same row.
+	scanResult(t, s, collector.Result{
+		Devices: twoDevices(),
+		Links:   []model.LinkInput{{A: keyB, B: keyA, APort: "Gi24", BPort: "Gi1", Source: "lldp"}},
+	})
+	if got := links(t, s); len(got) != 1 || got[0].ID != l.ID || !got[0].LastSeenAt.After(l.LastSeenAt) {
+		t.Errorf("links = %+v, want the first row seen again", got)
+	}
+}
+
+func TestApplyLinkToNewNeighborCreatesTheDevice(t *testing.T) {
+	s := newTestStore(t)
+	neighbor := model.DeviceInput{
+		Key: keyC, Hostname: "ap-lobby", Kind: model.KindAP, Source: "snmp",
+	}
+	scanResult(t, s, collector.Result{
+		Devices: append(twoDevices(), neighbor),
+		Links:   []model.LinkInput{{A: keyA, B: keyC, APort: "Gi2", BPort: "ap0", Source: "lldp"}},
+	})
+	c := byMAC(t, s, keyC.MAC)
+	if c.Source != "snmp" || c.Kind != model.KindAP || c.Hostname != "ap-lobby" {
+		t.Errorf("neighbor = %+v", c)
+	}
+	if got := links(t, s); len(got) != 1 || got[0].BDeviceID != c.ID {
+		t.Errorf("links = %+v", got)
+	}
+}
+
+func TestApplyLinkWithAnUnknownEndIsSkipped(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{
+		Devices: twoDevices(),
+		Links: []model.LinkInput{
+			{A: keyA, B: keyC, Source: "lldp"}, // keyC was never stored
+			{A: keyA, B: keyA, Source: "lldp"}, // a device is not linked to itself
+		},
+	})
+	if got := links(t, s); len(got) != 0 {
+		t.Errorf("links = %+v, want none", got)
+	}
+}
+
+func TestApplyRemovesLinkThatVanishedFromLLDP(t *testing.T) {
+	s := newTestStore(t)
+	devs := append(twoDevices(), dev(keyC.MAC, keyC.IP))
+	lldp := []model.LinkInput{
+		{A: keyA, B: keyB, APort: "Gi1", BPort: "Gi24", Source: "lldp"},
+		{A: keyA, B: keyC, APort: "Gi2", BPort: "eth0", Source: "lldp"},
+	}
+	scanResult(t, s, collector.Result{Devices: devs, Links: lldp, LinksPolled: []model.DeviceKey{keyA}})
+	if got := links(t, s); len(got) != 2 {
+		t.Fatalf("links = %+v", got)
+	}
+
+	// B and C did not answer, A did and no longer sees B. Only A-B goes... and A-C stays,
+	// because A still reports it.
+	scanResult(t, s, collector.Result{Devices: devs, Links: lldp[1:], LinksPolled: []model.DeviceKey{keyA}})
+	got := links(t, s)
+	if len(got) != 1 || got[0].APort != "Gi2" {
+		t.Fatalf("links = %+v, want only A-C", got)
+	}
+
+	// A scan in which nobody was polled removes nothing.
+	scanResult(t, s, collector.Result{Devices: devs})
+	if got := links(t, s); len(got) != 1 {
+		t.Errorf("links = %+v, a scan without LLDP must keep them", got)
+	}
+
+	// A device that was polled and sees nothing loses its links.
+	scanResult(t, s, collector.Result{Devices: devs, LinksPolled: []model.DeviceKey{keyC}})
+	if got := links(t, s); len(got) != 0 {
+		t.Errorf("links = %+v, want none", got)
+	}
+}
+
+func TestApplyKeepsManualLinks(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices()})
+	a, b := byMAC(t, s, keyA.MAC), byMAC(t, s, keyB.MAC)
+	manual, err := s.CreateLink(context.Background(), model.ManualLink{ADeviceID: a.ID, BDeviceID: b.ID, APort: "Gi1", BPort: "Gi24"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// LLDP reports the same cable: the row stays manual. Then LLDP stops reporting it.
+	scanResult(t, s, collector.Result{
+		Devices: twoDevices(), LinksPolled: []model.DeviceKey{keyA, keyB},
+		Links: []model.LinkInput{{A: keyA, B: keyB, APort: "Gi1", BPort: "Gi24", Source: "lldp"}},
+	})
+	scanResult(t, s, collector.Result{Devices: twoDevices(), LinksPolled: []model.DeviceKey{keyA, keyB}})
+	got := links(t, s)
+	if len(got) != 1 || got[0].ID != manual.ID || got[0].Source != "manual" {
+		t.Errorf("links = %+v, want the manual link untouched", got)
+	}
+}
+
+func TestApplySourceNeverGoesDown(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
+	if d := byMAC(t, s, keyA.MAC); d.Source != "arp" {
+		t.Fatalf("source = %q", d.Source)
+	}
+
+	upgraded := model.DeviceInput{Key: keyA, Hostname: "sw1", Description: "Acme", Kind: model.KindUnknown, Source: "snmp"}
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP), upgraded}})
+	d := byMAC(t, s, keyA.MAC)
+	if d.Source != "snmp" || d.Hostname != "sw1" || d.Description != "Acme" {
+		t.Errorf("device = %+v, want the SNMP facts and source", d)
+	}
+
+	// The next scan finds it by ARP only: the facts and the source stay.
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
+	if d := byMAC(t, s, keyA.MAC); d.Source != "snmp" || d.Hostname != "sw1" {
+		t.Errorf("device = %+v, ARP must not take the facts back", d)
+	}
+}
+
+func TestSourceRank(t *testing.T) {
+	cases := []struct{ cur, in, want string }{
+		{"arp", "snmp", "snmp"}, {"snmp", "arp", "snmp"}, {"snmp", "ssh", "ssh"},
+		{"ssh", "snmp", "ssh"}, {"manual", "ssh", "manual"}, {"arp", "arp", "arp"}, {"local", "arp", "arp"},
+	}
+	for _, c := range cases {
+		if got := betterSource(c.cur, c.in); got != c.want {
+			t.Errorf("betterSource(%q, %q) = %q, want %q", c.cur, c.in, got, c.want)
+		}
+	}
+}

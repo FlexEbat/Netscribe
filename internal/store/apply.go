@@ -55,6 +55,13 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		seen[id] = struct{}{}
 	}
 
+	if err := applyInterfaces(ctx, q, r.Interfaces); err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
+	if err := applyLinks(ctx, q, r, ts); err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
+
 	online, err := q.ListOnlineDeviceAddrs(ctx)
 	if err != nil {
 		return fmt.Errorf("apply result: %w", err)
@@ -68,7 +75,13 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		}
 	}
 
-	if err := q.SetScanCounts(ctx, dbgen.SetScanCountsParams{DeviceCount: int64(len(seen)), ID: scanID}); err != nil {
+	links, err := q.ListLinks(ctx)
+	if err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
+	if err := q.SetScanCounts(ctx, dbgen.SetScanCountsParams{
+		DeviceCount: int64(len(seen)), LinkCount: int64(len(links)), ID: scanID,
+	}); err != nil {
 		return fmt.Errorf("apply result: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -144,6 +157,7 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 		Hostname:    firstNonEmpty(in.Hostname, cur.Hostname),
 		Vendor:      firstNonEmpty(in.Vendor, cur.Vendor),
 		Kind:        kind,
+		Source:      betterSource(cur.Source, in.Source),
 		Description: firstNonEmpty(in.Description, cur.Description),
 		LastSeenAt:  ts,
 		ID:          cur.ID,
@@ -201,4 +215,157 @@ func firstNonEmpty(preferred, fallback string) string {
 		return preferred
 	}
 	return fallback
+}
+
+// sourceRank orders the sources of a device: a person beats ssh, ssh beats snmp, snmp
+// beats arp (section 5.2 of the spec). Unknown sources rank lowest.
+func sourceRank(source string) int {
+	switch source {
+	case "manual":
+		return 4
+	case "ssh":
+		return 3
+	case "snmp":
+		return 2
+	case "arp":
+		return 1
+	}
+	return 0
+}
+
+// betterSource keeps the source with the higher rank, the current one on a tie.
+func betterSource(cur, in string) string {
+	if sourceRank(in) > sourceRank(cur) {
+		return in
+	}
+	return cur
+}
+
+// applyInterfaces replaces the interfaces of every device that reported some. A device
+// that reported none keeps what it had, so a failed SNMP read does not empty the panel.
+func applyInterfaces(ctx context.Context, q *dbgen.Queries, in []model.InterfaceInput) error {
+	type ifKey struct{ name, ip string }
+	var order []int64
+	groups := map[int64][]model.InterfaceInput{}
+	for _, i := range in {
+		dev, found, err := findDevice(ctx, q, strings.ToLower(strings.TrimSpace(i.Device.MAC)), strings.TrimSpace(i.Device.IP))
+		if err != nil {
+			return err
+		}
+		if !found {
+			continue
+		}
+		if _, ok := groups[dev.ID]; !ok {
+			order = append(order, dev.ID)
+		}
+		groups[dev.ID] = append(groups[dev.ID], i)
+	}
+	for _, id := range order {
+		if err := q.DeleteDeviceInterfaces(ctx, id); err != nil {
+			return fmt.Errorf("replace interfaces of device %d: %w", id, err)
+		}
+		done := map[ifKey]struct{}{}
+		for _, i := range groups[id] {
+			name := cleanText(i.Name)
+			if name == "" {
+				continue
+			}
+			ip := strings.TrimSpace(i.IP)
+			if _, dup := done[ifKey{name, ip}]; dup {
+				continue
+			}
+			done[ifKey{name, ip}] = struct{}{}
+			up := int64(0)
+			if i.Up {
+				up = 1
+			}
+			err := q.InsertInterface(ctx, dbgen.InsertInterfaceParams{
+				DeviceID: id, Name: name, Mac: strings.ToLower(strings.TrimSpace(i.MAC)), Ip: ip, Up: up,
+			})
+			if err != nil {
+				return fmt.Errorf("insert interface of device %d: %w", id, err)
+			}
+		}
+	}
+	return nil
+}
+
+// applyLinks stores the links a scan found and removes the lldp links that disappeared.
+//
+// A link is one row: the pair is kept in id order, so the same cable reported from both
+// ends is one link. A link drawn by a person keeps its source. Only links that touch a
+// device whose LLDP table was read in this scan can disappear, a device that did not
+// answer never loses its links.
+func applyLinks(ctx context.Context, q *dbgen.Queries, r collector.Result, ts string) error {
+	seen := map[int64]struct{}{}
+	for _, l := range r.Links {
+		a, okA, err := findDevice(ctx, q, strings.ToLower(strings.TrimSpace(l.A.MAC)), strings.TrimSpace(l.A.IP))
+		if err != nil {
+			return err
+		}
+		b, okB, err := findDevice(ctx, q, strings.ToLower(strings.TrimSpace(l.B.MAC)), strings.TrimSpace(l.B.IP))
+		if err != nil {
+			return err
+		}
+		if !okA || !okB || a.ID == b.ID {
+			continue
+		}
+		aID, bID, aPort, bPort := a.ID, b.ID, cleanText(l.APort), cleanText(l.BPort)
+		if aID > bID {
+			aID, bID, aPort, bPort = bID, aID, bPort, aPort
+		}
+		cur, err := q.GetLinkByKey(ctx, dbgen.GetLinkByKeyParams{ADeviceID: aID, APort: aPort, BDeviceID: bID, BPort: bPort})
+		switch {
+		case err == nil:
+			if err := q.TouchLink(ctx, dbgen.TouchLinkParams{LastSeenAt: ts, ID: cur.ID}); err != nil {
+				return fmt.Errorf("touch link %d: %w", cur.ID, err)
+			}
+			seen[cur.ID] = struct{}{}
+		case errors.Is(err, sql.ErrNoRows):
+			row, err := q.InsertLink(ctx, dbgen.InsertLinkParams{
+				ADeviceID: aID, APort: aPort, BDeviceID: bID, BPort: bPort, Source: l.Source, LastSeenAt: ts,
+			})
+			if err != nil {
+				return fmt.Errorf("insert link: %w", err)
+			}
+			seen[row.ID] = struct{}{}
+		default:
+			return fmt.Errorf("find link: %w", err)
+		}
+	}
+
+	polled := map[int64]struct{}{}
+	for _, k := range r.LinksPolled {
+		d, found, err := findDevice(ctx, q, strings.ToLower(strings.TrimSpace(k.MAC)), strings.TrimSpace(k.IP))
+		if err != nil {
+			return err
+		}
+		if found {
+			polled[d.ID] = struct{}{}
+		}
+	}
+	if len(polled) == 0 {
+		return nil
+	}
+	all, err := q.ListLinks(ctx)
+	if err != nil {
+		return fmt.Errorf("list links: %w", err)
+	}
+	for _, l := range all {
+		if l.Source != "lldp" {
+			continue
+		}
+		if _, ok := seen[l.ID]; ok {
+			continue
+		}
+		_, a := polled[l.ADeviceID]
+		_, b := polled[l.BDeviceID]
+		if !a && !b {
+			continue
+		}
+		if _, err := q.DeleteLink(ctx, l.ID); err != nil {
+			return fmt.Errorf("delete link %d: %w", l.ID, err)
+		}
+	}
+	return nil
 }

@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react"
 import { Pencil } from "lucide-react"
-import { deleteDevice, getDevice, updateDevice, type Device } from "@/api/client"
+import {
+  deleteDevice,
+  getDeviceDetail,
+  updateDevice,
+  type Device,
+  type DeviceDetail,
+} from "@/api/client"
 import { DeleteDeviceButton } from "@/components/DeleteDeviceButton"
 import { DeviceForm } from "@/components/DeviceForm"
+import { InterfacesTable } from "@/components/InterfacesTable"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Button } from "@/components/ui/button"
 import { Alert } from "@/components/ui/alert"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { displayName, kindLabels } from "@/lib/topology"
 
 interface DevicePanelProps {
@@ -19,7 +27,7 @@ interface DevicePanelProps {
   onChanged?: () => void
 }
 
-type State = { status: "loading" } | { status: "failed" } | { status: "ready"; device: Device }
+type State = { status: "loading" } | { status: "failed" } | ({ status: "ready" } & DeviceDetail)
 
 export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: DevicePanelProps) {
   // The state remembers which device it belongs to, so a new deviceId shows the loading
@@ -31,9 +39,9 @@ export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: D
 
   useEffect(() => {
     let cancelled = false
-    getDevice(deviceId)
-      .then((device) => {
-        if (!cancelled) setLoaded({ id: deviceId, state: { status: "ready", device } })
+    getDeviceDetail(deviceId)
+      .then((detail) => {
+        if (!cancelled) setLoaded({ id: deviceId, state: { status: "ready", ...detail } })
       })
       .catch(() => {
         if (!cancelled) setLoaded({ id: deviceId, state: { status: "failed" } })
@@ -70,7 +78,10 @@ export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: D
                 kind: values.kind,
                 version: state.device.version,
               })
-              setLoaded({ id: deviceId, state: { status: "ready", device } })
+              setLoaded({
+                id: deviceId,
+                state: { status: "ready", device, interfaces: state.interfaces },
+              })
               setEditing(false)
               onChanged?.()
             }}
@@ -114,7 +125,23 @@ function Body({ state }: { state: State }) {
   if (state.status === "failed") {
     return <Alert variant="destructive">The device could not be loaded.</Alert>
   }
-  const d = state.device
+  return (
+    <Tabs defaultValue="details">
+      <TabsList aria-label="Device sections">
+        <TabsTrigger value="details">Details</TabsTrigger>
+        <TabsTrigger value="interfaces">Interfaces ({state.interfaces.length})</TabsTrigger>
+      </TabsList>
+      <TabsContent value="details">
+        <Details device={state.device} />
+      </TabsContent>
+      <TabsContent value="interfaces">
+        <InterfacesTable interfaces={state.interfaces} />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function Details({ device: d }: { device: Device }) {
   const rows: [string, React.ReactNode][] = [
     ["Status", <StatusBadge key="s" online={d.online} />],
     ["Kind", kindLabels[d.kind]],

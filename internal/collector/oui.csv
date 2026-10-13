@@ -1,0 +1,62 @@
+# prefix,vendor
+# A starter table of well-known prefixes, not the full IEEE registry. To use the whole
+# registry, replace this file with the IEEE OUI list in the same two-column form
+# (prefix as aa:bb:cc, then the vendor name). No code change is needed.
+00:00:0c,Cisco Systems
+00:50:56,VMware
+00:0c:29,VMware
+00:05:69,VMware
+08:00:27,Oracle VirtualBox
+b8:27:eb,Raspberry Pi Foundation
+dc:a6:32,Raspberry Pi Trading
+e4:5f:01,Raspberry Pi Trading
+d8:3a:dd,Raspberry Pi Trading
+2c:cf:67,Raspberry Pi Trading
+00:17:88,Philips Lighting
+00:11:32,Synology
+00:09:5b,Netgear
+fc:ec:da,Ubiquiti
+24:a4:3c,Ubiquiti
+74:ac:b9,Ubiquiti
+80:2a:a8,Ubiquiti
+f0:9f:c2,Ubiquiti
+78:8a:20,Ubiquiti
+44:d9:e7,Ubiquiti
+b4:fb:e4,Ubiquiti
+18:e8:29,Ubiquiti
+00:0c:42,MikroTik
+4c:5e:0c,MikroTik
+d4:ca:6d,MikroTik
+64:d1:54,MikroTik
+2c:c8:1b,MikroTik
+b8:69:f4,MikroTik
+cc:2d:e0,MikroTik
+00:03:93,Apple
+00:0a:27,Apple
+00:0a:95,Apple
+00:11:24,Apple
+00:14:51,Apple
+00:16:cb,Apple
+00:17:f2,Apple
+00:19:e3,Apple
+00:1b:63,Apple
+00:1c:b3,Apple
+00:1d:4f,Apple
+00:1e:52,Apple
+00:1e:c2,Apple
+00:1f:5b,Apple
+00:1f:f3,Apple
+00:21:e9,Apple
+00:22:41,Apple
+00:23:12,Apple
+00:23:32,Apple
+00:23:6c,Apple
+00:23:df,Apple
+00:24:36,Apple
+00:25:00,Apple
+00:25:4b,Apple
+00:25:bc,Apple
+00:26:08,Apple
+00:26:4a,Apple
+00:26:b0,Apple
+00:26:bb,Apple

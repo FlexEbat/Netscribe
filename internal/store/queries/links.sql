@@ -11,3 +11,9 @@ SELECT * FROM links ORDER BY id;
 
 -- name: DeleteLink :execrows
 DELETE FROM links WHERE id = ?;
+
+-- name: GetLinkByKey :one
+SELECT * FROM links WHERE a_device_id = ? AND a_port = ? AND b_device_id = ? AND b_port = ?;
+
+-- name: TouchLink :exec
+UPDATE links SET last_seen_at = ? WHERE id = ?;

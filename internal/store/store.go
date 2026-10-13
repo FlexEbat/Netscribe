@@ -41,6 +41,7 @@ type Repo interface {
 	SetDevicePosition(ctx context.Context, id int64, x, y float64) error // ErrNotFound
 	Topology(ctx context.Context) (model.Topology, error)
 	ListLinks(ctx context.Context) ([]model.Link, error)
+	ListInterfaces(ctx context.Context, deviceID int64) ([]model.Interface, error)
 
 	CreateDevice(ctx context.Context, in model.ManualDevice, userID int64) (model.Device, error)        // ErrConflict
 	UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, userID int64) (model.Device, error) // ErrNotFound, ErrVersionConflict
