@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react"
 import { ApiError, api } from "@/api/client"
 import { useSession } from "@/api/session"
+import { can } from "@/lib/permissions"
 import { RoleBadge } from "@/components/RoleBadge"
+import { TokensCard } from "@/components/TokensCard"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -111,6 +113,8 @@ export function Account() {
           </form>
         </CardContent>
       </Card>
+
+      {can(state.session.permissions, "tokens:manage") ? <TokensCard role={user.role} /> : null}
     </div>
   )
 }

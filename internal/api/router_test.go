@@ -119,7 +119,7 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 		repo = o.wrapRepo(st)
 	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, Repo: repo, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now,
+		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}
@@ -239,7 +239,7 @@ func TestRegisterPanicsOnRouteWithoutPermission(t *testing.T) {
 		}
 	}()
 	e := newEnv(t)
-	s := newServer(Options{Auth: e.svc, Audit: e.store})
+	s := newServer(Options{Auth: e.svc, Audit: e.store, AuditLog: e.store})
 	s.register(chi.NewRouter(), []Route{route(http.MethodGet, "/x", "", okHandler)})
 }
 
@@ -254,7 +254,7 @@ func TestNewRouterRequiresAuth(t *testing.T) {
 
 func TestEveryRegisteredRouteHasAPermission(t *testing.T) {
 	e := newEnv(t)
-	s := newServer(Options{Auth: e.svc, Audit: e.store, Repo: e.store, Scanner: &fakeScanner{}, Events: events.NewHub()})
+	s := newServer(Options{Auth: e.svc, Audit: e.store, AuditLog: e.store, Repo: e.store, Scanner: &fakeScanner{}, Events: events.NewHub()})
 	for _, rt := range s.routes() {
 		if rt.Permission == "" {
 			t.Errorf("%s %s has no permission", rt.Method, rt.Path)
@@ -268,7 +268,7 @@ func TestPermissionsAcrossTheWholeRouteTable(t *testing.T) {
 	scanner := &fakeScanner{}
 	e := newEnv(t, withRoutes(permissionRoutes()...), func(o *envOptions) { o.scanner = scanner })
 	// No event hub here: an event stream never ends, so it has its own tests in sse_test.go.
-	s := newServer(Options{Auth: e.svc, Audit: e.store, Repo: e.store, Scanner: scanner})
+	s := newServer(Options{Auth: e.svc, Audit: e.store, AuditLog: e.store, Repo: e.store, Scanner: scanner})
 	table := append(s.routes(), permissionRoutes()...)
 
 	roles := []model.Role{model.RoleViewer, model.RoleOperator, model.RoleAdmin}

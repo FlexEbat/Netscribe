@@ -160,7 +160,7 @@ func serve(args []string, e streams) error {
 	scanner := collector.NewScanner(db, cfg, logger)
 	scanner.SetEvents(hub)
 	router := api.NewRouter(api.Options{
-		Static: static, Auth: svc, Audit: db, Repo: db, Events: hub,
+		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, targets: targets},
 		TrustedProxies: proxies, Logger: logger,
 	})
