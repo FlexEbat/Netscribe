@@ -17,7 +17,7 @@ RETURNING id;
 
 -- name: UpdateDeviceFromScan :exec
 UPDATE devices
-SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, description = ?, online = 1, last_seen_at = ?
+SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, online = 1, last_seen_at = ?
 WHERE id = ?;
 
 -- name: ListDevices :many

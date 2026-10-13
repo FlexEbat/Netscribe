@@ -40,6 +40,37 @@ func (q *Queries) GetLink(ctx context.Context, id int64) (Link, error) {
 	return i, err
 }
 
+const getLinkByKey = `-- name: GetLinkByKey :one
+SELECT id, a_device_id, a_port, b_device_id, b_port, source, last_seen_at FROM links WHERE a_device_id = ? AND a_port = ? AND b_device_id = ? AND b_port = ?
+`
+
+type GetLinkByKeyParams struct {
+	ADeviceID int64
+	APort     string
+	BDeviceID int64
+	BPort     string
+}
+
+func (q *Queries) GetLinkByKey(ctx context.Context, arg GetLinkByKeyParams) (Link, error) {
+	row := q.db.QueryRowContext(ctx, getLinkByKey,
+		arg.ADeviceID,
+		arg.APort,
+		arg.BDeviceID,
+		arg.BPort,
+	)
+	var i Link
+	err := row.Scan(
+		&i.ID,
+		&i.ADeviceID,
+		&i.APort,
+		&i.BDeviceID,
+		&i.BPort,
+		&i.Source,
+		&i.LastSeenAt,
+	)
+	return i, err
+}
+
 const insertLink = `-- name: InsertLink :one
 INSERT INTO links (a_device_id, a_port, b_device_id, b_port, source, last_seen_at)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -110,4 +141,18 @@ func (q *Queries) ListLinks(ctx context.Context) ([]Link, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const touchLink = `-- name: TouchLink :exec
+UPDATE links SET last_seen_at = ? WHERE id = ?
+`
+
+type TouchLinkParams struct {
+	LastSeenAt string
+	ID         int64
+}
+
+func (q *Queries) TouchLink(ctx context.Context, arg TouchLinkParams) error {
+	_, err := q.db.ExecContext(ctx, touchLink, arg.LastSeenAt, arg.ID)
+	return err
 }

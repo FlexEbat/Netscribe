@@ -23,7 +23,7 @@ func validKind(k model.DeviceKind) bool {
 	return false
 }
 
-// getDevice answers GET /api/devices/{id} with {"device": {...}}. A malformed id is a
+// getDevice answers GET /api/devices/{id} with {"device": {...}, "interfaces": [...]}. A malformed id is a
 // missing device, not a bad request (section 7.2 of the spec).
 func (s *server) getDevice(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -40,7 +40,15 @@ func (s *server) getDevice(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "get device", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]model.Device{"device": device})
+	ifaces, err := s.repo.ListInterfaces(r.Context(), id)
+	if err != nil {
+		s.internalError(w, "list interfaces", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Device     model.Device      `json:"device"`
+		Interfaces []model.Interface `json:"interfaces"`
+	}{device, ifaces})
 }
 
 // changed tells the open event streams that the topology is different now.

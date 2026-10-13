@@ -22,8 +22,11 @@ type Result struct {
 	Devices    []model.DeviceInput
 	Interfaces []model.InterfaceInput
 	Links      []model.LinkInput
-	Services   []model.ServiceInput
-	Containers []model.ContainerInput
+	// LinksPolled lists the devices whose neighbor table was read completely. A link of
+	// source lldp that touches one of them and was not seen again is removed.
+	LinksPolled []model.DeviceKey
+	Services    []model.ServiceInput
+	Containers  []model.ContainerInput
 }
 
 // Collector is one source of facts. Collect must return when ctx is canceled.

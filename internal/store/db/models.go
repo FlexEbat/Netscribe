@@ -56,6 +56,15 @@ type Device struct {
 	UpdatedBy   sql.NullInt64
 }
 
+type Interface struct {
+	ID       int64
+	DeviceID int64
+	Name     string
+	Mac      string
+	Ip       string
+	Up       int64
+}
+
 type Link struct {
 	ID         int64
 	ADeviceID  int64

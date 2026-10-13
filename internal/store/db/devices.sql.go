@@ -378,7 +378,7 @@ func (q *Queries) UpdateDeviceEdit(ctx context.Context, arg UpdateDeviceEditPara
 
 const updateDeviceFromScan = `-- name: UpdateDeviceFromScan :exec
 UPDATE devices
-SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, description = ?, online = 1, last_seen_at = ?
+SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, online = 1, last_seen_at = ?
 WHERE id = ?
 `
 
@@ -388,6 +388,7 @@ type UpdateDeviceFromScanParams struct {
 	Hostname    string
 	Vendor      string
 	Kind        string
+	Source      string
 	Description string
 	LastSeenAt  string
 	ID          int64
@@ -400,6 +401,7 @@ func (q *Queries) UpdateDeviceFromScan(ctx context.Context, arg UpdateDeviceFrom
 		arg.Hostname,
 		arg.Vendor,
 		arg.Kind,
+		arg.Source,
 		arg.Description,
 		arg.LastSeenAt,
 		arg.ID,

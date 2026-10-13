@@ -90,15 +90,58 @@ func demoDevices() []model.DeviceInput {
 	return devs
 }
 
-// seedNetwork stores the demo devices through the scanner's own path, as one finished
-// scan. Running it twice changes nothing: devices are matched by MAC address.
+func demoKey(n int, ip string) model.DeviceKey {
+	return model.DeviceKey{MAC: fmt.Sprintf("02:00:00:00:00:%02x", n), IP: ip}
+}
+
+// demoLinks cables the demo network the way LLDP would report it: the router to the core
+// switch, the core switch to the office switch and the servers, the office switch to ten
+// hosts.
+func demoLinks() []model.LinkInput {
+	gateway, core, office := demoKey(1, "192.168.1.1"), demoKey(2, "192.168.1.2"), demoKey(3, "192.168.1.3")
+	link := func(a model.DeviceKey, aPort string, b model.DeviceKey, bPort string) model.LinkInput {
+		return model.LinkInput{A: a, B: b, APort: aPort, BPort: bPort, Source: "lldp"}
+	}
+	links := []model.LinkInput{link(gateway, "eth1", core, "Gi1"), link(core, "Gi2", office, "Gi1")}
+	for i := 0; i < 4; i++ {
+		server := demoKey(10+i, fmt.Sprintf("192.168.1.%d", 10+i))
+		links = append(links, link(core, fmt.Sprintf("Gi%d", 3+i), server, "eth0"))
+	}
+	for i := 0; i < 10; i++ {
+		host := demoKey(100+i, fmt.Sprintf("192.168.1.%d", 100+i))
+		links = append(links, link(office, fmt.Sprintf("Gi%d", 2+i), host, "eth0"))
+	}
+	return links
+}
+
+// demoInterfaces gives the router and the switches the interfaces the cables use.
+func demoInterfaces() []model.InterfaceInput {
+	gateway, core, office := demoKey(1, "192.168.1.1"), demoKey(2, "192.168.1.2"), demoKey(3, "192.168.1.3")
+	out := []model.InterfaceInput{
+		{Device: gateway, Name: "eth0", MAC: "02:00:00:00:01:00", IP: "203.0.113.2", Up: true},
+		{Device: gateway, Name: "eth1", MAC: "02:00:00:00:01:01", IP: "192.168.1.1", Up: true},
+		{Device: core, Name: "mgmt0", MAC: "02:00:00:00:02:00", IP: "192.168.1.2", Up: true},
+		{Device: office, Name: "mgmt0", MAC: "02:00:00:00:03:00", IP: "192.168.1.3", Up: true},
+	}
+	for i := 1; i <= 6; i++ {
+		out = append(out, model.InterfaceInput{Device: core, Name: fmt.Sprintf("Gi%d", i), Up: i <= 5})
+	}
+	for i := 1; i <= 11; i++ {
+		out = append(out, model.InterfaceInput{Device: office, Name: fmt.Sprintf("Gi%d", i), Up: i <= 10})
+	}
+	return out
+}
+
+// seedNetwork stores the demo devices, their interfaces and links through the scanner's own
+// path, as one finished scan. Running it twice changes nothing: devices are matched by MAC address.
 func seedNetwork(ctx context.Context, st store.Repo) (int, error) {
 	devs := demoDevices()
 	scan, err := st.StartScan(ctx, "192.168.1.0/24")
 	if err != nil {
 		return 0, err
 	}
-	if err := st.ApplyResult(ctx, scan.ID, collector.Result{Devices: devs}); err != nil {
+	res := collector.Result{Devices: devs, Interfaces: demoInterfaces(), Links: demoLinks()}
+	if err := st.ApplyResult(ctx, scan.ID, res); err != nil {
 		_ = st.FinishScan(ctx, scan.ID, "failed", err.Error())
 		return 0, err
 	}

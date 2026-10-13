@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
@@ -214,5 +215,58 @@ func TestSearchFindsByIPMACAndCyrillicNameIgnoringCase(t *testing.T) {
 				t.Errorf("search %q found %d devices %v, want only %s", tc.query, len(got), got, tc.want)
 			}
 		})
+	}
+}
+
+func TestGetDeviceListsInterfaces(t *testing.T) {
+	e := newEnv(t)
+	in := device("aa:aa:aa:aa:aa:02", "192.168.1.2", "sw1", model.KindSwitch)
+	ctx := context.Background()
+	scan, err := e.store.StartScan(ctx, "192.168.1.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = e.store.ApplyResult(ctx, scan.ID, collector.Result{
+		Devices: []model.DeviceInput{in, device("aa:aa:aa:aa:aa:03", "192.168.1.3", "quiet", model.KindHost)},
+		Interfaces: []model.InterfaceInput{
+			{Device: in.Key, Name: "Gi2", Up: false},
+			{Device: in.Key, Name: "Gi1", MAC: "02:11:22:33:44:01", IP: "192.168.1.2", Up: true},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.store.FinishScan(ctx, scan.ID, "done", ""); err != nil {
+		t.Fatal(err)
+	}
+	s := e.mustLogin("admin")
+
+	byIP := map[string]int64{}
+	for _, d := range listDevices(t, e, s, "") {
+		byIP[d.IP] = d.ID
+	}
+	get := func(ip string) []model.Interface {
+		rec := e.as(s, http.MethodGet, "/api/devices/"+strconv.FormatInt(byIP[ip], 10), nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body %s", rec.Code, rec.Body)
+		}
+		var body struct {
+			Interfaces []model.Interface `json:"interfaces"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(rec.Body.String(), `"interfaces":[`) {
+			t.Errorf("interfaces must be a list, never null: %s", rec.Body)
+		}
+		return body.Interfaces
+	}
+
+	got := get("192.168.1.2")
+	if len(got) != 2 || got[0].Name != "Gi1" || !got[0].Up || got[0].MAC != "02:11:22:33:44:01" || got[1].Name != "Gi2" || got[1].Up {
+		t.Errorf("interfaces = %+v", got)
+	}
+	if got := get("192.168.1.3"); len(got) != 0 {
+		t.Errorf("a device without interfaces got %+v", got)
 	}
 }
