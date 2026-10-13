@@ -28,7 +28,7 @@ type fakeAgent struct {
 // per line, a line without " = " continues the previous STRING.
 func loadAgent(t *testing.T, name, community string) *fakeAgent {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join("testdata", name))
+	raw, err := os.ReadFile(filepath.Join("testdata", name)) //nolint:gosec // a fixture name written in the test
 	if err != nil {
 		t.Fatal(err)
 	}
