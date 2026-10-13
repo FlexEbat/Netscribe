@@ -3,6 +3,7 @@
 **Версия: v0 (черновик)** (2026-10-07)
 
 Changelog:
+- v0 (правка 11) - слайс 7 смержен в `main` (PR #21). Миграция слайса называется `0005_interfaces.sql` и создаёт только `interfaces`: таблица `links` появилась в слайсе 5. `GET /api/devices/{id}` отвечает `{ "device", "interfaces" }`. `collector.Result` получил поле `LinksPolled`: связь `lldp` удаляется, только если опрошено одно из её устройств, молчащее устройство связей не теряет. Источник устройства не понижается, порядок `manual`, `ssh`, `snmp`, `arp`. `oui.csv` содержит стартовый набор известных префиксов, полный реестр IEEE кладётся в тот же файл без правок кода. В `DevicePanel` вкладки собраны на `@radix-ui/react-tabs`. Если подключены сборщики SNMP и LLDP, у скана четыре стадии прогресса вместо трёх.
 - v0 (правка 10) - слайс 6 смержен в `main` (PR #19). Токен никогда не открывает `users:manage`, `audit:read` и `tokens:manage`: украденный токен не может создавать новые токены. Из маршрутов `/api/auth/*` токену доступен только `GET /api/auth/me`. Права токена - пересечение его области и текущей роли владельца. В раздел 8 добавлены сообщения слайса 6.
 - v0 (правка 9) - ручное устройство принимает необязательное поле `hostname` (до 255 символов). Явно записано, что ручное устройство с MAC или IP, уже занятым другой записью, отвечает 409. В раздел 8 добавлено сообщение `hostname is longer than 255 characters`.
 - v0 (правка 8) - слайс 5 смержен в `main` (PR #16). Таблицу `links` создаёт миграция слайса 5, а не слайса 7, потому что ручные связи нужны раньше. В раздел 8 добавлены два сообщения, которых не было в списке: `port is longer than 64 characters` и `version is required`.
@@ -1183,7 +1184,7 @@ CONTRACT GAP
 
 ## 16. Стадии и слайсы
 
-Статус: слайсы 0-6 смержены в `main`, следующий слайс - 7.
+Статус: слайсы 0-7 смержены в `main`, следующий слайс - 8.
 
 Порядок жёсткий, сверху вниз. Один слайс за один заход сессии. Слайс закрыт, когда выполнен Definition of Done из раздела 13.
 
@@ -1376,7 +1377,7 @@ CONTRACT GAP
 
 ### Слайс 7 - SNMP, интерфейсы и LLDP-связи
 
-**Файлы:** `internal/store/migrations/NNNN_interfaces_links.sql`, `internal/collector/snmp.go`, `lldp.go`, `oui.go`, `oui.csv`, обновление `scanner.go`, `cmd/seed`, `web/src/components/DeviceNode.tsx`, `TopologyCanvas.tsx`, `DevicePanel.tsx`.
+**Файлы:** `internal/store/migrations/0005_interfaces.sql`, `internal/collector/snmp.go`, `lldp.go`, `oui.go`, `oui.csv`, обновление `scanner.go`, `cmd/seed`, `web/src/components/DeviceNode.tsx`, `TopologyCanvas.tsx`, `DevicePanel.tsx`.
 
 **Что делает:** для каждого живого устройства коллектор пробует SNMP v2c с community из конфига и читает `sysName`, `sysDescr`, `sysServices`, таблицы интерфейсов и адресов. LLDP-коллектор читает `lldpLocPortTable` и `lldpRemTable` и строит связи между известными устройствами: удалённый узел сопоставляется по MAC из chassis id или по адресу управления. Неизвестный сосед создаёт устройство с источником `snmp`. Вид устройства определяется по LLDP-возможностям (bridge → switch, router → router, WLAN access point → ap), иначе остаётся прежним. Вендор берётся из встроенной таблицы OUI по MAC. Связи рисуются рёбрами с подписями портов.
 
