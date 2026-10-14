@@ -52,14 +52,35 @@ type Scanner struct {
 	// enrichers run after the discovery stage, in order: SNMP first, because LLDP uses
 	// what it learned. An error of an enricher is logged, the scan goes on.
 	enrichers []Collector
+
+	// classifier sets the kind of devices nothing else has typed, facts gives it
+	// sysServices and open ports. Both are optional.
+	classifier *Classifier
+	facts      func(model.DeviceKey) Facts
 }
 
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
 func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
-	snmp := NewSNMP(log)
+	probe, snmp := NewProbe(log), NewSNMP(log)
+	lldp := NewLLDP(snmp, log)
+	classifier, err := DefaultClassifier()
+	if err != nil {
+		log.Error("the built-in classify rules are broken, kinds are not set", "err", err)
+		classifier = nil
+	}
 	return &Scanner{
 		store: store, discovery: NewARP(), resolver: net.DefaultResolver, cfg: cfg, log: log, dnsWait: dnsTimeout,
-		enrichers: []Collector{snmp, NewLLDP(snmp, log)},
+		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
+		// tells which ports are trunks, and the router and switch tables use both.
+		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log)},
+		classifier: classifier,
+		facts: func(k model.DeviceKey) Facts {
+			f := Facts{Services: -1, Ports: probe.openPorts(k.IP)}
+			if n, ok := snmp.servicesOf(k.IP); ok {
+				f.Services = n
+			}
+			return f
+		},
 	}
 }
 
@@ -193,15 +214,25 @@ func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.
 // a name read over SNMP replaces the name from reverse DNS. A failing enricher costs only
 // its own facts.
 func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Result) Result {
-	devices := make([]model.Device, 0, len(base.Devices))
-	for _, d := range base.Devices {
-		devices = append(devices, model.Device{MAC: d.Key.MAC, IP: d.Key.IP, Hostname: d.Hostname})
+	var devices []model.Device
+	known := map[model.DeviceKey]struct{}{}
+	remember := func(inputs []model.DeviceInput) {
+		for _, d := range inputs {
+			if _, ok := known[d.Key]; ok || d.Key.IP == "" {
+				continue
+			}
+			known[d.Key] = struct{}{}
+			devices = append(devices, model.Device{MAC: d.Key.MAC, IP: d.Key.IP, Hostname: d.Hostname})
+		}
 	}
+	remember(base.Devices)
+
 	res := base
 	for _, c := range s.enrichers {
 		if ctx.Err() != nil {
 			return res
 		}
+		// Devices found by an earlier enricher are asked by the later ones.
 		out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.cfg})
 		if err != nil {
 			if ctx.Err() == nil {
@@ -209,12 +240,20 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 			}
 			continue
 		}
+		if s.resolver != nil {
+			s.resolveHostnames(ctx, out.Devices) // names for the hosts the discovery stage did not see
+		}
+		remember(out.Devices)
 		res.Devices = append(res.Devices, out.Devices...)
 		res.Interfaces = append(res.Interfaces, out.Interfaces...)
 		res.Links = append(res.Links, out.Links...)
 		res.LinksPolled = append(res.LinksPolled, out.LinksPolled...)
+		res.FDBPolled = append(res.FDBPolled, out.FDBPolled...)
 	}
 	fillVendors(res.Devices)
+	if s.classifier != nil {
+		s.classifier.Apply(res.Devices, s.facts)
+	}
 	return res
 }
 

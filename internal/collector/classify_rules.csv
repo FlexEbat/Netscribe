@@ -1,0 +1,42 @@
+# field,match,kind
+#
+# The first rule that matches wins. Rules are tried by field in this order, whatever
+# their place in the file: descr, services, port, vendor. Inside one field the file order
+# decides. A kind that LLDP already reported is never changed, a device nothing matches
+# stays unknown.
+#
+#   descr     case-insensitive text inside sysDescr
+#   services  "bridge" (sysServices has the layer 2 bit) or "router" (the layer 3 bit)
+#   port      an open TCP port
+#   vendor    case-insensitive text inside the vendor name
+descr,access point,ap
+descr,jetdirect,printer
+descr,laserjet,printer
+descr,officejet,printer
+descr,printer,printer
+descr,network camera,camera
+descr,ipcam,camera
+descr,hikvision,camera
+descr,dahua,camera
+descr,diskstation,nas
+descr,synology,nas
+descr,qnap,nas
+descr,fortigate,firewall
+descr,pfsense,firewall
+descr,opnsense,firewall
+descr,routeros,router
+descr,mikrotik,router
+descr,switch,switch
+descr,router,router
+services,bridge,switch
+services,router,router
+port,9100,printer
+port,515,printer
+port,631,printer
+port,554,camera
+vendor,hikvision,camera
+vendor,synology,nas
+vendor,qnap,nas
+vendor,mikrotik,router
+vendor,vmware,server
+vendor,philips lighting,iot

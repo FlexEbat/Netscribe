@@ -242,3 +242,46 @@ func TestSourceRank(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyFDBLinksVanishOnlyWhenTheSwitchWasPolled(t *testing.T) {
+	s := newTestStore(t)
+	devs := append(twoDevices(), dev(keyC.MAC, keyC.IP))
+	fdb := model.LinkInput{A: keyA, B: keyC, APort: "Gi5", Source: "fdb"}
+	lldp := model.LinkInput{A: keyA, B: keyB, APort: "Gi1", BPort: "Gi24", Source: "lldp"}
+	scanResult(t, s, collector.Result{Devices: devs, Links: []model.LinkInput{fdb, lldp}})
+	if got := links(t, s); len(got) != 2 {
+		t.Fatalf("links = %+v", got)
+	}
+
+	// Polled over LLDP only: the fdb link says nothing about what LLDP saw.
+	scanResult(t, s, collector.Result{Devices: devs, LinksPolled: []model.DeviceKey{keyA, keyB}})
+	got := links(t, s)
+	if len(got) != 1 || got[0].Source != "fdb" {
+		t.Fatalf("links = %+v, want the fdb link to stay and the lldp one to go", got)
+	}
+
+	// Polled over FDB and the host is gone from the table: the link goes.
+	scanResult(t, s, collector.Result{Devices: devs, FDBPolled: []model.DeviceKey{keyA}})
+	if got := links(t, s); len(got) != 0 {
+		t.Errorf("links = %+v, want none", got)
+	}
+}
+
+func TestApplyProbeSourceRanksWithARP(t *testing.T) {
+	s := newTestStore(t)
+	probed := model.DeviceInput{Key: model.DeviceKey{IP: "192.168.1.70"}, Source: "probe"}
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{probed}})
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{
+		{Key: model.DeviceKey{IP: "192.168.1.70"}, Hostname: "found", Source: "snmp"},
+	}})
+	got, err := s.ListDevices(context.Background(), DeviceFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Source != "snmp" || got[0].Hostname != "found" {
+		t.Errorf("devices = %+v, want one device upgraded to snmp", got)
+	}
+	if betterSource("snmp", "probe") != "snmp" || betterSource("probe", "arp") != "probe" {
+		t.Error("probe and arp rank the same, a tie keeps the current source")
+	}
+}

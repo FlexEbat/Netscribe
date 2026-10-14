@@ -218,7 +218,7 @@ func firstNonEmpty(preferred, fallback string) string {
 }
 
 // sourceRank orders the sources of a device: a person beats ssh, ssh beats snmp, snmp
-// beats arp (section 5.2 of the spec). Unknown sources rank lowest.
+// beats arp and probe (section 5.2 of the spec). Unknown sources rank lowest.
 func sourceRank(source string) int {
 	switch source {
 	case "manual":
@@ -227,7 +227,7 @@ func sourceRank(source string) int {
 		return 3
 	case "snmp":
 		return 2
-	case "arp":
+	case "arp", "probe":
 		return 1
 	}
 	return 0
@@ -334,17 +334,21 @@ func applyLinks(ctx context.Context, q *dbgen.Queries, r collector.Result, ts st
 		}
 	}
 
-	polled := map[int64]struct{}{}
-	for _, k := range r.LinksPolled {
-		d, found, err := findDevice(ctx, q, strings.ToLower(strings.TrimSpace(k.MAC)), strings.TrimSpace(k.IP))
-		if err != nil {
-			return err
-		}
-		if found {
-			polled[d.ID] = struct{}{}
+	// A link can only vanish when the device that would have reported it was asked: the
+	// ends of an lldp link are asked over LLDP, the ends of an fdb link over their FDB.
+	polled := map[string]map[int64]struct{}{"lldp": {}, "fdb": {}}
+	for source, keys := range map[string][]model.DeviceKey{"lldp": r.LinksPolled, "fdb": r.FDBPolled} {
+		for _, k := range keys {
+			d, found, err := findDevice(ctx, q, strings.ToLower(strings.TrimSpace(k.MAC)), strings.TrimSpace(k.IP))
+			if err != nil {
+				return err
+			}
+			if found {
+				polled[source][d.ID] = struct{}{}
+			}
 		}
 	}
-	if len(polled) == 0 {
+	if len(polled["lldp"]) == 0 && len(polled["fdb"]) == 0 {
 		return nil
 	}
 	all, err := q.ListLinks(ctx)
@@ -352,14 +356,15 @@ func applyLinks(ctx context.Context, q *dbgen.Queries, r collector.Result, ts st
 		return fmt.Errorf("list links: %w", err)
 	}
 	for _, l := range all {
-		if l.Source != "lldp" {
-			continue
+		set, ok := polled[l.Source]
+		if !ok {
+			continue // manual links stay
 		}
 		if _, ok := seen[l.ID]; ok {
 			continue
 		}
-		_, a := polled[l.ADeviceID]
-		_, b := polled[l.BDeviceID]
+		_, a := set[l.ADeviceID]
+		_, b := set[l.BDeviceID]
 		if !a && !b {
 			continue
 		}
