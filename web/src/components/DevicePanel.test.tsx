@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { Device, DeviceInterface } from "@/api/client"
+import type { Device, DeviceInterface, Service } from "@/api/client"
 import { DevicePanel } from "@/components/DevicePanel"
 import { json, mockFetch } from "@/test-utils"
 
@@ -30,6 +30,19 @@ const device: Device = {
 
 function iface(id: number, overrides: Partial<DeviceInterface> = {}): DeviceInterface {
   return { id, deviceId: 3, name: `Gi${id}`, mac: "", ip: "", up: true, ...overrides }
+}
+
+function service(id: number, overrides: Partial<Service> = {}): Service {
+  return {
+    id,
+    deviceId: 3,
+    port: 22,
+    proto: "tcp",
+    name: "ssh",
+    firstSeenAt: "2026-10-09T12:00:00.000Z",
+    lastSeenAt: "2026-10-09T12:00:00.000Z",
+    ...overrides,
+  }
 }
 
 function open(body: unknown) {
@@ -74,5 +87,34 @@ describe("DevicePanel", () => {
   it("copes with an answer that has no interfaces field", async () => {
     open({ device })
     expect(await screen.findByRole("tab", { name: "Interfaces (0)" })).toBeInTheDocument()
+  })
+
+  it("lists the services of the device on their own tab", async () => {
+    open({
+      device,
+      interfaces: [],
+      services: [
+        service(1),
+        service(2, { port: 443, name: "https" }),
+        service(3, { port: 4444, name: "" }),
+      ],
+    })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole("tab", { name: "Services (3)" }))
+
+    const rows = within(screen.getByRole("table")).getAllByRole("row")
+    expect(rows).toHaveLength(4) // the header and three services
+    expect(within(rows[1]!).getByText("ssh")).toBeInTheDocument()
+    expect(within(rows[1]!).getByText("22")).toBeInTheDocument()
+    expect(within(rows[1]!).getByText("tcp")).toBeInTheDocument()
+    expect(within(rows[2]!).getByText("https")).toBeInTheDocument()
+    expect(within(rows[3]!).getByText("–")).toBeInTheDocument()
+  })
+
+  it("says so when no port is open", async () => {
+    open({ device, interfaces: [], services: [] })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole("tab", { name: "Services (0)" }))
+    expect(screen.getByText("No open ports were found on this device.")).toBeInTheDocument()
   })
 })

@@ -10,6 +10,7 @@ import {
 import { DeleteDeviceButton } from "@/components/DeleteDeviceButton"
 import { DeviceForm } from "@/components/DeviceForm"
 import { InterfacesTable } from "@/components/InterfacesTable"
+import { ServicesTable } from "@/components/ServicesTable"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Button } from "@/components/ui/button"
 import { Alert } from "@/components/ui/alert"
@@ -80,7 +81,12 @@ export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: D
               })
               setLoaded({
                 id: deviceId,
-                state: { status: "ready", device, interfaces: state.interfaces },
+                state: {
+                  status: "ready",
+                  device,
+                  interfaces: state.interfaces,
+                  services: state.services,
+                },
               })
               setEditing(false)
               onChanged?.()
@@ -130,12 +136,16 @@ function Body({ state }: { state: State }) {
       <TabsList aria-label="Device sections">
         <TabsTrigger value="details">Details</TabsTrigger>
         <TabsTrigger value="interfaces">Interfaces ({state.interfaces.length})</TabsTrigger>
+        <TabsTrigger value="services">Services ({state.services.length})</TabsTrigger>
       </TabsList>
       <TabsContent value="details">
         <Details device={state.device} />
       </TabsContent>
       <TabsContent value="interfaces">
         <InterfacesTable interfaces={state.interfaces} />
+      </TabsContent>
+      <TabsContent value="services">
+        <ServicesTable services={state.services} />
       </TabsContent>
     </Tabs>
   )

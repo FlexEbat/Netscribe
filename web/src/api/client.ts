@@ -197,17 +197,36 @@ export interface DeviceInterface {
   up: boolean
 }
 
+/** An open port of a device. */
+export interface Service {
+  id: number
+  deviceId: number
+  port: number
+  proto: string
+  name: string
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
 export interface DeviceDetail {
   device: Device
   interfaces: DeviceInterface[]
+  services: Service[]
+}
+
+export async function listServices(deviceId?: number): Promise<Service[]> {
+  const suffix = deviceId === undefined ? "" : `?deviceId=${deviceId}`
+  const body = await api<{ services: Service[] }>("GET", `/api/services${suffix}`)
+  return body.services
 }
 
 export async function getDeviceDetail(id: number): Promise<DeviceDetail> {
-  const body = await api<{ device: Device; interfaces?: DeviceInterface[] }>(
-    "GET",
-    `/api/devices/${id}`,
-  )
-  return { device: body.device, interfaces: body.interfaces ?? [] }
+  const body = await api<{
+    device: Device
+    interfaces?: DeviceInterface[]
+    services?: Service[]
+  }>("GET", `/api/devices/${id}`)
+  return { device: body.device, interfaces: body.interfaces ?? [], services: body.services ?? [] }
 }
 
 export async function getDevice(id: number): Promise<Device> {

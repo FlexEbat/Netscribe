@@ -27,9 +27,12 @@ type Result struct {
 	LinksPolled []model.DeviceKey
 	// FDBPolled is the same for links of source fdb: switches whose forwarding table
 	// was read.
-	FDBPolled  []model.DeviceKey
-	Services   []model.ServiceInput
-	Containers []model.ContainerInput
+	FDBPolled []model.DeviceKey
+	Services  []model.ServiceInput
+	// ServicesPolled lists the devices whose ports were scanned. A service of such a
+	// device that did not answer again is removed.
+	ServicesPolled []model.DeviceKey
+	Containers     []model.ContainerInput
 }
 
 // Collector is one source of facts. Collect must return when ctx is canceled.

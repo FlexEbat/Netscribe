@@ -114,6 +114,23 @@ func demoLinks() []model.LinkInput {
 	return links
 }
 
+// demoServices opens ssh on the router and switches and web ports on the four servers.
+func demoServices() []model.ServiceInput {
+	out := []model.ServiceInput{
+		{Device: demoKey(1, "192.168.1.1"), Port: 22, Proto: "tcp", Name: "ssh"},
+		{Device: demoKey(2, "192.168.1.2"), Port: 22, Proto: "tcp", Name: "ssh"},
+		{Device: demoKey(3, "192.168.1.3"), Port: 22, Proto: "tcp", Name: "ssh"},
+	}
+	for i := 0; i < 4; i++ {
+		server := demoKey(10+i, fmt.Sprintf("192.168.1.%d", 10+i))
+		out = append(out,
+			model.ServiceInput{Device: server, Port: 80, Proto: "tcp", Name: "http"},
+			model.ServiceInput{Device: server, Port: 443, Proto: "tcp", Name: "https"},
+		)
+	}
+	return out
+}
+
 // demoInterfaces gives the router and the switches the interfaces the cables use.
 func demoInterfaces() []model.InterfaceInput {
 	gateway, core, office := demoKey(1, "192.168.1.1"), demoKey(2, "192.168.1.2"), demoKey(3, "192.168.1.3")
@@ -140,7 +157,7 @@ func seedNetwork(ctx context.Context, st store.Repo) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	res := collector.Result{Devices: devs, Interfaces: demoInterfaces(), Links: demoLinks()}
+	res := collector.Result{Devices: devs, Interfaces: demoInterfaces(), Links: demoLinks(), Services: demoServices()}
 	if err := st.ApplyResult(ctx, scan.ID, res); err != nil {
 		_ = st.FinishScan(ctx, scan.ID, "failed", err.Error())
 		return 0, err

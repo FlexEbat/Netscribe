@@ -285,3 +285,102 @@ func TestApplyProbeSourceRanksWithARP(t *testing.T) {
 		t.Error("probe and arp rank the same, a tie keeps the current source")
 	}
 }
+
+func svc(key model.DeviceKey, port int, name string) model.ServiceInput {
+	return model.ServiceInput{Device: key, Port: port, Proto: "tcp", Name: name}
+}
+
+func services(t *testing.T, s *Store, deviceID int64) []model.Service {
+	t.Helper()
+	out, err := s.ListServices(context.Background(), deviceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestApplyServicesAreStoredOnceAndRefreshed(t *testing.T) {
+	s := newTestStore(t)
+	in := collector.Result{
+		Devices:        twoDevices(),
+		Services:       []model.ServiceInput{svc(keyA, 22, "ssh"), svc(keyA, 22, "ssh"), svc(keyB, 80, "http")},
+		ServicesPolled: []model.DeviceKey{keyA, keyB},
+	}
+	scanResult(t, s, in)
+	first := services(t, s, 0)
+	if len(first) != 2 || first[0].Port != 22 || first[0].Name != "ssh" || first[0].Proto != "tcp" {
+		t.Fatalf("services = %+v", first)
+	}
+
+	in.Services = []model.ServiceInput{svc(keyA, 22, "secure-shell"), svc(keyB, 80, "http")}
+	scanResult(t, s, in)
+	second := services(t, s, 0)
+	if len(second) != 2 || second[0].ID != first[0].ID || second[0].Name != "secure-shell" {
+		t.Fatalf("services = %+v, want the same rows with the new name", second)
+	}
+	if !second[0].FirstSeenAt.Equal(first[0].FirstSeenAt) || !second[0].LastSeenAt.After(first[0].LastSeenAt) {
+		t.Errorf("first seen %v -> %v, last seen %v -> %v", first[0].FirstSeenAt, second[0].FirstSeenAt, first[0].LastSeenAt, second[0].LastSeenAt)
+	}
+}
+
+func TestApplyServiceThatClosedIsRemovedAfterTheNextScan(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{
+		Devices:        twoDevices(),
+		Services:       []model.ServiceInput{svc(keyA, 22, "ssh"), svc(keyA, 80, "http"), svc(keyB, 443, "https")},
+		ServicesPolled: []model.DeviceKey{keyA, keyB},
+	})
+
+	// Port 80 of A closed. B was not scanned this time, so its service stays.
+	scanResult(t, s, collector.Result{
+		Devices:        twoDevices(),
+		Services:       []model.ServiceInput{svc(keyA, 22, "ssh")},
+		ServicesPolled: []model.DeviceKey{keyA},
+	})
+	a, b := byMAC(t, s, keyA.MAC), byMAC(t, s, keyB.MAC)
+	if got := services(t, s, a.ID); len(got) != 1 || got[0].Port != 22 {
+		t.Errorf("A services = %+v, want only ssh", got)
+	}
+	if got := services(t, s, b.ID); len(got) != 1 || got[0].Port != 443 {
+		t.Errorf("B services = %+v, an unscanned device keeps its services", got)
+	}
+
+	// A scan with the stage off (nobody polled) removes nothing.
+	scanResult(t, s, collector.Result{Devices: twoDevices()})
+	if got := services(t, s, a.ID); len(got) != 1 {
+		t.Errorf("A services = %+v", got)
+	}
+
+	// A scanned device with nothing open loses its last service.
+	scanResult(t, s, collector.Result{Devices: twoDevices(), ServicesPolled: []model.DeviceKey{keyA}})
+	if got := services(t, s, a.ID); len(got) != 0 {
+		t.Errorf("A services = %+v, want none", got)
+	}
+}
+
+func TestApplyServicesSkipsBadInput(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{
+		Devices: twoDevices(),
+		Services: []model.ServiceInput{
+			svc(keyA, 0, "zero"), svc(keyA, 70000, "big"), svc(keyC, 22, "ghost"), // C was never stored
+			{Device: keyA, Port: 53, Proto: "icmp"},
+			{Device: keyA, Port: 53, Proto: " UDP ", Name: "domain\n"},
+		},
+	})
+	got := services(t, s, 0)
+	if len(got) != 1 || got[0].Port != 53 || got[0].Proto != "udp" || got[0].Name != "domain" {
+		t.Errorf("services = %+v, want the one valid udp service with a clean name", got)
+	}
+}
+
+func TestServicesGoWithTheirDevice(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Services: []model.ServiceInput{svc(keyA, 22, "ssh"), svc(keyB, 80, "http")}})
+	if err := s.DeleteDevice(context.Background(), byMAC(t, s, keyA.MAC).ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := services(t, s, 0); len(got) != 1 || got[0].Port != 80 {
+		t.Errorf("services = %+v, want only the other device's", got)
+	}
+}
