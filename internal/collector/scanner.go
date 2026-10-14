@@ -61,7 +61,7 @@ type Scanner struct {
 
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
 func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
-	probe, snmp := NewProbe(log), NewSNMP(log)
+	probe, snmp, services := NewProbe(log), NewSNMP(log), NewServices(log)
 	lldp := NewLLDP(snmp, log)
 	classifier, err := DefaultClassifier()
 	if err != nil {
@@ -72,10 +72,10 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		store: store, discovery: NewARP(), resolver: net.DefaultResolver, cfg: cfg, log: log, dnsWait: dnsTimeout,
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
-		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log)},
+		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services},
 		classifier: classifier,
 		facts: func(k model.DeviceKey) Facts {
-			f := Facts{Services: -1, Ports: probe.openPorts(k.IP)}
+			f := Facts{Services: -1, Ports: mergePorts(probe.openPorts(k.IP), services.openPorts(k.IP))}
 			if n, ok := snmp.servicesOf(k.IP); ok {
 				f.Services = n
 			}
@@ -249,12 +249,29 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 		res.Links = append(res.Links, out.Links...)
 		res.LinksPolled = append(res.LinksPolled, out.LinksPolled...)
 		res.FDBPolled = append(res.FDBPolled, out.FDBPolled...)
+		res.Services = append(res.Services, out.Services...)
+		res.ServicesPolled = append(res.ServicesPolled, out.ServicesPolled...)
 	}
 	fillVendors(res.Devices)
 	if s.classifier != nil {
 		s.classifier.Apply(res.Devices, s.facts)
 	}
 	return res
+}
+
+// mergePorts joins two lists of open ports without repeats.
+func mergePorts(a, b []int) []int {
+	seen := map[int]struct{}{}
+	var out []int
+	for _, list := range [][]int{a, b} {
+		for _, p := range list {
+			if _, ok := seen[p]; !ok {
+				seen[p] = struct{}{}
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 // fail records the failure with a context that survives cancellation, because

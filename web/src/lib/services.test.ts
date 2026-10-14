@@ -1,0 +1,42 @@
+import { describe, expect, it } from "vitest"
+import { filterServices, serviceLabel } from "@/lib/services"
+
+const services = [
+  { name: "ssh", port: 22 },
+  { name: "https", port: 443 },
+  { name: "http-alt", port: 8080 },
+  { name: "", port: 4444 },
+]
+
+describe("filterServices", () => {
+  it("returns everything for an empty or blank query", () => {
+    expect(filterServices(services, "")).toHaveLength(4)
+    expect(filterServices(services, "   ")).toHaveLength(4)
+  })
+
+  it("matches the name as a substring, in any case", () => {
+    expect(filterServices(services, "HTTP").map((s) => s.port)).toEqual([443, 8080])
+    expect(filterServices(services, "ssh").map((s) => s.port)).toEqual([22])
+  })
+
+  it("finds a service without a name by its port", () => {
+    expect(filterServices(services, "4444").map((s) => s.port)).toEqual([4444])
+  })
+
+  it("does not match a port number as a substring", () => {
+    expect(filterServices(services, "44")).toEqual([])
+  })
+
+  it("does not change the list it was given", () => {
+    const copy = [...services]
+    filterServices(services, "ssh")
+    expect(services).toEqual(copy)
+  })
+})
+
+describe("serviceLabel", () => {
+  it("falls back to the port", () => {
+    expect(serviceLabel({ name: "ssh", port: 22 })).toBe("ssh")
+    expect(serviceLabel({ name: "", port: 4444 })).toBe("4444")
+  })
+})

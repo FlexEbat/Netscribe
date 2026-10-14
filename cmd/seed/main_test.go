@@ -49,6 +49,9 @@ func TestSeedNetworkStoresTheDemoNetworkOnce(t *testing.T) {
 	if len(links) != 16 {
 		t.Errorf("links = %d, want 16 after two runs", len(links))
 	}
+	if svcs, err := st.ListServices(ctx, 0); err != nil || len(svcs) != 11 {
+		t.Errorf("services = %d, %v, want 11 after two runs", len(svcs), err)
+	}
 	var core model.Device
 	for _, d := range devs {
 		if d.Hostname == "switch-core" {

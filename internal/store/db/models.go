@@ -87,6 +87,16 @@ type Scan struct {
 	ContainerCount int64
 }
 
+type Service struct {
+	ID          int64
+	DeviceID    int64
+	Port        int64
+	Proto       string
+	Name        string
+	FirstSeenAt string
+	LastSeenAt  string
+}
+
 type Session struct {
 	IDHash     string
 	UserID     int64

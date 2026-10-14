@@ -61,6 +61,9 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 	if err := applyLinks(ctx, q, r, ts); err != nil {
 		return fmt.Errorf("apply result: %w", err)
 	}
+	if err := applyServices(ctx, q, r, ts); err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
 
 	online, err := q.ListOnlineDeviceAddrs(ctx)
 	if err != nil {
@@ -370,6 +373,59 @@ func applyLinks(ctx context.Context, q *dbgen.Queries, r collector.Result, ts st
 		}
 		if _, err := q.DeleteLink(ctx, l.ID); err != nil {
 			return fmt.Errorf("delete link %d: %w", l.ID, err)
+		}
+	}
+	return nil
+}
+
+// applyServices stores the open ports a scan found. A device whose ports were scanned
+// loses the services that did not answer this time, a device that was not scanned keeps
+// what it had.
+func applyServices(ctx context.Context, q *dbgen.Queries, r collector.Result, ts string) error {
+	resolve := func(k model.DeviceKey) (int64, bool, error) {
+		d, found, err := findDevice(ctx, q, strings.ToLower(strings.TrimSpace(k.MAC)), strings.TrimSpace(k.IP))
+		return d.ID, found, err
+	}
+	for _, in := range r.Services {
+		proto := strings.ToLower(strings.TrimSpace(in.Proto))
+		if in.Port < 1 || in.Port > 65535 || (proto != "tcp" && proto != "udp") {
+			continue
+		}
+		id, found, err := resolve(in.Device)
+		if err != nil {
+			return err
+		}
+		if !found {
+			continue
+		}
+		name := cleanText(in.Name)
+		cur, err := q.GetServiceByKey(ctx, dbgen.GetServiceByKeyParams{DeviceID: id, Port: int64(in.Port), Proto: proto})
+		switch {
+		case err == nil:
+			if err := q.TouchService(ctx, dbgen.TouchServiceParams{Name: name, LastSeenAt: ts, ID: cur.ID}); err != nil {
+				return fmt.Errorf("touch service %d: %w", cur.ID, err)
+			}
+		case errors.Is(err, sql.ErrNoRows):
+			err := q.InsertService(ctx, dbgen.InsertServiceParams{
+				DeviceID: id, Port: int64(in.Port), Proto: proto, Name: name, FirstSeenAt: ts, LastSeenAt: ts,
+			})
+			if err != nil {
+				return fmt.Errorf("insert service: %w", err)
+			}
+		default:
+			return fmt.Errorf("find service: %w", err)
+		}
+	}
+	for _, k := range r.ServicesPolled {
+		id, found, err := resolve(k)
+		if err != nil {
+			return err
+		}
+		if !found {
+			continue
+		}
+		if err := q.DeleteDeviceServicesBefore(ctx, dbgen.DeleteDeviceServicesBeforeParams{DeviceID: id, LastSeenAt: ts}); err != nil {
+			return fmt.Errorf("delete closed services of device %d: %w", id, err)
 		}
 	}
 	return nil
