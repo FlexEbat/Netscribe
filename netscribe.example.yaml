@@ -7,7 +7,7 @@ allowPublicTargets: false # true allows scan targets outside RFC 1918
 scan:
   targets: [192.168.1.0/24]
   interval: 15m # 0 turns the schedule off, the minimum is 1m
-  ports: [22, 53, 80, 443, 445, 3389, 8080] # an empty list turns the port scan off
+  ports: [22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100] # an empty list turns the port scan off
 
 snmp:
   communities: [public] # use a read-only community and restrict it by ACL on the device

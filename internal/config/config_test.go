@@ -326,3 +326,28 @@ func TestParseTarget(t *testing.T) {
 		}
 	}
 }
+
+// The classify rules for printers (9100, 515, 631) and cameras (554) need these ports to
+// be scanned, so the defaults must keep them, and the example file must show the same list.
+func TestDefaultPortsCoverTheClassifyRules(t *testing.T) {
+	cfg, err := Load(writeConfig(t, 0o600, "scan:\n  targets: [10.0.0.0/24]\n"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[int]bool{}
+	for _, p := range cfg.Scan.Ports {
+		have[p] = true
+	}
+	for _, p := range []int{515, 554, 631, 9100} {
+		if !have[p] {
+			t.Errorf("default scan.ports lacks %d: %v", p, cfg.Scan.Ports)
+		}
+	}
+	example, err := Load("../../netscribe.example.yaml", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(example.Scan.Ports) != fmt.Sprint(cfg.Scan.Ports) {
+		t.Errorf("the example lists %v, the defaults are %v", example.Scan.Ports, cfg.Scan.Ports)
+	}
+}

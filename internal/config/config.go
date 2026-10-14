@@ -145,7 +145,7 @@ func defaults() Config {
 		Database: "./netscribe.db",
 		Scan: ScanConfig{
 			Interval: Duration(15 * time.Minute),
-			Ports:    []int{22, 53, 80, 443, 445, 3389, 8080},
+			Ports:    []int{22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100},
 		},
 		SNMP:    SNMPConfig{Timeout: Duration(2 * time.Second)},
 		SSH:     SSHConfig{KnownHosts: "~/.ssh/known_hosts"},
