@@ -366,12 +366,36 @@ func loadSigner(path string) (ssh.Signer, error) {
 
 // hostKeyPolicy loads known_hosts. The policy is strict: a host that is not listed and a
 // host whose key changed are both refused, nothing is added to the file.
-func hostKeyPolicy(path string) (*knownhosts.HostKeyDB, error) {
-	db, err := knownhosts.NewDB(expandHome(path))
+func hostKeyPolicy(path string) (ssh.HostKeyCallback, error) {
+	check, err := knownhosts.New(expandHome(path))
 	if err != nil {
 		return nil, errKnownHosts
 	}
-	return db, nil
+	return check, nil
+}
+
+// hostKeyAlgorithms lists the signature algorithms for the key types known_hosts holds.
+func hostKeyAlgorithms(want []knownhosts.KnownKey) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(a string) {
+		if _, ok := seen[a]; !ok {
+			seen[a] = struct{}{}
+			out = append(out, a)
+		}
+	}
+	for _, k := range want {
+		if k.Key == nil {
+			continue
+		}
+		if t := k.Key.Type(); t == ssh.KeyAlgoRSA {
+			add(ssh.KeyAlgoRSASHA512)
+			add(ssh.KeyAlgoRSASHA256)
+		} else {
+			add(t)
+		}
+	}
+	return out
 }
 
 // netRunner connects over TCP with the x/crypto SSH client.
@@ -382,22 +406,35 @@ func (netRunner) Connect(ctx context.Context, e sshEndpoint) (sshConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	db, err := hostKeyPolicy(e.KnownHosts)
+	check, err := hostKeyPolicy(e.KnownHosts)
 	if err != nil {
 		return nil, err
 	}
 	cfg := &ssh.ClientConfig{
 		User:            e.User,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: db.HostKeyCallback(),
-		// Offer the key types known_hosts has for this host, so a host that lists an
-		// ed25519 key is not asked for an RSA one it cannot match.
-		HostKeyAlgorithms: db.HostKeyAlgorithms(e.Addr),
-		Timeout:           sshConnectTimeout,
+		HostKeyCallback: check,
+		Timeout:         sshConnectTimeout,
 	}
+	client, err := dialSSH(ctx, e.Addr, cfg)
+	var ke *knownhosts.KeyError
+	if errors.As(err, &ke) && len(ke.Want) > 0 {
+		// The host presented a key type known_hosts has no entry for, while it lists
+		// others. Ask for the listed types once, as OpenSSH does, and check again: a key
+		// that really changed fails the second time too.
+		cfg.HostKeyAlgorithms = hostKeyAlgorithms(ke.Want)
+		client, err = dialSSH(ctx, e.Addr, cfg)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &netConn{client: client}, nil
+}
 
+// dialSSH opens the TCP connection and runs the handshake within sshConnectTimeout.
+func dialSSH(ctx context.Context, addr string, cfg *ssh.ClientConfig) (*ssh.Client, error) {
 	d := net.Dialer{Timeout: sshConnectTimeout}
-	nc, err := d.DialContext(ctx, "tcp", e.Addr)
+	nc, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
@@ -408,7 +445,7 @@ func (netRunner) Connect(ctx context.Context, e sshEndpoint) (sshConn, error) {
 		_ = nc.Close()
 		return nil, fmt.Errorf("connect: %w", err)
 	}
-	sc, chans, reqs, err := ssh.NewClientConn(nc, e.Addr, cfg)
+	sc, chans, reqs, err := ssh.NewClientConn(nc, addr, cfg)
 	stop()
 	if err != nil {
 		_ = nc.Close()
@@ -418,7 +455,7 @@ func (netRunner) Connect(ctx context.Context, e sshEndpoint) (sshConn, error) {
 		_ = sc.Close()
 		return nil, fmt.Errorf("connect: %w", err)
 	}
-	return &netConn{client: ssh.NewClient(sc, chans, reqs)}, nil
+	return ssh.NewClient(sc, chans, reqs), nil
 }
 
 type netConn struct{ client *ssh.Client }

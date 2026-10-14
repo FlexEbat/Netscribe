@@ -484,11 +484,10 @@ func TestHostKeyPolicyIsStrict(t *testing.T) {
 	if err := os.WriteFile(path, []byte(knownhosts.Line([]string{"192.168.1.10"}, known)+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	db, err := hostKeyPolicy(path)
+	check, err := hostKeyPolicy(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	check := db.HostKeyCallback()
 	addr := func(ip string) net.Addr { return &net.TCPAddr{IP: net.ParseIP(ip), Port: 22} }
 
 	if err := check("192.168.1.10:22", addr("192.168.1.10"), known); err != nil {
@@ -522,5 +521,16 @@ func TestExpandHome(t *testing.T) {
 	}
 	if got := expandHome("/etc/ssh/known_hosts"); got != "/etc/ssh/known_hosts" {
 		t.Errorf("an absolute path changed to %q", got)
+	}
+}
+
+func TestHostKeyAlgorithmsFollowKnownHosts(t *testing.T) {
+	ed := testPublicKey(t) // ssh-ed25519
+	got := hostKeyAlgorithms([]knownhosts.KnownKey{{Key: ed}, {Key: ed}, {}})
+	if len(got) != 1 || got[0] != ssh.KeyAlgoED25519 {
+		t.Errorf("algorithms = %v, want ssh-ed25519 once", got)
+	}
+	if got := hostKeyAlgorithms(nil); len(got) != 0 {
+		t.Errorf("algorithms = %v, want none", got)
 	}
 }
