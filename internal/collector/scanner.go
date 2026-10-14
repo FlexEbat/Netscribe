@@ -53,6 +53,10 @@ type Scanner struct {
 	// what it learned. An error of an enricher is logged, the scan goes on.
 	enrichers []Collector
 
+	// late run after classify, in order: the order of section 5.2 puts ssh behind it.
+	// An error of a late collector is logged, the scan goes on.
+	late []Collector
+
 	// classifier sets the kind of devices nothing else has typed, facts gives it
 	// sysServices and open ports. Both are optional.
 	classifier *Classifier
@@ -73,6 +77,7 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
 		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services},
+		late:       []Collector{NewSSH(log)},
 		classifier: classifier,
 		facts: func(k model.DeviceKey) Facts {
 			f := Facts{Services: -1, Ports: mergePorts(probe.openPorts(k.IP), services.openPorts(k.IP))}
@@ -228,34 +233,43 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 	remember(base.Devices)
 
 	res := base
-	for _, c := range s.enrichers {
-		if ctx.Err() != nil {
-			return res
-		}
-		// Devices found by an earlier enricher are asked by the later ones.
-		out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.cfg})
-		if err != nil {
-			if ctx.Err() == nil {
-				s.log.Warn("collector failed", "collector", c.Name(), "err", err)
+	// collect runs cs on what is known so far and merges what they return. It reports
+	// false when the scan was canceled.
+	collect := func(cs []Collector) bool {
+		for _, c := range cs {
+			if ctx.Err() != nil {
+				return false
 			}
-			continue
+			// Devices found by an earlier collector are asked by the later ones.
+			out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.cfg})
+			if err != nil {
+				if ctx.Err() == nil {
+					s.log.Warn("collector failed", "collector", c.Name(), "err", err)
+				}
+				continue
+			}
+			if s.resolver != nil {
+				s.resolveHostnames(ctx, out.Devices) // names for the hosts the discovery stage did not see
+			}
+			remember(out.Devices)
+			res.Devices = append(res.Devices, out.Devices...)
+			res.Interfaces = append(res.Interfaces, out.Interfaces...)
+			res.Links = append(res.Links, out.Links...)
+			res.LinksPolled = append(res.LinksPolled, out.LinksPolled...)
+			res.FDBPolled = append(res.FDBPolled, out.FDBPolled...)
+			res.Services = append(res.Services, out.Services...)
+			res.ServicesPolled = append(res.ServicesPolled, out.ServicesPolled...)
 		}
-		if s.resolver != nil {
-			s.resolveHostnames(ctx, out.Devices) // names for the hosts the discovery stage did not see
-		}
-		remember(out.Devices)
-		res.Devices = append(res.Devices, out.Devices...)
-		res.Interfaces = append(res.Interfaces, out.Interfaces...)
-		res.Links = append(res.Links, out.Links...)
-		res.LinksPolled = append(res.LinksPolled, out.LinksPolled...)
-		res.FDBPolled = append(res.FDBPolled, out.FDBPolled...)
-		res.Services = append(res.Services, out.Services...)
-		res.ServicesPolled = append(res.ServicesPolled, out.ServicesPolled...)
+		return true
+	}
+	if !collect(s.enrichers) {
+		return res
 	}
 	fillVendors(res.Devices)
 	if s.classifier != nil {
 		s.classifier.Apply(res.Devices, s.facts)
 	}
+	collect(s.late)
 	return res
 }
 
