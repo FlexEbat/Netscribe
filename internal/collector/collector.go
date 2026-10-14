@@ -25,8 +25,11 @@ type Result struct {
 	// LinksPolled lists the devices whose neighbor table was read completely. A link of
 	// source lldp that touches one of them and was not seen again is removed.
 	LinksPolled []model.DeviceKey
-	Services    []model.ServiceInput
-	Containers  []model.ContainerInput
+	// FDBPolled is the same for links of source fdb: switches whose forwarding table
+	// was read.
+	FDBPolled  []model.DeviceKey
+	Services   []model.ServiceInput
+	Containers []model.ContainerInput
 }
 
 // Collector is one source of facts. Collect must return when ctx is canceled.

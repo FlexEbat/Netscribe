@@ -51,14 +51,26 @@ const (
 type LLDP struct {
 	snmp *SNMP
 	log  *slog.Logger
+
+	mu     sync.Mutex
+	trunks map[string]map[string]struct{} // device ip -> local ports that have an LLDP neighbor
 }
 
 // NewLLDP returns an LLDP collector that reuses the sessions details of snmp.
 func NewLLDP(snmp *SNMP, log *slog.Logger) *LLDP {
-	return &LLDP{snmp: snmp, log: log}
+	return &LLDP{snmp: snmp, log: log, trunks: map[string]map[string]struct{}{}}
 }
 
 func (c *LLDP) Name() string { return "lldp" }
+
+// hasNeighbor tells whether port of the device has an LLDP neighbor. Such a port is a
+// trunk: the MACs behind it belong to other switches' hosts, not to this switch.
+func (c *LLDP) hasNeighbor(ip, port string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	_, ok := c.trunks[ip][port]
+	return ok
+}
 
 func (c *LLDP) Collect(ctx context.Context, in Input) (Result, error) {
 	known := newKnown(in.Devices)
@@ -183,7 +195,16 @@ func (c *LLDP) collectOne(ctx context.Context, d model.Device, community string,
 		man = nil // management addresses are a convenience, links work without them
 	}
 
-	for _, n := range parseNeighbors(locPorts, rem, man) {
+	neighbors := parseNeighbors(locPorts, rem, man)
+	ports := map[string]struct{}{}
+	for _, n := range neighbors {
+		ports[n.localPort] = struct{}{}
+	}
+	c.mu.Lock()
+	c.trunks[d.IP] = ports
+	c.mu.Unlock()
+
+	for _, n := range neighbors {
 		key, isNew := c.resolve(n, known)
 		if key == (model.DeviceKey{}) || key == local {
 			continue
