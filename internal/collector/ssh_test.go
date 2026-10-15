@@ -132,7 +132,7 @@ func TestSSHFillsHostFromCommandOutput(t *testing.T) {
 		}
 		ifaces = append(ifaces, i.Name+"="+i.IP)
 	}
-	if got, want := fmt.Sprint(ifaces), "[eth0=192.168.1.10 eth0=fd00::10 br0.10=10.0.10.1]"; got != want {
+	if got, want := fmt.Sprint(ifaces), "[br0.10=10.0.10.1 eth0=192.168.1.10 eth0=fd00::10]"; got != want {
 		t.Errorf("interfaces = %s, want %s", got, want)
 	}
 

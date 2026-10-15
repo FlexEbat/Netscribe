@@ -515,5 +515,6 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 		p = p[:room]
 	}
 	b.buf.Write(p) // a bytes.Buffer write cannot fail
-	return n, nil // report everything as taken, a short write would fail the copy
+	// Report everything as taken: a short write would fail the copy.
+	return n, nil
 }
