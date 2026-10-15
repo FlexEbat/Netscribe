@@ -33,6 +33,9 @@ type Result struct {
 	// device that did not answer again is removed.
 	ServicesPolled []model.DeviceKey
 	Containers     []model.ContainerInput
+	// ContainersPolled lists the hosts whose Docker daemon was read completely. A
+	// container of such a host that the daemon no longer lists is removed.
+	ContainersPolled []model.DeviceKey
 }
 
 // Collector is one source of facts. Collect must return when ctx is canceled.

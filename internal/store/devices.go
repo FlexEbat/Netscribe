@@ -79,8 +79,7 @@ func (s *Store) SetDevicePosition(ctx context.Context, id int64, x, y float64) e
 	return nil
 }
 
-// Topology returns everything the canvas draws. Containers come with the slice that
-// collects them, until then the list is empty, never nil.
+// Topology returns everything the canvas draws. Every list is non-nil.
 func (s *Store) Topology(ctx context.Context) (model.Topology, error) {
 	devices, err := s.ListDevices(ctx, DeviceFilter{})
 	if err != nil {
@@ -90,7 +89,11 @@ func (s *Store) Topology(ctx context.Context) (model.Topology, error) {
 	if err != nil {
 		return model.Topology{}, err
 	}
-	return model.Topology{Devices: devices, Links: links, Containers: []model.Container{}}, nil
+	containers, err := s.ListContainers(ctx)
+	if err != nil {
+		return model.Topology{}, err
+	}
+	return model.Topology{Devices: devices, Links: links, Containers: containers}, nil
 }
 
 func matches(d model.Device, lowerQuery string) bool {

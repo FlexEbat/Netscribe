@@ -131,6 +131,33 @@ func demoServices() []model.ServiceInput {
 	return out
 }
 
+// demoContainers puts nine containers on the first server, two compose projects and one
+// loose container, in every state the page colours. Nine is more than one row on the canvas.
+func demoContainers() []model.ContainerInput {
+	host := demoKey(10, "192.168.1.10")
+	mk := func(id, name, image, state, project string, ports []model.PortMapping) model.ContainerInput {
+		return model.ContainerInput{
+			Device: host, ID: id + "0000000000000000000000000000000000000000000000000000000000", Name: name,
+			Image: image, State: state, ComposeProject: project, Ports: ports,
+			Networks: []model.ContainerNetwork{{Name: "bridge", IP: "172.17.0.2"}},
+		}
+	}
+	pub := func(host, container int) []model.PortMapping {
+		return []model.PortMapping{{HostIP: "0.0.0.0", HostPort: host, ContainerPort: container, Proto: "tcp"}}
+	}
+	return []model.ContainerInput{
+		mk("a1", "shop-web", "nginx:1.27", "running", "shop", pub(8080, 80)),
+		mk("a2", "shop-api", "shop/api:2.3", "running", "shop", pub(8081, 3000)),
+		mk("a3", "shop-db", "postgres:16", "running", "shop", nil),
+		mk("a4", "shop-cache", "redis:7", "running", "shop", nil),
+		mk("b1", "wiki-app", "outlinewiki/outline:0.80", "running", "wiki", pub(8082, 3000)),
+		mk("b2", "wiki-db", "postgres:16", "restarting", "wiki", nil),
+		mk("b3", "wiki-backup", "restic/restic:0.17", "exited", "wiki", nil),
+		mk("c1", "grafana", "grafana/grafana:11", "running", "", pub(3000, 3000)),
+		mk("c2", "old-test", "alpine:3.20", "paused", "", nil),
+	}
+}
+
 // demoInterfaces gives the router and the switches the interfaces the cables use.
 func demoInterfaces() []model.InterfaceInput {
 	gateway, core, office := demoKey(1, "192.168.1.1"), demoKey(2, "192.168.1.2"), demoKey(3, "192.168.1.3")
@@ -157,7 +184,10 @@ func seedNetwork(ctx context.Context, st store.Repo) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	res := collector.Result{Devices: devs, Interfaces: demoInterfaces(), Links: demoLinks(), Services: demoServices()}
+	res := collector.Result{
+		Devices: devs, Interfaces: demoInterfaces(), Links: demoLinks(), Services: demoServices(),
+		Containers: demoContainers(), ContainersPolled: []model.DeviceKey{demoKey(10, "192.168.1.10")},
+	}
 	if err := st.ApplyResult(ctx, scan.ID, res); err != nil {
 		_ = st.FinishScan(ctx, scan.ID, "failed", err.Error())
 		return 0, err

@@ -57,6 +57,10 @@ type Scanner struct {
 	// An error of a late collector is logged, the scan goes on.
 	late []Collector
 
+	// docker is also the last of late. It keeps its own state and watches the daemon
+	// between scans.
+	docker *Docker
+
 	// classifier sets the kind of devices nothing else has typed, facts gives it
 	// sysServices and open ports. Both are optional.
 	classifier *Classifier
@@ -66,6 +70,7 @@ type Scanner struct {
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
 func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	probe, snmp, services := NewProbe(log), NewSNMP(log), NewServices(log)
+	docker := NewDocker(cfg.Docker, log)
 	lldp := NewLLDP(snmp, log)
 	classifier, err := DefaultClassifier()
 	if err != nil {
@@ -77,7 +82,8 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
 		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services},
-		late:       []Collector{NewSSH(log)},
+		late:       []Collector{NewSSH(log), docker},
+		docker:     docker,
 		classifier: classifier,
 		facts: func(k model.DeviceKey) Facts {
 			f := Facts{Services: -1, Ports: mergePorts(probe.openPorts(k.IP), services.openPorts(k.IP))}
@@ -119,6 +125,9 @@ func (s *Scanner) stages() int {
 
 // SetEvents sets the receiver of scan events.
 func (s *Scanner) SetEvents(p Publisher) { s.events = p }
+
+// Docker returns the Docker collector, which the server also runs between scans.
+func (s *Scanner) Docker() *Docker { return s.docker }
 
 func (s *Scanner) publish(name string, data any) {
 	if s.events != nil {
@@ -259,6 +268,8 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 			res.FDBPolled = append(res.FDBPolled, out.FDBPolled...)
 			res.Services = append(res.Services, out.Services...)
 			res.ServicesPolled = append(res.ServicesPolled, out.ServicesPolled...)
+			res.Containers = append(res.Containers, out.Containers...)
+			res.ContainersPolled = append(res.ContainersPolled, out.ContainersPolled...)
 		}
 		return true
 	}
