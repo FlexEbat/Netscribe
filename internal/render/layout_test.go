@@ -113,3 +113,54 @@ func TestLayoutOfNothing(t *testing.T) {
 		t.Errorf("Layout(nil) = %v", got)
 	}
 }
+
+func hostAt(id int64, x, y float64) model.Device {
+	return model.Device{ID: id, X: &x, Y: &y}
+}
+
+func TestLayoutContainersStandsThemUnderTheHostSixToARow(t *testing.T) {
+	var list []model.Container
+	for i := 0; i < 8; i++ {
+		// Ids run backwards so the order must come from the names.
+		list = append(list, model.Container{ID: string(rune('z' - i)), DeviceID: 2, Name: string(rune('a' + i))})
+	}
+	got := LayoutContainers([]model.Device{hostAt(2, 100, 200)}, list)
+	if len(got) != 8 {
+		t.Fatalf("positions = %+v", got)
+	}
+	want := [][2]float64{
+		{100, 310}, {250, 310}, {400, 310}, {550, 310}, {700, 310}, {850, 310}, // the first row
+		{100, 386}, {250, 386}, // the second row
+	}
+	for i, p := range got {
+		if p.X != want[i][0] || p.Y != want[i][1] {
+			t.Errorf("container %d at (%v, %v), want (%v, %v)", i, p.X, p.Y, want[i][0], want[i][1])
+		}
+		if p.ID != string(rune('z'-i)) {
+			t.Errorf("container %d is %q, want %q: ordered by name", i, p.ID, string(rune('z'-i)))
+		}
+	}
+}
+
+func TestLayoutContainersKeepsHostsApartAndSkipsOrphans(t *testing.T) {
+	devices := []model.Device{hostAt(1, 0, 0), hostAt(2, 500, 0), {ID: 3}} // device 3 has no position
+	list := []model.Container{
+		{ID: "a", DeviceID: 2, Name: "web"},
+		{ID: "b", DeviceID: 1, Name: "db"},
+		{ID: "c", DeviceID: 3, Name: "no-place"},
+		{ID: "d", DeviceID: 9, Name: "no-host"},
+		{ID: "e", DeviceID: 1, Name: "db"}, // the same name: the id decides
+	}
+	got := LayoutContainers(devices, list)
+	var ids []string
+	for _, p := range got {
+		ids = append(ids, p.ID)
+	}
+	if fmt.Sprint(ids) != "[b e a]" {
+		t.Errorf("order = %v, want [b e a]: by host, then name, then id", ids)
+	}
+	again := LayoutContainers(devices, list)
+	if fmt.Sprint(again) != fmt.Sprint(got) {
+		t.Error("the layout changed between two runs")
+	}
+}

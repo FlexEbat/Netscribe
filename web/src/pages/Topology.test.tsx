@@ -1,8 +1,8 @@
-import { act, render, screen, waitFor } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { createMemoryRouter, RouterProvider } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { setCsrfToken, type Device, type Topology } from "@/api/client"
+import { setCsrfToken, type Container, type Device, type Topology } from "@/api/client"
 import { SessionProvider } from "@/api/session"
 import { routes } from "@/App"
 import { json, makeUser, meBody, mockFetch } from "@/test-utils"
@@ -15,11 +15,17 @@ vi.mock("@/components/TopologyCanvas", () => ({
     readOnly?: boolean
     onMove: (id: number, x: number, y: number) => void
     onSelect: (id: number | null) => void
+    onSelectContainer?: (id: string | null) => void
   }) => (
     <div data-testid="canvas" data-readonly={String(Boolean(props.readOnly))}>
       {props.topology.devices.map((d) => (
         <button key={d.id} onClick={() => props.onSelect(d.id)}>
           node {d.id}
+        </button>
+      ))}
+      {props.topology.containers.map((c) => (
+        <button key={c.id} onClick={() => props.onSelectContainer?.(c.id)}>
+          container {c.name}
         </button>
       ))}
       <button onClick={() => props.onMove(1, 12.5, -3)}>drag node 1</button>
@@ -188,5 +194,61 @@ describe("Topology page", () => {
     const before = loads()
     act(() => FakeEventSource.last?.emit("topology.changed"))
     await waitFor(() => expect(loads()).toBe(before + 1))
+  })
+  it("opens the panel of a container with everything the daemon told", async () => {
+    const web: Container = {
+      id: "abc123",
+      deviceId: 2,
+      name: "web",
+      image: "nginx:1.27",
+      state: "running",
+      composeProject: "shop",
+      ports: [{ hostIp: "0.0.0.0", hostPort: 8080, containerPort: 80, proto: "tcp" }],
+      networks: [{ name: "shop_default", ip: "172.18.0.3" }],
+      firstSeenAt: "2026-10-09T12:00:00.000Z",
+      lastSeenAt: "2026-10-09T12:05:00.000Z",
+    }
+    const user = userEvent.setup()
+    const { router } = open({
+      topology: () => json(200, { ...topology, containers: [web] }),
+    })
+    await user.click(await screen.findByRole("button", { name: "container web" }))
+
+    const panel = await screen.findByRole("dialog")
+    expect(within(panel).getByText("web")).toBeInTheDocument()
+    expect(within(panel).getByText("nginx:1.27")).toBeInTheDocument()
+    expect(within(panel).getByText("running")).toBeInTheDocument()
+    expect(within(panel).getByText("shop")).toBeInTheDocument()
+    expect(within(panel).getByText("8080->80/tcp")).toBeInTheDocument()
+    expect(within(panel).getByText("shop_default")).toBeInTheDocument()
+    expect(within(panel).getByText("172.18.0.3")).toBeInTheDocument()
+    expect(router.state.location.search).toBe("?container=abc123")
+    expect(screen.queryByRole("button", { name: /^Edit$/ })).not.toBeInTheDocument()
+
+    await user.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(router.state.location.search).toBe("")
+  })
+
+  it("closes the panel of a container that is removed", async () => {
+    const web: Container = {
+      id: "abc123",
+      deviceId: 2,
+      name: "web",
+      image: "nginx:1.27",
+      state: "running",
+      composeProject: "",
+      ports: [],
+      networks: [],
+      firstSeenAt: "",
+      lastSeenAt: "",
+    }
+    let containers = [web]
+    open({ topology: () => json(200, { ...topology, containers }), entry: "/?container=abc123" })
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+
+    containers = []
+    act(() => FakeEventSource.last?.emit("topology.changed"))
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   })
 })

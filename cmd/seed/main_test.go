@@ -52,6 +52,17 @@ func TestSeedNetworkStoresTheDemoNetworkOnce(t *testing.T) {
 	if svcs, err := st.ListServices(ctx, 0); err != nil || len(svcs) != 11 {
 		t.Errorf("services = %d, %v, want 11 after two runs", len(svcs), err)
 	}
+	ctrs, err := st.ListContainers(ctx)
+	if err != nil || len(ctrs) != 9 {
+		t.Errorf("containers = %d, %v, want 9 after two runs", len(ctrs), err)
+	}
+	states := map[string]int{}
+	for _, c := range ctrs {
+		states[c.State]++
+	}
+	if states["running"] != 6 || states["restarting"] != 1 || states["exited"] != 1 || states["paused"] != 1 {
+		t.Errorf("container states = %v", states)
+	}
 	var core model.Device
 	for _, d := range devs {
 		if d.Hostname == "switch-core" {

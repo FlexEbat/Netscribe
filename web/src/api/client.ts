@@ -165,12 +165,45 @@ export interface Link {
   lastSeenAt: string
 }
 
+export interface PortMapping {
+  hostIp: string
+  hostPort: number
+  containerPort: number
+  proto: string
+}
+
+export interface ContainerNetwork {
+  name: string
+  ip: string
+}
+
 export interface Container {
   id: string
   deviceId: number
   name: string
   image: string
   state: string
+  composeProject: string
+  ports: PortMapping[]
+  networks: ContainerNetwork[]
+  firstSeenAt: string
+  lastSeenAt: string
+}
+
+/** Whether the Docker daemon can be read right now, and if not, why. */
+export interface DockerState {
+  enabled: boolean
+  available: boolean
+  reason: string
+}
+
+export interface ContainerList {
+  containers: Container[]
+  docker: DockerState
+}
+
+export function listContainers(): Promise<ContainerList> {
+  return api<ContainerList>("GET", "/api/containers")
 }
 
 export interface Topology {

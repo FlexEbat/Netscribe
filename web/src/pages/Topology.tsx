@@ -4,6 +4,7 @@ import { getTopology, moveDevice, type Topology as TopologyData } from "@/api/cl
 import { openEvents } from "@/api/events"
 import { useSession } from "@/api/session"
 import { AddDeviceDialog } from "@/components/AddDeviceDialog"
+import { ContainerPanel } from "@/components/ContainerPanel"
 import { DevicePanel } from "@/components/DevicePanel"
 import { EmptyState } from "@/components/EmptyState"
 import { LinkBar } from "@/components/LinkBar"
@@ -43,7 +44,28 @@ export function Topology() {
         (p) => {
           const next = new URLSearchParams(p)
           if (id === null) next.delete("device")
-          else next.set("device", String(id))
+          else {
+            next.set("device", String(id))
+            next.delete("container")
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setParams],
+  )
+
+  const selectContainer = useCallback(
+    (id: string | null) => {
+      setParams(
+        (p) => {
+          const next = new URLSearchParams(p)
+          if (id === null) next.delete("container")
+          else {
+            next.set("container", id)
+            next.delete("device")
+          }
           return next
         },
         { replace: true },
@@ -88,6 +110,8 @@ export function Topology() {
     return d ? displayName(d) : `device ${id}`
   }
   const link = state.topology.links.find((l) => l.id === linkId)
+  // A container that is gone from the topology closes its panel.
+  const container = state.topology.containers.find((c) => c.id === params.get("container"))
   return (
     <div className="flex flex-col gap-3">
       {toolbar}
@@ -109,6 +133,7 @@ export function Topology() {
         topology={state.topology}
         onMove={move}
         onSelect={select}
+        onSelectContainer={selectContainer}
         onConnectNodes={(a, b) => setConnecting({ a, b })}
         onSelectLink={setLinkId}
         readOnly={!canMove}
@@ -124,6 +149,13 @@ export function Topology() {
             setConnecting(null)
             load()
           }}
+        />
+      ) : null}
+      {container ? (
+        <ContainerPanel
+          container={container}
+          hostName={nameOf(container.deviceId)}
+          onClose={() => selectContainer(null)}
         />
       ) : null}
       {deviceId !== null ? (
