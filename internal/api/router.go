@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/FlexEbat/Netscribe/internal/auth"
+	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/store"
@@ -51,6 +52,17 @@ type AuditReader interface {
 	ListAudit(ctx context.Context, f store.AuditFilter) ([]model.AuditEntry, error)
 }
 
+// ContainerReader lists the stored containers. *store.Store implements it.
+type ContainerReader interface {
+	ListContainers(ctx context.Context) ([]model.Container, error)
+}
+
+// DockerStatus tells whether the Docker daemon can be read. *collector.Docker
+// implements it.
+type DockerStatus interface {
+	State() collector.DockerState
+}
+
 // Scanner starts scans. The scanner behind it is told which targets to use.
 type Scanner interface {
 	// Start records a scan and returns it while it continues in the background.
@@ -70,6 +82,10 @@ type Options struct {
 	AuditLog AuditReader
 	// Repo serves devices and scans. Without it those routes are not registered.
 	Repo store.Repo
+	// Containers serves GET /api/containers. Without it that route is not registered.
+	Containers ContainerReader
+	// Docker reports whether the daemon can be read. Without it the daemon counts as available.
+	Docker DockerStatus
 	// Scanner runs scans for POST /api/scans. Without it that route is not registered.
 	Scanner Scanner
 	// Events feeds GET /api/events. Without it that route is not registered.
@@ -83,16 +99,18 @@ type Options struct {
 }
 
 type server struct {
-	auth     *auth.Service
-	audit    Auditor
-	repo     store.Repo
-	auditLog AuditReader
-	scanner  Scanner
-	hub      *events.Hub
-	streams  *streamCounter
-	trusted  []netip.Prefix
-	log      *slog.Logger
-	limiter  *auth.Limiter // sign-in attempts per client address
+	auth       *auth.Service
+	audit      Auditor
+	repo       store.Repo
+	containers ContainerReader
+	docker     DockerStatus
+	auditLog   AuditReader
+	scanner    Scanner
+	hub        *events.Hub
+	streams    *streamCounter
+	trusted    []netip.Prefix
+	log        *slog.Logger
+	limiter    *auth.Limiter // sign-in attempts per client address
 }
 
 const (
@@ -119,6 +137,9 @@ func (s *server) routes() []Route {
 	)
 	if s.auditLog != nil {
 		table = append(table, route(http.MethodGet, "/api/audit", model.PermAuditRead, s.listAudit))
+	}
+	if s.containers != nil {
+		table = append(table, route(http.MethodGet, "/api/containers", model.PermTopologyRead, s.listContainers))
 	}
 	if s.repo != nil {
 		table = append(table,
@@ -160,16 +181,18 @@ func newServer(opts Options) *server {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	return &server{
-		auth:     opts.Auth,
-		audit:    opts.Audit,
-		repo:     opts.Repo,
-		auditLog: opts.AuditLog,
-		scanner:  opts.Scanner,
-		hub:      opts.Events,
-		streams:  newStreamCounter(),
-		trusted:  opts.TrustedProxies,
-		log:      log,
-		limiter:  auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
+		auth:       opts.Auth,
+		audit:      opts.Audit,
+		repo:       opts.Repo,
+		containers: opts.Containers,
+		docker:     opts.Docker,
+		auditLog:   opts.AuditLog,
+		scanner:    opts.Scanner,
+		hub:        opts.Events,
+		streams:    newStreamCounter(),
+		trusted:    opts.TrustedProxies,
+		log:        log,
+		limiter:    auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
 	}
 }
 

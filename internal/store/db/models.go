@@ -34,6 +34,19 @@ type AuditLog struct {
 	Detail   string
 }
 
+type Container struct {
+	ID             string
+	DeviceID       int64
+	Name           string
+	Image          string
+	State          string
+	ComposeProject string
+	Ports          string
+	Networks       string
+	FirstSeenAt    string
+	LastSeenAt     string
+}
+
 type Device struct {
 	ID          int64
 	Mac         string

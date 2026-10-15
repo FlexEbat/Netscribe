@@ -161,11 +161,13 @@ func serve(args []string, e streams) error {
 	scanner.SetEvents(hub)
 	router := api.NewRouter(api.Options{
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
+		Containers: db, Docker: scanner.Docker(),
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, targets: targets},
 		TrustedProxies: proxies, Logger: logger,
 	})
 	srv := newServer(cfg, router)
 	go maintain(ctx, db, cfg.Audit.KeepDays, time.Hour, logger)
+	go scanner.Docker().Watch(ctx, db, targets, func() { hub.Publish("topology.changed", struct{}{}) })
 
 	errc := make(chan error, 1)
 	go func() {

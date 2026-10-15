@@ -64,6 +64,9 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 	if err := applyServices(ctx, q, r, ts); err != nil {
 		return fmt.Errorf("apply result: %w", err)
 	}
+	if err := applyContainers(ctx, q, r, ts); err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
 
 	online, err := q.ListOnlineDeviceAddrs(ctx)
 	if err != nil {
@@ -82,8 +85,12 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 	if err != nil {
 		return fmt.Errorf("apply result: %w", err)
 	}
+	containers, err := q.CountContainers(ctx)
+	if err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
 	if err := q.SetScanCounts(ctx, dbgen.SetScanCountsParams{
-		DeviceCount: int64(len(seen)), LinkCount: int64(len(links)), ID: scanID,
+		DeviceCount: int64(len(seen)), LinkCount: int64(len(links)), ContainerCount: containers, ID: scanID,
 	}); err != nil {
 		return fmt.Errorf("apply result: %w", err)
 	}
