@@ -14,11 +14,15 @@ snmp:
   timeout: 2s
 
 ssh:
+  # Strict: a host that is not listed here, or whose key changed, is skipped. Add hosts
+  # yourself, for example with ssh-keyscan, and check the fingerprint.
   knownHosts: ~/.ssh/known_hosts
   hosts:
+    # address is an IP, with :port when it is not 22. Use an account that can read only:
+    # the scan runs hostname, uname -sr, ip -o addr and ss -H -tln, nothing else.
     - address: 192.168.1.10
       user: audit
-      keyFile: ~/.ssh/netscribe_ed25519 # keys only, no passwords
+      keyFile: ~/.ssh/netscribe_ed25519 # keys only, mode 0600, no passphrase
 
 docker:
   enabled: true

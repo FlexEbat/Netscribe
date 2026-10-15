@@ -99,3 +99,55 @@ func TestEnrichStopsOnCancel(t *testing.T) {
 		t.Error("a collector ran after the scan was canceled")
 	}
 }
+
+func TestLateCollectorsRunAfterClassifyAndSeeEveryDevice(t *testing.T) {
+	printer := model.DeviceKey{MAC: "00:00:0c:00:00:09", IP: "10.0.0.9"}
+	early := &stepCollector{name: "services", res: Result{Devices: []model.DeviceInput{{Key: model.DeviceKey{IP: "10.0.0.20"}}}}}
+	late := &stepCollector{name: "ssh", res: Result{
+		Devices:    []model.DeviceInput{{Key: printer, Hostname: "from-ssh", Source: "ssh"}},
+		Interfaces: []model.InterfaceInput{{Device: printer, Name: "eth0", IP: "10.0.0.9"}},
+	}}
+	s := enrichScanner(true, early)
+	s.late = []Collector{late}
+
+	res := s.enrich(context.Background(), nil, Result{Devices: []model.DeviceInput{{Key: printer}}})
+
+	if len(late.seen) != 2 {
+		t.Errorf("the late collector saw %+v, want the discovered device and the one an enricher found", late.seen)
+	}
+	if len(res.Devices) != 3 || res.Devices[2].Source != "ssh" || len(res.Interfaces) != 1 {
+		t.Fatalf("res = %+v", res)
+	}
+	if res.Devices[0].Kind != model.KindPrinter {
+		t.Errorf("the first entry of the printer has kind %q, classify did not run before the late stage", res.Devices[0].Kind)
+	}
+	if res.Devices[2].Kind != "" {
+		t.Errorf("the late entry has kind %q: classify ran after the late stage", res.Devices[2].Kind)
+	}
+}
+
+func TestLateCollectorFailureCostsOnlyItsOwnFacts(t *testing.T) {
+	a := model.DeviceKey{IP: "10.0.0.1"}
+	early := &stepCollector{name: "snmp", res: Result{Interfaces: []model.InterfaceInput{{Device: a, Name: "eth0"}}}}
+	broken := &stepCollector{name: "ssh", err: errors.New("boom")}
+	s := enrichScanner(false, early)
+	s.late = []Collector{broken}
+
+	res := s.enrich(context.Background(), nil, Result{})
+	if len(res.Interfaces) != 1 {
+		t.Errorf("res = %+v, want what the enricher found", res)
+	}
+}
+
+func TestLateCollectorsDoNotRunAfterCancel(t *testing.T) {
+	late := &stepCollector{name: "ssh"}
+	s := enrichScanner(false)
+	s.late = []Collector{late}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	s.enrich(ctx, nil, Result{})
+	if late.seen != nil {
+		t.Error("a late collector ran after the scan was canceled")
+	}
+}
