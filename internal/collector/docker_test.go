@@ -323,7 +323,7 @@ func TestDockerEventHandlerAppliesEachAction(t *testing.T) {
 	}
 }
 
-func waitFor(t *testing.T, what string, cond func() bool) {
+func waitDocker(t *testing.T, what string, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for !cond() {
@@ -349,7 +349,7 @@ func TestDockerWatchFollowsEventsWithoutAScan(t *testing.T) {
 		close(done)
 	}()
 
-	waitFor(t, "the first list", func() bool { return count() == 1 })
+	waitDocker(t, "the first list", func() bool { return count() == 1 })
 	sink.mu.Lock()
 	if len(sink.replaced) != 1 || len(sink.replaced[0]) != 1 || sink.hosts[0].Source != "local" || sink.hosts[0].Key.IP != "192.168.1.5" {
 		t.Errorf("first list = %+v, hosts = %+v", sink.replaced, sink.hosts)
@@ -358,7 +358,7 @@ func TestDockerWatchFollowsEventsWithoutAScan(t *testing.T) {
 
 	api.set("b", container("b", "cache", "running"))
 	api.events <- event("start", "b")
-	waitFor(t, "the start event", func() bool { return count() == 2 })
+	waitDocker(t, "the start event", func() bool { return count() == 2 })
 	sink.mu.Lock()
 	if sink.saved["b"].State != "running" {
 		t.Errorf("saved = %+v", sink.saved)
@@ -366,7 +366,7 @@ func TestDockerWatchFollowsEventsWithoutAScan(t *testing.T) {
 	sink.mu.Unlock()
 
 	api.events <- event("destroy", "b")
-	waitFor(t, "the destroy event", func() bool { return count() == 3 })
+	waitDocker(t, "the destroy event", func() bool { return count() == 3 })
 	sink.mu.Lock()
 	if fmt.Sprint(sink.deleted) != "[b]" {
 		t.Errorf("deleted = %v", sink.deleted)
@@ -393,10 +393,10 @@ func TestDockerWatchReconnectsAndListsAgain(t *testing.T) {
 	defer cancel()
 	go d.Watch(ctx, sink, []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, func() {})
 
-	waitFor(t, "the first list", func() bool { sink.mu.Lock(); defer sink.mu.Unlock(); return len(sink.replaced) == 1 })
+	waitDocker(t, "the first list", func() bool { sink.mu.Lock(); defer sink.mu.Unlock(); return len(sink.replaced) == 1 })
 	// The daemon restarts: the stream ends, the watcher lists again.
 	close(api.events)
-	waitFor(t, "the second list", func() bool { sink.mu.Lock(); defer sink.mu.Unlock(); return len(sink.replaced) >= 2 })
+	waitDocker(t, "the second list", func() bool { sink.mu.Lock(); defer sink.mu.Unlock(); return len(sink.replaced) >= 2 })
 }
 
 // socketServer serves fixtures on a unix socket the way the daemon does and refuses
