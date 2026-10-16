@@ -93,7 +93,7 @@ export function Topology() {
   const toolbar =
     canMove || canExport ? (
       <div className="flex justify-end gap-2">
-        {canExport ? <ExportMenu formats={["md", "drawio"]} /> : null}
+        {canExport ? <ExportMenu formats={["md", "html", "pdf", "drawio"]} /> : null}
         {canMove ? <AddDeviceDialog onCreated={load} /> : null}
       </div>
     ) : null

@@ -202,6 +202,24 @@ export interface ContainerList {
   docker: DockerState
 }
 
+/**
+ * Fetches an export as a file. The server answers an error with a message, which a plain
+ * download link would save as the file, so the request is made here and the file is saved
+ * only when it is one.
+ */
+export async function downloadExport(format: string): Promise<{ blob: Blob; filename: string }> {
+  let response: Response
+  try {
+    response = await fetch(`/api/export/${format}`, { credentials: "same-origin" })
+  } catch {
+    throw new ApiError(0, "Cannot reach the server")
+  }
+  if (response.status === 401) onUnauthorized?.()
+  if (!response.ok) throw new ApiError(response.status, await errorMessage(response))
+  const name = /filename="?([^";]+)"?/.exec(response.headers.get("Content-Disposition") ?? "")?.[1]
+  return { blob: await response.blob(), filename: name ?? `netscribe.${format}` }
+}
+
 export function listContainers(): Promise<ContainerList> {
   return api<ContainerList>("GET", "/api/containers")
 }
