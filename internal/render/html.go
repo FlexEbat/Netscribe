@@ -26,6 +26,7 @@ type htmlDevice struct {
 type htmlInterface struct{ Device, Name, IP, MAC, State string }
 type htmlService struct{ Device, Port, Proto, Name string }
 type htmlContainer struct{ Host, Name, Image, State, Project, Ports string }
+type htmlChange struct{ Kind, Summary string }
 
 type htmlView struct {
 	Generated                        string
@@ -76,6 +77,13 @@ func HTML(d Data, now time.Time) ([]byte, error) {
 	}
 	for _, c := range d.Containers {
 		v.ContainerRows = append(v.ContainerRows, htmlContainer{names[c.DeviceID], c.Name, c.Image, c.State, dash(c.ComposeProject), dash(portList(c.Ports))})
+	}
+	if d.LastScan != nil {
+		v.HasScan = true
+		v.LastScan = fmt.Sprintf("#%d, %s", d.LastScan.ID, scanTime(d.LastScan))
+		for _, c := range d.Changes {
+			v.ChangeRows = append(v.ChangeRows, htmlChange{c.Kind, c.Summary})
+		}
 	}
 	var b bytes.Buffer
 	if err := reportTemplate.Execute(&b, v); err != nil {

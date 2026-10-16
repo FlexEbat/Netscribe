@@ -41,6 +41,18 @@
   <li>Containers: {{.Containers}}</li>
 </ul>
 
+<h2>Changes</h2>
+{{if not .HasScan}}<p class="empty">No scan has completed yet.</p>
+{{else if not .ChangeRows}}<p>Last scan: {{.LastScan}}. <span class="empty">It found no changes.</span></p>
+{{else}}<p>Last scan: {{.LastScan}}.</p>
+<table>
+<thead><tr><th>Change</th><th>Summary</th></tr></thead>
+<tbody>
+{{range .ChangeRows}}<tr><td>{{.Kind}}</td><td>{{.Summary}}</td></tr>
+{{end}}</tbody>
+</table>
+{{end}}
+
 <h2>Topology</h2>
 <div class="diagram">{{.Diagram}}</div>
 

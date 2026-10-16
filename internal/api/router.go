@@ -149,6 +149,7 @@ func (s *server) routes() []Route {
 	if s.repo != nil {
 		table = append(table,
 			route(http.MethodGet, "/api/export/{format}", model.PermExportRun, s.export),
+			route(http.MethodGet, "/api/changes", model.PermTopologyRead, s.listChanges),
 			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
 			route(http.MethodPost, "/api/devices", model.PermDevicesWrite, s.createDevice),
 			route(http.MethodGet, "/api/devices/{id}", model.PermTopologyRead, s.getDevice),

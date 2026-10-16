@@ -169,7 +169,7 @@ func serve(args []string, e streams) error {
 		TrustedProxies: proxies, Logger: logger,
 	})
 	srv := newServer(cfg, router)
-	go maintain(ctx, db, cfg.Audit.KeepDays, time.Hour, logger)
+	go maintain(ctx, db, cfg.Audit.KeepDays, cfg.History.KeepScans, time.Hour, logger)
 	go scanner.Docker().Watch(ctx, db, targets, func() { hub.Publish("topology.changed", struct{}{}) })
 
 	errc := make(chan error, 1)
@@ -402,16 +402,20 @@ func parseProxies(list []string) ([]netip.Prefix, error) {
 type pruner interface {
 	PruneSessions(ctx context.Context, now time.Time) error
 	PruneAudit(ctx context.Context, keepDays int) error
+	PruneScans(ctx context.Context, keep int) (int64, error)
 }
 
 // maintain removes expired sessions and old audit entries, once at start and then every interval.
-func maintain(ctx context.Context, p pruner, keepDays int, interval time.Duration, log *slog.Logger) {
+func maintain(ctx context.Context, p pruner, keepDays, keepScans int, interval time.Duration, log *slog.Logger) {
 	run := func() {
 		if err := p.PruneSessions(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			log.Error("prune sessions", "err", err)
 		}
 		if err := p.PruneAudit(ctx, keepDays); err != nil && ctx.Err() == nil {
 			log.Error("prune audit log", "err", err)
+		}
+		if _, err := p.PruneScans(ctx, keepScans); err != nil && ctx.Err() == nil {
+			log.Error("prune scans", "err", err)
 		}
 	}
 	run()

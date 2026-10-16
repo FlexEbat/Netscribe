@@ -29,6 +29,7 @@ type Source interface {
 	Topology(ctx context.Context) (model.Topology, error)
 	ListInterfaces(ctx context.Context, deviceID int64) ([]model.Interface, error)
 	ListServices(ctx context.Context, deviceID int64) ([]model.Service, error)
+	LatestChanges(ctx context.Context) (scan model.Scan, changes []model.Change, ok bool, err error)
 }
 
 // Data is the state of the database an export shows. Devices have the positions the web
@@ -39,6 +40,10 @@ type Data struct {
 	Containers []model.Container
 	Interfaces []model.Interface
 	Services   []model.Service
+	// LastScan is the last completed scan, nil before the first one. Changes are what it
+	// changed, oldest first.
+	LastScan *model.Scan
+	Changes  []model.Change
 }
 
 // File is a finished export.
@@ -66,6 +71,14 @@ func Load(ctx context.Context, src Source) (Data, error) {
 	}
 	if d.Services, err = src.ListServices(ctx, 0); err != nil {
 		return Data{}, fmt.Errorf("read services: %w", err)
+	}
+	scan, changes, ok, err := src.LatestChanges(ctx)
+	if err != nil {
+		return Data{}, fmt.Errorf("read changes: %w", err)
+	}
+	if ok {
+		d.LastScan, d.Changes = &scan, changes
+		sort.SliceStable(d.Changes, func(i, j int) bool { return d.Changes[i].ID < d.Changes[j].ID })
 	}
 	sort.SliceStable(d.Links, func(i, j int) bool { return d.Links[i].ID < d.Links[j].ID })
 	sort.SliceStable(d.Interfaces, func(i, j int) bool {

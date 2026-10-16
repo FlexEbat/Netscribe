@@ -56,6 +56,11 @@ type Repo interface {
 	GetScan(ctx context.Context, id int64) (model.Scan, error) // ErrNotFound
 
 	ApplyResult(ctx context.Context, scanID int64, r collector.Result) error
+
+	ListChanges(ctx context.Context, limit int) ([]model.Change, error) // newest first
+	// LatestChanges returns the last completed scan and what it changed; ok is false
+	// before the first scan completes.
+	LatestChanges(ctx context.Context) (scan model.Scan, changes []model.Change, ok bool, err error)
 }
 
 // AuthRepo holds users, sessions, access tokens and the audit log.

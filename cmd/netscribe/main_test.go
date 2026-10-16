@@ -548,6 +548,8 @@ type fakePruner struct {
 	sessions int
 	audits   int
 	keep     int
+	scans    int
+	keepScan int
 }
 
 func (p *fakePruner) PruneSessions(context.Context, time.Time) error {
@@ -565,12 +567,20 @@ func (p *fakePruner) PruneAudit(_ context.Context, keepDays int) error {
 	return nil
 }
 
+func (p *fakePruner) PruneScans(_ context.Context, keep int) (int64, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.scans++
+	p.keepScan = keep
+	return 0, nil
+}
+
 func TestMaintainPrunesAtStartAndOnEveryTick(t *testing.T) {
 	p := &fakePruner{}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		maintain(ctx, p, 365, 20*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		maintain(ctx, p, 365, 200, 20*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		close(done)
 	}()
 	time.Sleep(110 * time.Millisecond)
@@ -587,6 +597,9 @@ func TestMaintainPrunesAtStartAndOnEveryTick(t *testing.T) {
 	}
 	if p.keep != 365 {
 		t.Errorf("keepDays = %d", p.keep)
+	}
+	if p.scans < 3 || p.keepScan != 200 {
+		t.Errorf("scans pruned %d times with keep %d, want at least 3 with 200", p.scans, p.keepScan)
 	}
 }
 
