@@ -5,6 +5,8 @@ go 1.26.0
 toolchain go1.26.9
 
 require (
+	github.com/chromedp/cdproto v0.157.8
+	github.com/chromedp/chromedp v0.21.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/gosnmp/gosnmp v1.45.0
 	github.com/pressly/goose/v3 v3.28.0
@@ -16,6 +18,7 @@ require (
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/go-json-experiment/json v0.0.0-20260213210345-44df1a37e875 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
