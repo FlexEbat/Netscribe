@@ -16,6 +16,8 @@ import (
 // so they hand out the same bytes.
 const (
 	FormatMarkdown = "md"
+	FormatHTML     = "html"
+	FormatPDF      = "pdf"
 	FormatDrawio   = "drawio"
 )
 
@@ -99,30 +101,53 @@ func Load(ctx context.Context, src Source) (Data, error) {
 	return d, nil
 }
 
+// Options tune an export.
+type Options struct {
+	// ChromePath is the browser that prints PDFs, empty to look in PATH.
+	ChromePath string
+	// PDF replaces the PDF printer, for tests. Nil means Chrome.
+	PDF PDFFunc
+}
+
 // Export renders the database in the given format. now is the generation time, the only
-// part of the output that changes between two runs on the same data.
-func Export(ctx context.Context, src Source, format string, now time.Time) (File, error) {
-	var (
-		body []byte
-		ext  string
-		mime string
-	)
+// part of the output that changes between two runs on the same data. A PDF needs Chrome:
+// without it the error is ErrNoChrome.
+func Export(ctx context.Context, src Source, format string, now time.Time, opts Options) (File, error) {
 	switch format {
-	case FormatMarkdown, FormatDrawio:
+	case FormatMarkdown, FormatHTML, FormatPDF, FormatDrawio:
 	default:
 		return File{}, ErrUnknownFormat
+	}
+	if format == FormatPDF && opts.PDF == nil {
+		// Look for the browser before reading the database: no Chrome, no work.
+		if _, err := FindChrome(opts.ChromePath); err != nil {
+			return File{}, err
+		}
+		opts.PDF = ChromePDF(opts.ChromePath)
 	}
 	d, err := Load(ctx, src)
 	if err != nil {
 		return File{}, err
 	}
+	name := "netscribe-" + now.UTC().Format("2006-01-02") + "."
 	switch format {
 	case FormatMarkdown:
-		body, ext, mime = Markdown(d, now), "md", "text/markdown; charset=utf-8"
+		return File{Name: name + "md", ContentType: "text/markdown; charset=utf-8", Body: Markdown(d, now)}, nil
 	case FormatDrawio:
-		body, ext, mime = Drawio(d), "drawio", "application/xml; charset=utf-8"
+		return File{Name: name + "drawio", ContentType: "application/xml; charset=utf-8", Body: Drawio(d)}, nil
 	}
-	return File{Name: "netscribe-" + now.UTC().Format("2006-01-02") + "." + ext, ContentType: mime, Body: body}, nil
+	html, err := HTML(d, now)
+	if err != nil {
+		return File{}, err
+	}
+	if format == FormatHTML {
+		return File{Name: name + "html", ContentType: "text/html; charset=utf-8", Body: html}, nil
+	}
+	pdf, err := opts.PDF(ctx, html)
+	if err != nil {
+		return File{}, err
+	}
+	return File{Name: name + "pdf", ContentType: "application/pdf", Body: pdf}, nil
 }
 
 // deviceName is what the panel calls a device: its label, else its host name, else its IP.

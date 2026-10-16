@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Netscribe network documentation</title>
+<style>
+  :root { color-scheme: light; }
+  body { font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; color: #111; margin: 24px auto; max-width: 1100px; padding: 0 16px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 28px 0 8px; break-after: avoid; }
+  .meta { color: #555; margin: 0 0 16px; }
+  ul.summary { padding-left: 18px; margin: 0; }
+  .diagram { border: 1px solid #ddd; border-radius: 6px; padding: 8px; overflow: auto; }
+  .diagram svg { display: block; max-width: 100%; height: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; }
+  th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; vertical-align: top; word-break: break-word; }
+  th { background: #f3f4f6; }
+  tr.off td { color: #777; }
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+  .empty { color: #555; font-style: italic; }
+  @page { margin: 14mm; }
+  @media print {
+    body { margin: 0; max-width: none; padding: 0; }
+    .diagram { border: 0; padding: 0; overflow: visible; break-inside: avoid; }
+    h2 { break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<h1>Netscribe network documentation</h1>
+<p class="meta">Generated: {{.Generated}}</p>
+
+<h2>Summary</h2>
+<ul class="summary">
+  <li>Devices: {{.Devices}} ({{.Online}} online)</li>
+  <li>Links: {{.Links}}</li>
+  <li>Services: {{.Services}}</li>
+  <li>Containers: {{.Containers}}</li>
+</ul>
+
+<h2>Topology</h2>
+<div class="diagram">{{.Diagram}}</div>
+
+{{if .DeviceRows}}
+<h2>Devices</h2>
+<table>
+<thead><tr><th>Name</th><th>IP</th><th>MAC</th><th>Kind</th><th>Vendor</th><th>State</th></tr></thead>
+<tbody>
+{{range .DeviceRows}}<tr{{if not .Online}} class="off"{{end}}><td>{{.Name}}</td><td>{{.IP}}</td><td>{{.MAC}}</td><td>{{.Kind}}</td><td>{{.Vendor}}</td><td>{{.State}}</td></tr>
+{{end}}</tbody>
+</table>
+{{else}}
+<p class="empty">There are no devices yet. Run a scan first.</p>
+{{end}}
+
+{{if .InterfaceRows}}
+<h2>Interfaces</h2>
+<table>
+<thead><tr><th>Device</th><th>Interface</th><th>IP</th><th>MAC</th><th>State</th></tr></thead>
+<tbody>
+{{range .InterfaceRows}}<tr><td>{{.Device}}</td><td>{{.Name}}</td><td>{{.IP}}</td><td>{{.MAC}}</td><td>{{.State}}</td></tr>
+{{end}}</tbody>
+</table>
+{{end}}
+
+{{if .ServiceRows}}
+<h2>Services</h2>
+<table>
+<thead><tr><th>Device</th><th>Port</th><th>Proto</th><th>Service</th></tr></thead>
+<tbody>
+{{range .ServiceRows}}<tr><td>{{.Device}}</td><td>{{.Port}}</td><td>{{.Proto}}</td><td>{{.Name}}</td></tr>
+{{end}}</tbody>
+</table>
+{{end}}
+
+{{if .ContainerRows}}
+<h2>Containers</h2>
+<table>
+<thead><tr><th>Host</th><th>Name</th><th>Image</th><th>State</th><th>Project</th><th>Ports</th></tr></thead>
+<tbody>
+{{range .ContainerRows}}<tr><td>{{.Host}}</td><td>{{.Name}}</td><td>{{.Image}}</td><td>{{.State}}</td><td>{{.Project}}</td><td>{{.Ports}}</td></tr>
+{{end}}</tbody>
+</table>
+{{end}}
+</body>
+</html>

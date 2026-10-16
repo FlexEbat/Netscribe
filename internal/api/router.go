@@ -20,6 +20,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
+	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
 )
 
@@ -82,6 +83,8 @@ type Options struct {
 	AuditLog AuditReader
 	// Repo serves devices and scans. Without it those routes are not registered.
 	Repo store.Repo
+	// ExportOptions tune the exports: the Chrome that prints PDFs.
+	ExportOptions render.Options
 	// Containers serves GET /api/containers. Without it that route is not registered.
 	Containers ContainerReader
 	// Docker reports whether the daemon can be read. Without it the daemon counts as available.
@@ -103,6 +106,7 @@ type server struct {
 	audit      Auditor
 	repo       store.Repo
 	now        func() time.Time
+	exportOpts render.Options
 	containers ContainerReader
 	docker     DockerStatus
 	auditLog   AuditReader
@@ -191,6 +195,7 @@ func newServer(opts Options) *server {
 		audit:      opts.Audit,
 		repo:       opts.Repo,
 		now:        now,
+		exportOpts: opts.ExportOptions,
 		containers: opts.Containers,
 		docker:     opts.Docker,
 		auditLog:   opts.AuditLog,

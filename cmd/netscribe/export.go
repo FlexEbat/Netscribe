@@ -14,7 +14,7 @@ import (
 // directly, so the right to run it is the right to read the database file.
 func export(args []string, e streams) error {
 	flags := newCommonFlags("export", e.err)
-	format := flags.fs.String("format", render.FormatMarkdown, "md or drawio")
+	format := flags.fs.String("format", render.FormatMarkdown, "md, html, pdf or drawio")
 	out := flags.fs.String("out", "", "file to write; empty or - writes to standard output")
 	cfg, logger, err := flags.load(args, e.err)
 	if err != nil {
@@ -24,9 +24,9 @@ func export(args []string, e streams) error {
 		return fmt.Errorf("unexpected argument %q", flags.args[0])
 	}
 	switch *format {
-	case render.FormatMarkdown, render.FormatDrawio:
+	case render.FormatMarkdown, render.FormatHTML, render.FormatPDF, render.FormatDrawio:
 	default:
-		return fmt.Errorf("unknown format %q: use md or drawio", *format)
+		return fmt.Errorf("unknown format %q: use md, html, pdf or drawio", *format)
 	}
 
 	st, err := store.Open(cfg.Database)
@@ -39,7 +39,7 @@ func export(args []string, e streams) error {
 		}
 	}()
 
-	f, err := render.Export(context.Background(), st, *format, time.Now())
+	f, err := render.Export(context.Background(), st, *format, time.Now(), render.Options{ChromePath: cfg.Export.ChromePath})
 	if err != nil {
 		return err
 	}

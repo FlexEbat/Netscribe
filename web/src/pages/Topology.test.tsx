@@ -256,10 +256,7 @@ describe("Topology page", () => {
     open({ role: "viewer" })
     await user.click(await screen.findByRole("button", { name: "Export" }))
     const items = await screen.findAllByRole("menuitem")
-    expect(items.map((i) => i.getAttribute("href"))).toEqual([
-      "/api/export/md",
-      "/api/export/drawio",
-    ])
+    expect(items.map((i) => i.textContent)).toEqual(["Markdown", "HTML", "PDF", "Draw.io"])
     expect(screen.queryByRole("button", { name: /add device/i })).not.toBeInTheDocument()
   })
 })

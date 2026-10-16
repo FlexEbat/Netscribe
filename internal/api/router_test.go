@@ -23,6 +23,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
+	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
 )
 
@@ -83,6 +84,7 @@ type envOptions struct {
 	scanner Scanner
 	hub     *events.Hub
 	docker  DockerStatus
+	export  render.Options
 	// wrapRepo lets a test replace behaviour of the repository the API talks to.
 	wrapRepo func(store.Repo) store.Repo
 }
@@ -120,7 +122,7 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 		repo = o.wrapRepo(st)
 	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now,
+		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, ExportOptions: o.export, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}

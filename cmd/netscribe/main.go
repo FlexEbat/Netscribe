@@ -29,6 +29,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
+	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
 	"github.com/FlexEbat/Netscribe/web"
 )
@@ -39,7 +40,7 @@ commands:
   serve     run the web panel
   scan      scan the targets from the config, or the CIDRs given as arguments
   devices   print the devices found so far
-  export    write the network documentation: --format md|drawio --out <file>
+  export    write the network documentation: --format md|html|pdf|drawio --out <file>
   user      manage accounts: add, list, disable, passwd
 
 run "netscribe <command> -h" for the flags of a command`
@@ -163,7 +164,7 @@ func serve(args []string, e streams) error {
 	scanner.SetEvents(hub)
 	router := api.NewRouter(api.Options{
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
-		Containers: db, Docker: scanner.Docker(),
+		Containers: db, Docker: scanner.Docker(), ExportOptions: render.Options{ChromePath: cfg.Export.ChromePath},
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, targets: targets},
 		TrustedProxies: proxies, Logger: logger,
 	})

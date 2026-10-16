@@ -35,7 +35,7 @@ func TestExportWritesTheFileTheAPIServes(t *testing.T) {
 	c := newCLI(t)
 	seedHost(t, c)
 
-	for format, ext := range map[string]string{"md": "md", "drawio": "drawio"} {
+	for format, ext := range map[string]string{"md": "md", "html": "html", "drawio": "drawio"} {
 		out := filepath.Join(t.TempDir(), "doc."+ext)
 		if code, _, stderr := c.run("", "export", "--format", format, "--out", out); code != 0 {
 			t.Fatalf("%s: exit %d: %s", format, code, stderr)
@@ -48,7 +48,7 @@ func TestExportWritesTheFileTheAPIServes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		want, err := render.Export(context.Background(), st, format, time.Now())
+		want, err := render.Export(context.Background(), st, format, time.Now(), render.Options{})
 		_ = st.Close()
 		if err != nil {
 			t.Fatal(err)
@@ -85,12 +85,21 @@ func TestExportOfAnEmptyDatabaseWorks(t *testing.T) {
 func TestExportRefusals(t *testing.T) {
 	c := newCLI(t)
 	for _, args := range [][]string{
-		{"export", "--format", "pdf"},
-		{"export", "--format", "html"},
+		{"export", "--format", "docx"},
+		{"export", "--format", "exe"},
 		{"export", "stray"},
 	} {
 		if code, _, stderr := c.run("", args...); code != 1 || stderr == "" {
 			t.Errorf("%v: exit %d, stderr %q", args, code, stderr)
 		}
+	}
+}
+
+func TestExportPDFWithoutChromeSaysSo(t *testing.T) {
+	c := newCLI(t)
+	t.Setenv("PATH", t.TempDir())
+	code, _, stderr := c.run("", "export", "--format", "pdf", "--out", filepath.Join(t.TempDir(), "x.pdf"))
+	if code != 1 || !strings.Contains(strings.ToLower(stderr), "chrome") {
+		t.Errorf("exit %d, stderr %q", code, stderr)
 	}
 }
