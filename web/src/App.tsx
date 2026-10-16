@@ -1,5 +1,5 @@
 import { NavLink, Outlet, type RouteObject } from "react-router-dom"
-import { Box, Cable, List, Network, ScrollText, Users as UsersIcon } from "lucide-react"
+import { Box, Cable, History, List, Network, ScrollText, Users as UsersIcon } from "lucide-react"
 import { useSession } from "@/api/session"
 import { EmptyState } from "@/components/EmptyState"
 import { RequirePermission } from "@/components/RequirePermission"
@@ -12,6 +12,7 @@ import { Audit } from "@/pages/Audit"
 import { Users } from "@/pages/Users"
 import { Inventory } from "@/pages/Inventory"
 import { Login } from "@/pages/Login"
+import { Changes } from "@/pages/Changes"
 import { Containers } from "@/pages/Containers"
 import { Services } from "@/pages/Services"
 import { Topology } from "@/pages/Topology"
@@ -22,6 +23,7 @@ const navItems: { to: string; label: string; icon: typeof Network; permission: P
   { to: "/inventory", label: "Inventory", icon: List, permission: "topology:read" },
   { to: "/services", label: "Services", icon: Cable, permission: "topology:read" },
   { to: "/containers", label: "Containers", icon: Box, permission: "topology:read" },
+  { to: "/changes", label: "Changes", icon: History, permission: "topology:read" },
   { to: "/users", label: "Users", icon: UsersIcon, permission: "users:manage" },
   { to: "/audit", label: "Audit log", icon: ScrollText, permission: "audit:read" },
 ]
@@ -109,6 +111,14 @@ export const routes: RouteObject[] = [
         element: (
           <RequirePermission permission="topology:read">
             <Containers />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: "changes",
+        element: (
+          <RequirePermission permission="topology:read">
+            <Changes />
           </RequirePermission>
         ),
       },

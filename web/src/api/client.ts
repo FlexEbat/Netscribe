@@ -220,6 +220,31 @@ export async function downloadExport(format: string): Promise<{ blob: Blob; file
   return { blob: await response.blob(), filename: name ?? `netscribe.${format}` }
 }
 
+export type ChangeKind =
+  | "device_added"
+  | "device_online"
+  | "device_offline"
+  | "device_changed"
+  | "link_added"
+  | "link_removed"
+  | "container_added"
+  | "container_removed"
+
+export interface Change {
+  id: number
+  scanId: number
+  kind: ChangeKind
+  entityId: string
+  summary: string
+  at: string
+}
+
+/** The newest changes first. */
+export async function listChanges(limit = 200): Promise<Change[]> {
+  const body = await api<{ changes: Change[] }>("GET", `/api/changes?limit=${limit}`)
+  return body.changes
+}
+
 export function listContainers(): Promise<ContainerList> {
   return api<ContainerList>("GET", "/api/containers")
 }
