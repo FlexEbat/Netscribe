@@ -5,6 +5,7 @@ import { openEvents } from "@/api/events"
 import { useSession } from "@/api/session"
 import { AddDeviceDialog } from "@/components/AddDeviceDialog"
 import { ContainerPanel } from "@/components/ContainerPanel"
+import { ExportMenu } from "@/components/ExportMenu"
 import { DevicePanel } from "@/components/DevicePanel"
 import { EmptyState } from "@/components/EmptyState"
 import { LinkBar } from "@/components/LinkBar"
@@ -21,6 +22,7 @@ type State =
 export function Topology() {
   const { state: session } = useSession()
   const canMove = session.status === "signedIn" && can(session.session.permissions, "devices:write")
+  const canExport = session.status === "signedIn" && can(session.session.permissions, "export:run")
   const [params, setParams] = useSearchParams()
   const [state, setState] = useState<State>({ status: "loading" })
   const [saveFailed, setSaveFailed] = useState(false)
@@ -88,11 +90,13 @@ export function Topology() {
   if (state.status === "failed") {
     return <Alert variant="destructive">The topology could not be loaded. Try again later.</Alert>
   }
-  const toolbar = canMove ? (
-    <div className="flex justify-end">
-      <AddDeviceDialog onCreated={load} />
-    </div>
-  ) : null
+  const toolbar =
+    canMove || canExport ? (
+      <div className="flex justify-end gap-2">
+        {canExport ? <ExportMenu formats={["md", "drawio"]} /> : null}
+        {canMove ? <AddDeviceDialog onCreated={load} /> : null}
+      </div>
+    ) : null
   if (state.topology.devices.length === 0) {
     return (
       <div className="flex flex-col gap-3">

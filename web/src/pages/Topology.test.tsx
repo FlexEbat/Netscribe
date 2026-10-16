@@ -251,4 +251,15 @@ describe("Topology page", () => {
     act(() => FakeEventSource.last?.emit("topology.changed"))
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
   })
+  it("offers the exports to everyone who may export, and nothing to add to a viewer", async () => {
+    const user = userEvent.setup()
+    open({ role: "viewer" })
+    await user.click(await screen.findByRole("button", { name: "Export" }))
+    const items = await screen.findAllByRole("menuitem")
+    expect(items.map((i) => i.getAttribute("href"))).toEqual([
+      "/api/export/md",
+      "/api/export/drawio",
+    ])
+    expect(screen.queryByRole("button", { name: /add device/i })).not.toBeInTheDocument()
+  })
 })

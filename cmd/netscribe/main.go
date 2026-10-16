@@ -39,6 +39,7 @@ commands:
   serve     run the web panel
   scan      scan the targets from the config, or the CIDRs given as arguments
   devices   print the devices found so far
+  export    write the network documentation: --format md|drawio --out <file>
   user      manage accounts: add, list, disable, passwd
 
 run "netscribe <command> -h" for the flags of a command`
@@ -65,6 +66,7 @@ func run(args []string, e streams) int {
 		"serve":   serve,
 		"scan":    scan,
 		"devices": devices,
+		"export":  export,
 		"user":    user,
 	}
 	if cmd, ok := commands[args[0]]; ok {

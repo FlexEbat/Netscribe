@@ -102,6 +102,7 @@ type server struct {
 	auth       *auth.Service
 	audit      Auditor
 	repo       store.Repo
+	now        func() time.Time
 	containers ContainerReader
 	docker     DockerStatus
 	auditLog   AuditReader
@@ -143,6 +144,7 @@ func (s *server) routes() []Route {
 	}
 	if s.repo != nil {
 		table = append(table,
+			route(http.MethodGet, "/api/export/{format}", model.PermExportRun, s.export),
 			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
 			route(http.MethodPost, "/api/devices", model.PermDevicesWrite, s.createDevice),
 			route(http.MethodGet, "/api/devices/{id}", model.PermTopologyRead, s.getDevice),
@@ -176,6 +178,10 @@ func newServer(opts Options) *server {
 	if opts.Auth == nil || opts.Audit == nil {
 		panic("api: Options.Auth and Options.Audit are required")
 	}
+	now := opts.Now
+	if now == nil {
+		now = time.Now
+	}
 	log := opts.Logger
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -184,6 +190,7 @@ func newServer(opts Options) *server {
 		auth:       opts.Auth,
 		audit:      opts.Audit,
 		repo:       opts.Repo,
+		now:        now,
 		containers: opts.Containers,
 		docker:     opts.Docker,
 		auditLog:   opts.AuditLog,
