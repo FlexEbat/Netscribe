@@ -100,7 +100,7 @@ func TestExportOfAnEmptyDatabaseSaysSo(t *testing.T) {
 	}
 }
 
-var generated = regexp.MustCompile(`(?m)^Generated: .*$`)
+var generated = regexp.MustCompile(`Generated: \S+`)
 
 func TestTheSameStateGivesTheSameBytesExceptTheDate(t *testing.T) {
 	for _, format := range []string{FormatMarkdown, FormatHTML, FormatDrawio} {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -70,7 +71,7 @@ func ChromePDF(path string) PDFFunc {
 var printer = printPDF
 
 // printPDF opens the document from a private temporary file and prints it. The browser
-// gets no network: the document needs none.
+// gets no network and no script: the document needs neither.
 func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "netscribe-pdf-")
 	if err != nil {
@@ -82,15 +83,32 @@ func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
 		return nil, fmt.Errorf("write report: %w", err)
 	}
 
+	// Chrome runs with its sandbox. Where the system forbids it (as root, in a container, or
+	// with unprivileged user namespaces switched off) the browser says so at start, and the
+	// print is tried once more without it: the document is made by this program, every
+	// value in it is escaped, and the browser runs without script or network.
+	noSandbox := os.Geteuid() == 0
+	pdf, err := printOnce(ctx, exe, dir, file, noSandbox)
+	if err != nil && !noSandbox && ctx.Err() == nil && strings.Contains(err.Error(), "sandbox") {
+		pdf, err = printOnce(ctx, exe, dir, file, true)
+	}
+	return pdf, err
+}
+
+func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]byte, error) {
+	profile, err := os.MkdirTemp(dir, "profile-")
+	if err != nil {
+		return nil, fmt.Errorf("make profile dir: %w", err)
+	}
 	opts := append([]chromedp.ExecAllocatorOption{}, chromedp.DefaultExecAllocatorOptions[:]...)
 	opts = append(opts,
 		chromedp.ExecPath(exe),
-		chromedp.UserDataDir(filepath.Join(dir, "profile")),
+		chromedp.UserDataDir(profile),
 		chromedp.Flag("disable-extensions", true),
 		chromedp.Flag("host-resolver-rules", "MAP * ~NOTFOUND"),
+		chromedp.Flag("blink-settings", "scriptEnabled=false"),
 	)
-	if os.Geteuid() == 0 {
-		// Chrome refuses its sandbox as root, which is how a container runs it.
+	if noSandbox {
 		opts = append(opts, chromedp.Flag("no-sandbox", true))
 	}
 	alloc, cancelAlloc := chromedp.NewExecAllocator(ctx, opts...)
