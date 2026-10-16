@@ -51,7 +51,7 @@ func sample() fakeSource {
 
 func export(t *testing.T, src Source, format string) File {
 	t.Helper()
-	f, err := Export(context.Background(), src, format, at)
+	f, err := Export(context.Background(), src, format, at, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestMarkdownHoldsEverySection(t *testing.T) {
 }
 
 func TestExportOfAnEmptyDatabaseSaysSo(t *testing.T) {
-	for _, format := range []string{FormatMarkdown, FormatDrawio} {
+	for _, format := range []string{FormatMarkdown, FormatHTML, FormatDrawio} {
 		f := export(t, fakeSource{topo: model.Topology{}}, format)
 		if len(f.Body) == 0 {
 			t.Errorf("%s: empty body", format)
@@ -103,15 +103,15 @@ func TestExportOfAnEmptyDatabaseSaysSo(t *testing.T) {
 var generated = regexp.MustCompile(`(?m)^Generated: .*$`)
 
 func TestTheSameStateGivesTheSameBytesExceptTheDate(t *testing.T) {
-	for _, format := range []string{FormatMarkdown, FormatDrawio} {
-		a, err := Export(context.Background(), sample(), format, at)
+	for _, format := range []string{FormatMarkdown, FormatHTML, FormatDrawio} {
+		a, err := Export(context.Background(), sample(), format, at, Options{})
 		if err != nil {
 			t.Fatal(err)
 		}
 		// Shuffle what the store returns: the order must not leak into the file.
 		src := sample()
 		src.topo.Devices[0], src.topo.Devices[2] = src.topo.Devices[2], src.topo.Devices[0]
-		b, err := Export(context.Background(), src, format, at.Add(48*time.Hour))
+		b, err := Export(context.Background(), src, format, at.Add(48*time.Hour), Options{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -236,11 +236,11 @@ func TestDrawioHasAVertexPerDeviceAndContainerAndAnEdgePerLink(t *testing.T) {
 }
 
 func TestExportRefusesAnUnknownFormatAndReportsReadErrors(t *testing.T) {
-	if _, err := Export(context.Background(), sample(), "html", at); !errors.Is(err, ErrUnknownFormat) {
+	if _, err := Export(context.Background(), sample(), "exe", at, Options{}); !errors.Is(err, ErrUnknownFormat) {
 		t.Errorf("err = %v, want ErrUnknownFormat", err)
 	}
 	boom := errors.New("boom")
-	if _, err := Export(context.Background(), fakeSource{err: boom}, FormatMarkdown, at); !errors.Is(err, boom) {
+	if _, err := Export(context.Background(), fakeSource{err: boom}, FormatMarkdown, at, Options{}); !errors.Is(err, boom) {
 		t.Errorf("err = %v, want the read error", err)
 	}
 }

@@ -1,0 +1,28 @@
+name: tidy-tmp
+on:
+  pull_request:
+permissions:
+  contents: write
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version-file: go.mod
+      - name: add chromedp and tidy
+        run: |
+          mkdir -p web/dist && touch web/dist/.gitkeep
+          if grep -q chromedp go.mod; then echo "already there"; exit 0; fi
+          go get github.com/chromedp/chromedp
+          go mod tidy
+          git diff --stat -- go.mod go.sum
+          git config user.name "netscribe-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add go.mod go.sum
+          git commit -m "chore(deps): add chromedp for the PDF export"
+          git push
