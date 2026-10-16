@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 )
 
@@ -92,22 +91,20 @@ func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
 	)
 	if os.Geteuid() == 0 {
 		// Chrome refuses its sandbox as root, which is how a container runs it.
-		opts = append(opts, chromedp.NoSandbox)
+		opts = append(opts, chromedp.Flag("no-sandbox", true))
 	}
 	alloc, cancelAlloc := chromedp.NewExecAllocator(ctx, opts...)
 	defer cancelAlloc()
 	tab, cancelTab := chromedp.NewContext(alloc)
 	defer cancelTab()
 
-	var pdf []byte
-	err = chromedp.Run(tab,
-		chromedp.Navigate("file://"+filepath.ToSlash(file)),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			var err error
-			pdf, _, err = page.PrintToPDF().WithPrintBackground(true).WithPreferCSSPageSize(true).Do(ctx)
-			return err
-		}),
-	)
+	if err := chromedp.Do(tab, chromedp.Navigate("file://"+filepath.ToSlash(file))); err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("open report: %w", err)
+	}
+	pdf, err := chromedp.Run(tab, chromedp.PrintToPDF(chromedp.PDFPrintBackground(), chromedp.PDFPreferCSSPageSize()))
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
