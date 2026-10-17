@@ -106,7 +106,7 @@ func TestMarkdownAndHTMLExportsCarryTheLastScansChanges(t *testing.T) {
 	for _, format := range []string{"md", "html"} {
 		rec := e.as(s, http.MethodGet, "/api/export/"+format, nil)
 		body := rec.Body.String()
-		for _, want := range []string{"Changes", "device_added", "New device", "192.168.1.2"} {
+		for _, want := range []string{"Changes", "Device added", "New device", "192.168.1.2"} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s export lacks %q", format, want)
 			}

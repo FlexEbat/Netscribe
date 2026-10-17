@@ -208,3 +208,23 @@ func oneLine(s string) string {
 		return r
 	}, s)
 }
+
+// changeLabels are the words the web page uses for the kinds of change.
+var changeLabels = map[string]string{
+	"device_added":      "Device added",
+	"device_online":     "Device online",
+	"device_offline":    "Device offline",
+	"device_changed":    "Device changed",
+	"link_added":        "Link added",
+	"link_removed":      "Link removed",
+	"container_added":   "Container added",
+	"container_removed": "Container removed",
+}
+
+// changeLabel names a kind of change, or returns the kind itself when it is not known.
+func changeLabel(kind string) string {
+	if l, ok := changeLabels[kind]; ok {
+		return l
+	}
+	return kind
+}

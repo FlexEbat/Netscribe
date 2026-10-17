@@ -268,17 +268,17 @@ func TestExportsCarryTheChangesOfTheLastScan(t *testing.T) {
 	md := string(export(t, src, FormatMarkdown).Body)
 	for _, want := range []string{
 		"## Changes", "Last scan: #7, 2026-10-15T12:00:00Z.", "| Change | Summary |",
-		"| device_added | New device 192.168.1.9 (-, unknown) |", "| device_offline | web went offline |",
+		"| Device added | New device 192.168.1.9 (-, unknown) |", "| Device offline | web went offline |",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown lacks %q:\n%s", want, md)
 		}
 	}
-	if strings.Index(md, "device_added") > strings.Index(md, "device_offline") {
+	if strings.Index(md, "| Device added |") > strings.Index(md, "| Device offline |") {
 		t.Error("the changes are not in the order they were written")
 	}
 	html := string(export(t, src, FormatHTML).Body)
-	for _, want := range []string{"<h2>Changes</h2>", "Last scan: #7, 2026-10-15T12:00:00Z.", "<td>device_added</td>", "<td>web went offline</td>"} {
+	for _, want := range []string{"<h2>Changes</h2>", "Last scan: #7, 2026-10-15T12:00:00Z.", "<td>Device added</td>", "<td>web went offline</td>"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("html lacks %q", want)
 		}

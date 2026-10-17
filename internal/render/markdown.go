@@ -87,7 +87,7 @@ func Markdown(d Data, now time.Time) []byte {
 		fmt.Fprintf(&b, "Last scan: #%d, %s.\n\n", d.LastScan.ID, scanTime(d.LastScan))
 		rows := make([][]string, 0, len(d.Changes))
 		for _, c := range d.Changes {
-			rows = append(rows, []string{mdCell(c.Kind), mdCell(c.Summary)})
+			rows = append(rows, []string{mdCell(changeLabel(c.Kind)), mdCell(c.Summary)})
 		}
 		mdTable(&b, []string{"Change", "Summary"}, rows)
 	}

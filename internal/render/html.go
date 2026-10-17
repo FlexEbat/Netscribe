@@ -85,7 +85,7 @@ func HTML(d Data, now time.Time) ([]byte, error) {
 		v.HasScan = true
 		v.LastScan = fmt.Sprintf("#%d, %s", d.LastScan.ID, scanTime(d.LastScan))
 		for _, c := range d.Changes {
-			v.ChangeRows = append(v.ChangeRows, htmlChange{c.Kind, c.Summary})
+			v.ChangeRows = append(v.ChangeRows, htmlChange{changeLabel(c.Kind), c.Summary})
 		}
 	}
 	var b bytes.Buffer
