@@ -80,6 +80,9 @@ func (s *server) streamEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
+			if e.Perm != "" && !p.Can(e.Perm) {
+				continue
+			}
 			data, err := json.Marshal(e.Data)
 			if err != nil {
 				s.log.Error("encode event", "event", e.Name, "err", err)

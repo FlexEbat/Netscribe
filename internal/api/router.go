@@ -83,8 +83,9 @@ type Options struct {
 	AuditLog AuditReader
 	// Repo serves devices and scans. Without it those routes are not registered.
 	Repo store.Repo
-	// ExportOptions tune the exports: the Chrome that prints PDFs.
-	ExportOptions render.Options
+	// ExportOptions tunes the exports: the Chrome that prints PDFs. It is read on every
+	// export, so a reloaded config applies. Nil means the defaults.
+	ExportOptions func() render.Options
 	// Containers serves GET /api/containers. Without it that route is not registered.
 	Containers ContainerReader
 	// Docker reports whether the daemon can be read. Without it the daemon counts as available.
@@ -106,7 +107,7 @@ type server struct {
 	audit      Auditor
 	repo       store.Repo
 	now        func() time.Time
-	exportOpts render.Options
+	exportOpts func() render.Options
 	containers ContainerReader
 	docker     DockerStatus
 	auditLog   AuditReader

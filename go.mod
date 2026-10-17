@@ -6,6 +6,7 @@ toolchain go1.26.9
 
 require (
 	github.com/chromedp/chromedp v0.21.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/gosnmp/gosnmp v1.45.0
 	github.com/pressly/goose/v3 v3.28.0

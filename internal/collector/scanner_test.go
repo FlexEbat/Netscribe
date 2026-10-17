@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net/netip"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,7 @@ type fakeStore struct {
 	applied     []Result
 	applyErr    error
 	finishCalls int
+	starts      int
 	// finishCtxErr records ctx.Err() seen by FinishScan: it must be nil even after cancellation.
 	finishCtxErr error
 }
@@ -31,6 +33,7 @@ type fakeStore struct {
 func (s *fakeStore) StartScan(_ context.Context, target string) (model.Scan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.starts++
 	s.scan = model.Scan{ID: 7, Target: target, Status: "running"}
 	return s.scan, nil
 }
@@ -303,4 +306,264 @@ func TestCleanHostnameKeepsValidUTF8AndDropsControlCharacters(t *testing.T) {
 func hex2(i int) string {
 	const digits = "0123456789abcdef"
 	return string([]byte{digits[i>>4&0xf], digits[i&0xf]})
+}
+
+// fakeClock replaces the timer of the schedule. Every timer it hands out is kept, so a
+// test sees the waits the scheduler asked for and fires them one by one.
+type fakeClock struct {
+	mu    sync.Mutex
+	waits []time.Duration
+	chans []chan time.Time
+}
+
+func (c *fakeClock) timer(d time.Duration) (<-chan time.Time, func() bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ch := make(chan time.Time, 1)
+	c.waits = append(c.waits, d)
+	c.chans = append(c.chans, ch)
+	return ch, func() bool { return true }
+}
+
+func (c *fakeClock) requested() []time.Duration {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]time.Duration(nil), c.waits...)
+}
+
+// fire ends the latest timer, as if its interval had passed.
+func (c *fakeClock) fire() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.chans[len(c.chans)-1] <- time.Now()
+}
+
+// lockedBuffer is a log sink the scheduler goroutine and the test can share.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func scheduleConfig(interval time.Duration, targets ...string) config.Config {
+	return config.Config{Scan: config.ScanConfig{Interval: config.Duration(interval), Targets: targets}}
+}
+
+// startSchedule runs the scheduler of a scanner on a fake clock until the test ends.
+func startSchedule(t *testing.T, s *Scanner, targets func(config.Config) ([]netip.Prefix, error)) *fakeClock {
+	t.Helper()
+	clock := &fakeClock{}
+	s.timer = clock.timer
+	s.wake = make(chan struct{}, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		s.Schedule(ctx, targets)
+		close(done)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			t.Error("Schedule did not stop when its context ended")
+		}
+	})
+	return clock
+}
+
+func waitUntil(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+}
+
+func startedScans(st *fakeStore) int {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.starts
+}
+
+var lanTargets = func(config.Config) ([]netip.Prefix, error) {
+	return []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, nil
+}
+
+func TestScheduleStartsAScanEveryInterval(t *testing.T) {
+	st := &fakeStore{}
+	s := newTestScanner(st, &fakeCollector{}, &fakeResolver{})
+	s.cfg = scheduleConfig(15 * time.Minute)
+	clock := startSchedule(t, s, lanTargets)
+
+	waitUntil(t, "the first timer", func() bool { return len(clock.requested()) == 1 })
+	if got := clock.requested()[0]; got != 15*time.Minute {
+		t.Errorf("first wait = %v, want 15m", got)
+	}
+	if n := startedScans(st); n != 0 {
+		t.Errorf("%d scans before the first tick", n)
+	}
+	clock.fire()
+	waitUntil(t, "the scheduled scan", func() bool { return startedScans(st) == 1 })
+	waitUntil(t, "the next timer", func() bool { return len(clock.requested()) == 2 })
+}
+
+func TestScheduleTakesANewIntervalWithoutARestart(t *testing.T) {
+	s := newTestScanner(&fakeStore{}, &fakeCollector{}, &fakeResolver{})
+	s.cfg = scheduleConfig(15 * time.Minute)
+	clock := startSchedule(t, s, lanTargets)
+	waitUntil(t, "the first timer", func() bool { return len(clock.requested()) == 1 })
+
+	s.SetConfig(scheduleConfig(30 * time.Minute))
+	waitUntil(t, "the timer with the new interval", func() bool { return len(clock.requested()) == 2 })
+	if got := clock.requested()[1]; got != 30*time.Minute {
+		t.Errorf("wait after the change = %v, want 30m", got)
+	}
+
+	// A reload that leaves the interval alone does not restart the wait.
+	s.SetConfig(scheduleConfig(30*time.Minute, "10.0.0.0/24"))
+	time.Sleep(50 * time.Millisecond)
+	if n := len(clock.requested()); n != 2 {
+		t.Errorf("%d timers, a reload without a new interval restarted the wait", n)
+	}
+}
+
+func TestScheduleIntervalZeroTurnsItOffAndBackOn(t *testing.T) {
+	s := newTestScanner(&fakeStore{}, &fakeCollector{}, &fakeResolver{})
+	s.cfg = scheduleConfig(0)
+	clock := startSchedule(t, s, lanTargets)
+	time.Sleep(50 * time.Millisecond)
+	if n := len(clock.requested()); n != 0 {
+		t.Fatalf("%d timers with interval 0", n)
+	}
+	s.SetConfig(scheduleConfig(time.Hour))
+	waitUntil(t, "a timer after the schedule is turned on", func() bool { return len(clock.requested()) == 1 })
+}
+
+func TestScheduleAsksForTargetsOfTheConfigInForce(t *testing.T) {
+	st := &fakeStore{}
+	s := newTestScanner(st, &fakeCollector{}, &fakeResolver{})
+	s.cfg = scheduleConfig(time.Hour, "192.168.1.0/24")
+	var mu sync.Mutex
+	var seen [][]string
+	clock := startSchedule(t, s, func(c config.Config) ([]netip.Prefix, error) {
+		mu.Lock()
+		seen = append(seen, c.Scan.Targets)
+		mu.Unlock()
+		return lanTargets(c)
+	})
+	waitUntil(t, "the first timer", func() bool { return len(clock.requested()) == 1 })
+	s.SetConfig(scheduleConfig(time.Hour, "10.0.0.0/24"))
+	clock.fire()
+	waitUntil(t, "the scheduled scan", func() bool { return startedScans(st) == 1 })
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != 1 || len(seen[0]) != 1 || seen[0][0] != "10.0.0.0/24" {
+		t.Errorf("targets asked for config %v, want the reloaded one", seen)
+	}
+}
+
+func TestScheduleSkipsATickWhileAScanRuns(t *testing.T) {
+	st := &fakeStore{}
+	release := make(chan struct{})
+	entered := make(chan struct{}, 2)
+	c := &fakeCollector{run: func(ctx context.Context) error {
+		entered <- struct{}{}
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}}
+	var logs lockedBuffer
+	s := newTestScanner(st, c, &fakeResolver{})
+	s.log = slog.New(slog.NewTextHandler(&logs, nil))
+	s.cfg = scheduleConfig(time.Hour)
+	clock := startSchedule(t, s, lanTargets)
+	t.Cleanup(func() { close(release) })
+
+	waitUntil(t, "the first timer", func() bool { return len(clock.requested()) == 1 })
+	clock.fire()
+	<-entered // the first scan is running
+	waitUntil(t, "the second timer", func() bool { return len(clock.requested()) == 2 })
+	clock.fire()
+	waitUntil(t, "the third timer", func() bool { return len(clock.requested()) == 3 })
+
+	if n := startedScans(st); n != 1 {
+		t.Errorf("%d scans started, want 1: the tick during a running scan must be skipped", n)
+	}
+	if !strings.Contains(logs.String(), "skipped") {
+		t.Errorf("the skipped tick is not in the log: %q", logs.String())
+	}
+}
+
+// configSpy is an enricher that records the config its scan runs with.
+type configSpy struct {
+	mu   sync.Mutex
+	seen []string
+}
+
+func (*configSpy) Name() string { return "spy" }
+
+func (c *configSpy) Collect(_ context.Context, in Input) (Result, error) {
+	c.mu.Lock()
+	c.seen = append(c.seen, strings.Join(in.Config.Scan.Targets, ","))
+	c.mu.Unlock()
+	return Result{}, nil
+}
+
+func TestARunningScanKeepsItsConfigAndTheNextOneTakesTheNew(t *testing.T) {
+	st := &fakeStore{}
+	entered, release := make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	discovery := &fakeCollector{run: func(ctx context.Context) error {
+		first := false
+		once.Do(func() { first = true; close(entered) })
+		if !first {
+			return nil // only the first scan is held back
+		}
+		select {
+		case <-release:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}}
+	spy := &configSpy{}
+	s := newTestScanner(st, discovery, &fakeResolver{})
+	s.enrichers = []Collector{spy}
+	s.cfg = scheduleConfig(time.Hour, "192.168.1.0/24")
+	targets := []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}
+
+	if _, err := s.Start(context.Background(), targets); err != nil {
+		t.Fatal(err)
+	}
+	<-entered
+	s.SetConfig(scheduleConfig(time.Hour, "10.0.0.0/24")) // the reload arrives mid-scan
+	close(release)
+	waitUntil(t, "the first scan to end", func() bool { return !s.busy.Load() })
+
+	if _, err := s.Run(context.Background(), targets); err != nil {
+		t.Fatal(err)
+	}
+	spy.mu.Lock()
+	defer spy.mu.Unlock()
+	if len(spy.seen) != 2 || spy.seen[0] != "192.168.1.0/24" || spy.seen[1] != "10.0.0.0/24" {
+		t.Errorf("configs seen by the two scans = %v, want the old one then the new one", spy.seen)
+	}
 }

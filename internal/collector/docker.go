@@ -107,6 +107,13 @@ type Docker struct {
 	cfg      config.DockerConfig
 	state    DockerState
 	reported string // the reason already written to the log
+
+	// managed is set by Reconfigure. From then on the server owns cfg and a scan, which
+	// may carry an older config, does not write it back.
+	managed bool
+	// stopWatch ends the connection Watch holds, wake ends its wait before a retry.
+	stopWatch context.CancelFunc
+	wake      chan struct{}
 }
 
 // NewDocker returns a collector for the daemon behind cfg.Socket.
@@ -118,6 +125,7 @@ func NewDocker(cfg config.DockerConfig, log *slog.Logger) *Docker {
 		hostname: func() string { h, _ := os.Hostname(); return h },
 		retry:    dockerRetry,
 		cfg:      cfg,
+		wake:     make(chan struct{}, 1),
 	}
 	if cfg.Enabled {
 		d.state = DockerState{Enabled: true, Reason: reasonNotChecked}
@@ -152,6 +160,35 @@ func (d *Docker) setConfig(cfg config.DockerConfig) {
 	}
 }
 
+// Reconfigure applies the docker section of a reloaded config. When the socket or the
+// switch changed, Watch drops its connection and connects again with the new settings,
+// or stops watching when Docker is off.
+func (d *Docker) Reconfigure(cfg config.DockerConfig) {
+	d.mu.Lock()
+	changed := d.cfg != cfg
+	d.managed = true
+	stop := d.stopWatch
+	d.mu.Unlock()
+
+	d.setConfig(cfg)
+	if !changed {
+		return
+	}
+	if stop != nil {
+		stop()
+	}
+	select {
+	case d.wake <- struct{}{}:
+	default: // a wake-up is already waiting
+	}
+}
+
+func (d *Docker) isManaged() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.managed
+}
+
 // ok records that the daemon answered, so the next failure is reported again.
 func (d *Docker) ok() {
 	d.mu.Lock()
@@ -177,7 +214,9 @@ func (d *Docker) fail(reason string) {
 // one log line and leaves the stored containers as they are.
 func (d *Docker) Collect(ctx context.Context, in Input) (Result, error) {
 	cfg := in.Config.Docker
-	d.setConfig(cfg)
+	if !d.isManaged() {
+		d.setConfig(cfg)
+	}
 	if !cfg.Enabled {
 		return Result{}, nil
 	}
@@ -265,12 +304,21 @@ func (d *Docker) Watch(ctx context.Context, sink ContainerSink, targets []netip.
 	for ctx.Err() == nil {
 		cfg := d.config()
 		if cfg.Enabled {
-			if err := d.watchOnce(ctx, sink, cfg, targets, changed); err != nil && ctx.Err() == nil {
-				d.fail(dockerReason(err))
+			wctx, stop := context.WithCancel(ctx)
+			d.mu.Lock()
+			d.stopWatch = stop
+			d.mu.Unlock()
+			// Reconfigure may have run before stop was registered, so look again.
+			if d.config() == cfg {
+				if err := d.watchOnce(wctx, sink, cfg, targets, changed); err != nil && wctx.Err() == nil {
+					d.fail(dockerReason(err))
+				}
 			}
+			stop()
 		}
 		select {
 		case <-ctx.Done():
+		case <-d.wake:
 		case <-time.After(d.retry):
 		}
 	}

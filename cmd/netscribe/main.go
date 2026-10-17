@@ -122,7 +122,8 @@ func (c *commonFlags) load(args []string, stderr io.Writer) (config.Config, *slo
 }
 
 func serve(args []string, e streams) error {
-	cfg, logger, err := newCommonFlags("serve", e.err).load(args, e.err)
+	flags := newCommonFlags("serve", e.err)
+	cfg, logger, err := flags.load(args, e.err)
 	if err != nil {
 		return err
 	}
@@ -154,23 +155,37 @@ func serve(args []string, e streams) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// SIGHUP reloads the config. It is caught here, before anything runs, because an
+	// uncaught SIGHUP ends the process.
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
 
 	targets, err := configuredTargets(cfg)
 	if err != nil {
 		return err
 	}
+	live := config.NewWatcher(*flags.configPath, *flags.allowLoose, cfg, logger)
 	hub := events.NewHub()
 	scanner := collector.NewScanner(db, cfg, logger)
 	scanner.SetEvents(hub)
 	router := api.NewRouter(api.Options{
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
-		Containers: db, Docker: scanner.Docker(), ExportOptions: render.Options{ChromePath: cfg.Export.ChromePath},
-		Scanner:        scanStarter{scanner: scanner, ctx: ctx, targets: targets},
+		Containers: db, Docker: scanner.Docker(),
+		ExportOptions:  func() render.Options { return render.Options{ChromePath: live.Current().Export.ChromePath} },
+		Scanner:        scanStarter{scanner: scanner, ctx: ctx, config: live.Current},
 		TrustedProxies: proxies, Logger: logger,
 	})
 	srv := newServer(cfg, router)
-	go maintain(ctx, db, cfg.Audit.KeepDays, cfg.History.KeepScans, time.Hour, logger)
+	go maintain(ctx, db, cfg.Audit.KeepDays, func() int { return live.Current().History.KeepScans }, time.Hour, logger)
 	go scanner.Docker().Watch(ctx, db, targets, func() { hub.Publish("topology.changed", struct{}{}) })
+	go scanner.Schedule(ctx, configuredTargets)
+	reloaded, failed := configHooks(scanner, hub, db, logger)
+	go func() {
+		if err := live.Run(ctx, hup, func(c config.Config) { reloaded(ctx, c) }, func(err error) { failed(ctx, err) }); err != nil {
+			logger.Error("config reload is off, restart to apply changes", "err", err)
+		}
+	}()
 
 	errc := make(chan error, 1)
 	go func() {
@@ -193,15 +208,61 @@ func serve(args []string, e streams) error {
 	return srv.Shutdown(shutdownCtx)
 }
 
-// scanStarter runs scans for the API over the configured targets. A scan lives as long as
-// the server does, not as long as the request that started it.
+// scanStarter runs scans for the API over the targets of the config in force. A scan
+// lives as long as the server does, not as long as the request that started it.
 type scanStarter struct {
 	scanner *collector.Scanner
 	ctx     context.Context
-	targets []netip.Prefix
+	config  func() config.Config
 }
 
-func (s scanStarter) Start() (model.Scan, error) { return s.scanner.Start(s.ctx, s.targets) }
+func (s scanStarter) Start() (model.Scan, error) {
+	targets, err := configuredTargets(s.config())
+	if err != nil {
+		return model.Scan{}, err
+	}
+	return s.scanner.Start(s.ctx, targets)
+}
+
+// configApplier takes a reloaded config. *collector.Scanner satisfies it.
+type configApplier interface {
+	SetConfig(cfg config.Config)
+}
+
+// restrictedPublisher sends events to readers who hold a right. *events.Hub satisfies it.
+type restrictedPublisher interface {
+	PublishFor(perm model.Permission, name string, data any)
+}
+
+// configError is the data of a config.error event.
+type configError struct {
+	Error string `json:"error"`
+}
+
+// configHooks returns what runs after the config file was reloaded or refused. A reload
+// is applied, announced to the users who may manage the server and written to the audit
+// log. A refused file changes nothing but the announcement and the log. The error text
+// comes from config.Load, which keeps secret values out of it.
+func configHooks(scanner configApplier, hub restrictedPublisher, audit api.Auditor, log *slog.Logger) (reloaded func(context.Context, config.Config), failed func(context.Context, error)) {
+	record := func(ctx context.Context, action, result, detail string) {
+		err := audit.AddAudit(ctx, model.AuditEntry{
+			Action: action, Result: result, Username: "system", Entity: "config", EntityID: "netscribe.yaml", Detail: detail,
+		})
+		if err != nil {
+			log.Error("write audit entry", "action", action, "err", err)
+		}
+	}
+	reloaded = func(ctx context.Context, cfg config.Config) {
+		scanner.SetConfig(cfg)
+		hub.PublishFor(model.PermUsersManage, "config.reloaded", struct{}{})
+		record(ctx, "config_reload", "ok", "")
+	}
+	failed = func(ctx context.Context, err error) {
+		hub.PublishFor(model.PermUsersManage, "config.error", configError{Error: err.Error()})
+		record(ctx, "config_reload_failed", "error", err.Error())
+	}
+	return reloaded, failed
+}
 
 // configuredTargets parses scan.targets. An empty list is allowed: scans then answer
 // collector.ErrNoTargets until targets are configured.
@@ -406,7 +467,8 @@ type pruner interface {
 }
 
 // maintain removes expired sessions and old audit entries, once at start and then every interval.
-func maintain(ctx context.Context, p pruner, keepDays, keepScans int, interval time.Duration, log *slog.Logger) {
+// keepScans is asked on every run, because history.keepScans changes with the config.
+func maintain(ctx context.Context, p pruner, keepDays int, keepScans func() int, interval time.Duration, log *slog.Logger) {
 	run := func() {
 		if err := p.PruneSessions(ctx, time.Now()); err != nil && ctx.Err() == nil {
 			log.Error("prune sessions", "err", err)
@@ -414,7 +476,7 @@ func maintain(ctx context.Context, p pruner, keepDays, keepScans int, interval t
 		if err := p.PruneAudit(ctx, keepDays); err != nil && ctx.Err() == nil {
 			log.Error("prune audit log", "err", err)
 		}
-		if _, err := p.PruneScans(ctx, keepScans); err != nil && ctx.Err() == nil {
+		if _, err := p.PruneScans(ctx, keepScans()); err != nil && ctx.Err() == nil {
 			log.Error("prune scans", "err", err)
 		}
 	}
