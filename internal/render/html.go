@@ -37,6 +37,9 @@ type htmlView struct {
 	InterfaceRows                    []htmlInterface
 	ServiceRows                      []htmlService
 	ContainerRows                    []htmlContainer
+	HasScan                          bool
+	LastScan                         string
+	ChangeRows                       []htmlChange
 }
 
 func dash(s string) string {

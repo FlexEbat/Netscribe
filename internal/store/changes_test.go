@@ -9,11 +9,6 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
-var (
-	keyA = model.DeviceKey{MAC: "aa:00:00:00:00:01", IP: "192.168.1.1"}
-	keyB = model.DeviceKey{MAC: "aa:00:00:00:00:02", IP: "192.168.1.2"}
-)
-
 // scanWith runs a complete scan of 192.168.1.0/24 with the given result.
 func scanWith(t *testing.T, s *Store, res collector.Result) model.Scan {
 	t.Helper()
@@ -35,7 +30,7 @@ func scanWith(t *testing.T, s *Store, res collector.Result) model.Scan {
 	return got
 }
 
-func twoDevices() collector.Result {
+func baselineScan() collector.Result {
 	return collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP), dev(keyB.MAC, keyB.IP)}}
 }
 
@@ -65,7 +60,7 @@ func wantKinds(t *testing.T, got []model.Change, want ...string) {
 
 func TestTheFirstCompletedScanWritesNoChanges(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 	if got := feed(t, s); len(got) != 0 {
 		t.Errorf("changes = %+v, want none from the baseline", got)
 	}
@@ -73,9 +68,9 @@ func TestTheFirstCompletedScanWritesNoChanges(t *testing.T) {
 
 func TestAScanWithoutDifferencesWritesNothing(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
-	scanWith(t, s, twoDevices())
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
+	scanWith(t, s, baselineScan())
+	scanWith(t, s, baselineScan())
 	if got := feed(t, s); len(got) != 0 {
 		t.Errorf("changes = %+v, want none", got)
 	}
@@ -83,8 +78,8 @@ func TestAScanWithoutDifferencesWritesNothing(t *testing.T) {
 
 func TestADeviceAddedIsWritten(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
-	res := twoDevices()
+	scanWith(t, s, baselineScan())
+	res := baselineScan()
 	res.Devices = append(res.Devices, dev("aa:00:00:00:00:03", "192.168.1.3"))
 	sc := scanWith(t, s, res)
 
@@ -98,20 +93,20 @@ func TestADeviceAddedIsWritten(t *testing.T) {
 
 func TestADeviceGoingOfflineAndComingBackIsWritten(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 	scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
 	wantKinds(t, feed(t, s), ChangeDeviceOffline)
 	if got := feed(t, s)[0].Summary; !strings.Contains(got, "192.168.1.2") || !strings.Contains(got, "offline") {
 		t.Errorf("summary = %q", got)
 	}
 
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 	wantKinds(t, feed(t, s), ChangeDeviceOnline, ChangeDeviceOffline) // newest first
 }
 
 func TestADeviceThatChangedItsAddressOrNameIsWritten(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 
 	moved := dev(keyB.MAC, "192.168.1.20")
 	moved.Hostname = "printer-2"
@@ -128,9 +123,9 @@ func TestADeviceThatChangedItsAddressOrNameIsWritten(t *testing.T) {
 
 func TestALinkAddedAndRemovedIsWritten(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 
-	res := twoDevices()
+	res := baselineScan()
 	res.Links = []model.LinkInput{{A: keyA, B: keyB, APort: "Gi0/1", BPort: "eth0", Source: "lldp"}}
 	res.LinksPolled = []model.DeviceKey{keyA}
 	scanWith(t, s, res)
@@ -140,7 +135,7 @@ func TestALinkAddedAndRemovedIsWritten(t *testing.T) {
 		t.Errorf("summary = %q", got[0].Summary)
 	}
 
-	res = twoDevices()
+	res = baselineScan()
 	res.LinksPolled = []model.DeviceKey{keyA}
 	scanWith(t, s, res)
 	got = feed(t, s)
@@ -152,10 +147,10 @@ func TestALinkAddedAndRemovedIsWritten(t *testing.T) {
 
 func TestAContainerAddedAndRemovedIsWritten(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 
 	web := model.ContainerInput{Device: keyA, ID: "abcd", Name: "web", Image: "nginx:1.27", State: "running"}
-	res := twoDevices()
+	res := baselineScan()
 	res.Containers = []model.ContainerInput{web}
 	res.ContainersPolled = []model.DeviceKey{keyA}
 	scanWith(t, s, res)
@@ -165,7 +160,7 @@ func TestAContainerAddedAndRemovedIsWritten(t *testing.T) {
 		t.Errorf("change = %+v", got[0])
 	}
 
-	res = twoDevices()
+	res = baselineScan()
 	res.ContainersPolled = []model.DeviceKey{keyA}
 	scanWith(t, s, res)
 	wantKinds(t, feed(t, s), ChangeContainerRemoved, ChangeContainerAdded)
@@ -174,7 +169,7 @@ func TestAContainerAddedAndRemovedIsWritten(t *testing.T) {
 func TestAFailedScanWritesNoChangesAndLeavesDevicesOnline(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 
 	sc, err := s.StartScan(ctx, "192.168.1.0/24")
 	if err != nil {
@@ -204,7 +199,7 @@ func TestAFailedFirstScanDoesNotCountAsTheBaseline(t *testing.T) {
 	if err := s.FinishScan(ctx, sc.ID, "failed", "boom"); err != nil {
 		t.Fatal(err)
 	}
-	scanWith(t, s, twoDevices()) // the first completed scan
+	scanWith(t, s, baselineScan()) // the first completed scan
 	if got := feed(t, s); len(got) != 0 {
 		t.Errorf("changes = %+v, the first completed scan is the baseline", got)
 	}
@@ -213,13 +208,13 @@ func TestAFailedFirstScanDoesNotCountAsTheBaseline(t *testing.T) {
 func TestAnApplyThatFailsWritesNoChanges(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 
 	sc, err := s.StartScan(ctx, "192.168.1.0/24")
 	if err != nil {
 		t.Fatal(err)
 	}
-	bad := twoDevices()
+	bad := baselineScan()
 	bad.Devices = append(bad.Devices, model.DeviceInput{Source: "arp"}) // no mac and no ip
 	if err := s.ApplyResult(ctx, sc.ID, bad); err == nil {
 		t.Fatal("a device without an address was applied")
@@ -231,9 +226,9 @@ func TestAnApplyThatFailsWritesNoChanges(t *testing.T) {
 
 func TestChangesAreNewestFirstAndLimited(t *testing.T) {
 	s := newTestStore(t)
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 	scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 
 	all, err := s.ListChanges(context.Background(), 100)
 	if err != nil || len(all) != 2 || all[0].ID < all[1].ID {
@@ -255,7 +250,7 @@ func TestLatestChangesBelongToTheLastCompletedScan(t *testing.T) {
 	if _, _, ok, err := s.LatestChanges(ctx); ok || err != nil {
 		t.Fatalf("no scans: ok = %v, err = %v", ok, err)
 	}
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 	scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
 	last := scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}}) // no differences
 
@@ -283,9 +278,9 @@ func TestLatestChangesBelongToTheLastCompletedScan(t *testing.T) {
 func TestPruneScansKeepsTheNewestAndTakesTheirChangesAlong(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
 	scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}}) // offline B
-	scanWith(t, s, twoDevices())                                                           // online B
+	scanWith(t, s, baselineScan())                                                           // online B
 	last := scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
 	running, err := s.StartScan(ctx, "192.168.1.0/24")
 	if err != nil {
@@ -322,8 +317,8 @@ func TestPruneScansNeverDeletesARunningScan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scanWith(t, s, twoDevices())
-	scanWith(t, s, twoDevices())
+	scanWith(t, s, baselineScan())
+	scanWith(t, s, baselineScan())
 	if _, err := s.PruneScans(ctx, 1); err != nil {
 		t.Fatal(err)
 	}
