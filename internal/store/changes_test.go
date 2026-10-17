@@ -280,7 +280,7 @@ func TestPruneScansKeepsTheNewestAndTakesTheirChangesAlong(t *testing.T) {
 	ctx := context.Background()
 	scanWith(t, s, baselineScan())
 	scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}}) // offline B
-	scanWith(t, s, baselineScan())                                                           // online B
+	scanWith(t, s, baselineScan())                                                         // online B
 	last := scanWith(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
 	running, err := s.StartScan(ctx, "192.168.1.0/24")
 	if err != nil {
