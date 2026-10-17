@@ -580,7 +580,7 @@ func TestMaintainPrunesAtStartAndOnEveryTick(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		maintain(ctx, p, 365, 200, 20*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		maintain(ctx, p, 365, func() int { return 200 }, 20*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		close(done)
 	}()
 	time.Sleep(110 * time.Millisecond)
@@ -613,5 +613,85 @@ func TestParseProxies(t *testing.T) {
 	}
 	if got, err := parseProxies(nil); err != nil || len(got) != 0 {
 		t.Errorf("parseProxies(nil) = %v, %v", got, err)
+	}
+}
+
+type fakeApplier struct{ applied []config.Config }
+
+func (f *fakeApplier) SetConfig(c config.Config) { f.applied = append(f.applied, c) }
+
+type sentEvent struct {
+	perm model.Permission
+	name string
+	data any
+}
+
+type fakeRestrictedHub struct{ sent []sentEvent }
+
+func (h *fakeRestrictedHub) PublishFor(perm model.Permission, name string, data any) {
+	h.sent = append(h.sent, sentEvent{perm, name, data})
+}
+
+type fakeAudit struct {
+	entries []model.AuditEntry
+	err     error
+}
+
+func (a *fakeAudit) AddAudit(_ context.Context, e model.AuditEntry) error {
+	a.entries = append(a.entries, e)
+	return a.err
+}
+
+func TestReloadedConfigIsAppliedAnnouncedToAdminsAndAudited(t *testing.T) {
+	sc, hub, audit := &fakeApplier{}, &fakeRestrictedHub{}, &fakeAudit{}
+	reloaded, _ := configHooks(sc, hub, audit, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	cfg := config.Config{Listen: "127.0.0.1:1"}
+	reloaded(context.Background(), cfg)
+
+	if len(sc.applied) != 1 || sc.applied[0].Listen != cfg.Listen {
+		t.Errorf("applied = %+v, want the reloaded config", sc.applied)
+	}
+	if len(hub.sent) != 1 || hub.sent[0].name != "config.reloaded" || hub.sent[0].perm != model.PermUsersManage {
+		t.Errorf("events = %+v, want config.reloaded for users:manage", hub.sent)
+	}
+	if len(audit.entries) != 1 || audit.entries[0].Action != "config_reload" || audit.entries[0].Result != "ok" {
+		t.Errorf("audit = %+v, want a config_reload entry", audit.entries)
+	}
+}
+
+func TestRefusedConfigIsAnnouncedToAdminsAndAuditedButNotApplied(t *testing.T) {
+	sc, hub, audit := &fakeApplier{}, &fakeRestrictedHub{}, &fakeAudit{}
+	_, failed := configHooks(sc, hub, audit, slog.New(slog.NewTextHandler(io.Discard, nil)))
+
+	failed(context.Background(), errors.New("scan.interval: scan interval is below 1m"))
+
+	if len(sc.applied) != 0 {
+		t.Errorf("applied = %+v, a refused file must change nothing", sc.applied)
+	}
+	if len(hub.sent) != 1 || hub.sent[0].name != "config.error" || hub.sent[0].perm != model.PermUsersManage {
+		t.Fatalf("events = %+v, want config.error for users:manage", hub.sent)
+	}
+	if got, ok := hub.sent[0].data.(configError); !ok || got.Error != "scan.interval: scan interval is below 1m" {
+		t.Errorf("event data = %+v, want the error text", hub.sent[0].data)
+	}
+	if len(audit.entries) != 1 || audit.entries[0].Action != "config_reload_failed" || audit.entries[0].Result != "error" ||
+		!strings.Contains(audit.entries[0].Detail, "below 1m") {
+		t.Errorf("audit = %+v, want a config_reload_failed entry with the reason", audit.entries)
+	}
+}
+
+func TestAnAuditFailureDoesNotUndoAReload(t *testing.T) {
+	sc, hub, audit := &fakeApplier{}, &fakeRestrictedHub{}, &fakeAudit{err: errors.New("disk full")}
+	var logs bytes.Buffer
+	reloaded, _ := configHooks(sc, hub, audit, slog.New(slog.NewTextHandler(&logs, nil)))
+
+	reloaded(context.Background(), config.Config{})
+
+	if len(sc.applied) != 1 || len(hub.sent) != 1 {
+		t.Errorf("applied %d, events %d, want the reload to stand", len(sc.applied), len(hub.sent))
+	}
+	if !strings.Contains(logs.String(), "disk full") {
+		t.Errorf("the audit failure is not logged: %q", logs.String())
 	}
 }

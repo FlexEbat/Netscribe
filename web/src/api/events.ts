@@ -7,11 +7,18 @@ export interface ScanProgress {
   total: number
 }
 
+/** The data of a config.error event: why the config file was refused. */
+export interface ConfigError {
+  error: string
+}
+
 export interface EventHandlers {
   "scan.started"?: (scan: Scan) => void
   "scan.progress"?: (progress: ScanProgress) => void
   "scan.finished"?: (scan: Scan) => void
   "topology.changed"?: () => void
+  "config.reloaded"?: () => void
+  "config.error"?: (error: ConfigError) => void
 }
 
 /**

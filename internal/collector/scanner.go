@@ -43,11 +43,21 @@ type Scanner struct {
 	store     ScanStore
 	discovery Collector
 	resolver  Resolver
-	cfg       config.Config
 	log       *slog.Logger
 	dnsWait   time.Duration
 	events    Publisher
 	busy      atomic.Bool
+
+	// cfg is the config in force, SetConfig replaces it while the server runs. A scan
+	// copies it into scanCfg when it takes the scan slot and keeps that copy to the end,
+	// so a reload never changes a running scan.
+	cfgMu   sync.RWMutex
+	cfg     config.Config
+	scanCfg config.Config
+
+	// wake tells Schedule that scan.interval changed. timer is replaced in tests.
+	wake  chan struct{}
+	timer func(time.Duration) (<-chan time.Time, func() bool)
 
 	// enrichers run after the discovery stage, in order: SNMP first, because LLDP uses
 	// what it learned. An error of an enricher is logged, the scan goes on.
@@ -79,6 +89,7 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	}
 	return &Scanner{
 		store: store, discovery: NewARP(), resolver: net.DefaultResolver, cfg: cfg, log: log, dnsWait: dnsTimeout,
+		wake: make(chan struct{}, 1),
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
 		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services},
@@ -129,6 +140,30 @@ func (s *Scanner) SetEvents(p Publisher) { s.events = p }
 // Docker returns the Docker collector, which the server also runs between scans.
 func (s *Scanner) Docker() *Docker { return s.docker }
 
+func (s *Scanner) config() config.Config {
+	s.cfgMu.RLock()
+	defer s.cfgMu.RUnlock()
+	return s.cfg
+}
+
+// SetConfig replaces the config for the next scan. The scan that is running ends with
+// the config it started with. The Docker collector reconnects when its settings change.
+func (s *Scanner) SetConfig(cfg config.Config) {
+	s.cfgMu.Lock()
+	intervalChanged := s.cfg.Scan.Interval != cfg.Scan.Interval
+	s.cfg = cfg
+	s.cfgMu.Unlock()
+	if s.docker != nil {
+		s.docker.Reconfigure(cfg.Docker)
+	}
+	if intervalChanged {
+		select {
+		case s.wake <- struct{}{}:
+		default: // a wake-up is already waiting
+		}
+	}
+}
+
 func (s *Scanner) publish(name string, data any) {
 	if s.events != nil {
 		s.events.Publish(name, data)
@@ -153,6 +188,7 @@ func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan
 		s.busy.Store(false)
 		return model.Scan{}, fmt.Errorf("start scan: %w", err)
 	}
+	s.scanCfg = s.config()
 	s.log.Info("scan started", "scan", scan.ID, "target", scan.Target)
 	s.publish("scan.started", scan)
 	return scan, nil
@@ -185,8 +221,56 @@ func (s *Scanner) Start(ctx context.Context, targets []netip.Prefix) (model.Scan
 	return scan, nil
 }
 
+// Schedule starts a scan every scan.interval until ctx ends. An interval of 0 turns the
+// schedule off. A new interval takes effect at once: the wait starts over with it. A tick
+// that finds a scan still running is skipped. targets turns the config in force into the
+// scan targets, so a change of scan.targets applies to the next scheduled scan.
+func (s *Scanner) Schedule(ctx context.Context, targets func(config.Config) ([]netip.Prefix, error)) {
+	newTimer := s.timer
+	if newTimer == nil {
+		newTimer = func(d time.Duration) (<-chan time.Time, func() bool) {
+			t := time.NewTimer(d)
+			return t.C, t.Stop
+		}
+	}
+	for {
+		var tick <-chan time.Time
+		stop := func() bool { return false }
+		if iv := s.config().Scan.Interval.Std(); iv > 0 {
+			tick, stop = newTimer(iv)
+		}
+		select {
+		case <-ctx.Done():
+			stop()
+			return
+		case <-s.wake:
+			stop()
+		case <-tick:
+			s.scheduled(ctx, targets)
+		}
+	}
+}
+
+func (s *Scanner) scheduled(ctx context.Context, targets func(config.Config) ([]netip.Prefix, error)) {
+	list, err := targets(s.config())
+	if err != nil {
+		s.log.Warn("scheduled scan not started", "err", err)
+		return
+	}
+	_, err = s.Start(ctx, list)
+	switch {
+	case err == nil:
+	case errors.Is(err, ErrBusy):
+		s.log.Info("scheduled scan skipped, the previous scan is still running")
+	case errors.Is(err, ErrNoTargets):
+		s.log.Warn("scheduled scan skipped, no scan targets are configured")
+	default:
+		s.log.Error("scheduled scan not started", "err", err)
+	}
+}
+
 func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.Prefix) (model.Scan, error) {
-	res, err := s.discovery.Collect(ctx, Input{Targets: targets, Config: s.cfg})
+	res, err := s.discovery.Collect(ctx, Input{Targets: targets, Config: s.scanCfg})
 	if err != nil {
 		return s.fail(ctx, scan.ID, fmt.Errorf("%s: %w", s.discovery.Name(), err))
 	}
@@ -250,7 +334,7 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 				return false
 			}
 			// Devices found by an earlier collector are asked by the later ones.
-			out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.cfg})
+			out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.scanCfg})
 			if err != nil {
 				if ctx.Err() == nil {
 					s.log.Warn("collector failed", "collector", c.Name(), "err", err)

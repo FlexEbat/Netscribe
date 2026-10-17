@@ -480,3 +480,72 @@ func TestSocketAPIReadsTheDaemonWithGetRequestsOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestDockerReconfigureReconnectsTheWatchAndStopsItWhenDisabled(t *testing.T) {
+	api := &fakeDockerAPI{list: []dockerContainer{container("a", "web", "running")}, events: make(chan dockerEvent)}
+	d := testDocker(api, quietLogger())
+	var mu sync.Mutex
+	var sockets []string
+	d.newAPI = func(socket string) dockerAPI {
+		mu.Lock()
+		sockets = append(sockets, socket)
+		mu.Unlock()
+		return api
+	}
+	connections := func() []string { mu.Lock(); defer mu.Unlock(); return append([]string(nil), sockets...) }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go d.Watch(ctx, &fakeSink{}, []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, func() {})
+	waitDocker(t, "the first connection", func() bool { return len(connections()) == 1 })
+
+	d.Reconfigure(config.DockerConfig{Enabled: true, Socket: "/run/other.sock"})
+	waitDocker(t, "the connection to the new socket", func() bool { return len(connections()) == 2 })
+	if got := connections()[1]; got != "/run/other.sock" {
+		t.Errorf("second connection to %q, want the new socket", got)
+	}
+
+	d.Reconfigure(config.DockerConfig{Enabled: false, Socket: "/run/other.sock"})
+	waitDocker(t, "Docker to turn off", func() bool { return !d.State().Enabled })
+	time.Sleep(50 * time.Millisecond)
+	if n := len(connections()); n != 2 {
+		t.Errorf("%d connections, a disabled Docker must not reconnect", n)
+	}
+
+	d.Reconfigure(config.DockerConfig{Enabled: true, Socket: "/run/docker.sock"})
+	waitDocker(t, "the connection after Docker is turned on", func() bool { return len(connections()) == 3 })
+}
+
+func TestDockerReconfigureWithTheSameSettingsKeepsTheConnection(t *testing.T) {
+	api := &fakeDockerAPI{list: []dockerContainer{container("a", "web", "running")}, events: make(chan dockerEvent)}
+	d := testDocker(api, quietLogger())
+	var mu sync.Mutex
+	n := 0
+	d.newAPI = func(string) dockerAPI { mu.Lock(); n++; mu.Unlock(); return api }
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go d.Watch(ctx, &fakeSink{}, []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, func() {})
+	waitDocker(t, "the first connection", func() bool { mu.Lock(); defer mu.Unlock(); return n == 1 })
+
+	d.Reconfigure(config.DockerConfig{Enabled: true, Socket: "/run/docker.sock"})
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if n != 1 {
+		t.Errorf("%d connections, want the first one kept", n)
+	}
+}
+
+func TestDockerScanWithAnOlderConfigDoesNotUndoAReload(t *testing.T) {
+	d := testDocker(&fakeDockerAPI{}, quietLogger())
+	d.Reconfigure(config.DockerConfig{Enabled: true, Socket: "/run/new.sock"})
+
+	// A scan that began before the reload still carries the old docker section.
+	if _, err := d.Collect(context.Background(), dockerInput()); err != nil {
+		t.Fatal(err)
+	}
+	if got := d.config().Socket; got != "/run/new.sock" {
+		t.Errorf("socket = %q after the scan, want the reloaded one", got)
+	}
+}

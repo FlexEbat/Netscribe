@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/FlexEbat/Netscribe/internal/events"
+	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
 // openStream connects to /api/events of a real test server with the given session.
@@ -142,5 +143,86 @@ func TestStreamCounter(t *testing.T) {
 	c.release(1)
 	if !c.acquire(1) {
 		t.Error("slot not freed by release")
+	}
+}
+
+// openTokenStream connects to /api/events with an access token.
+func openTokenStream(t *testing.T, srv *httptest.Server, token string) (*http.Response, context.CancelFunc) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/events", nil)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		cancel()
+		t.Fatal(err)
+	}
+	return resp, func() { cancel(); _ = resp.Body.Close() }
+}
+
+// eventNames reads a stream until it has seen n events and returns their names.
+func eventNames(t *testing.T, resp *http.Response, n int) []string {
+	t.Helper()
+	names := make(chan string, 8)
+	go func() {
+		sc := bufio.NewScanner(resp.Body)
+		for sc.Scan() {
+			if name, ok := strings.CutPrefix(sc.Text(), "event: "); ok {
+				names <- name
+			}
+		}
+		close(names)
+	}()
+	var got []string
+	timeout := time.After(2 * time.Second)
+	for len(got) < n {
+		select {
+		case name, ok := <-names:
+			if !ok {
+				return got
+			}
+			got = append(got, name)
+		case <-timeout:
+			t.Fatalf("got %v, want %d events within 2s", got, n)
+		}
+	}
+	return got
+}
+
+func TestConfigEventsReachOnlyThoseWithUsersManage(t *testing.T) {
+	e, hub, srv := streamEnv(t)
+	e.addUser("vera", model.RoleViewer)
+	e.addUser("olga", model.RoleOperator)
+	tokenValue := issueToken(t, e, e.mustLogin("admin"), map[string]any{"name": "ci", "scope": "write"}).Value
+
+	admin, closeAdmin := openStream(t, srv, e.mustLogin("admin"))
+	defer closeAdmin()
+	viewer, closeViewer := openStream(t, srv, e.mustLogin("vera"))
+	defer closeViewer()
+	operator, closeOperator := openStream(t, srv, e.mustLogin("olga"))
+	defer closeOperator()
+	token, closeToken := openTokenStream(t, srv, tokenValue)
+	defer closeToken()
+	for name, resp := range map[string]*http.Response{"admin": admin, "viewer": viewer, "operator": operator, "token": token} {
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s stream: status %d", name, resp.StatusCode)
+		}
+	}
+
+	hub.PublishFor(model.PermUsersManage, "config.reloaded", struct{}{})
+	hub.PublishFor(model.PermUsersManage, "config.error", map[string]string{"error": "scan.interval: scan interval is below 1m"})
+	hub.Publish("topology.changed", struct{}{}) // the marker: everyone gets it, after the config events
+
+	if got := strings.Join(eventNames(t, admin, 3), " "); got != "config.reloaded config.error topology.changed" {
+		t.Errorf("admin got %q, want both config events then the marker", got)
+	}
+	for name, resp := range map[string]*http.Response{"viewer": viewer, "operator": operator, "token of an admin": token} {
+		if got := strings.Join(eventNames(t, resp, 1), " "); got != "topology.changed" {
+			t.Errorf("%s got %q first, want only the marker: config events are for users:manage", name, got)
+		}
 	}
 }

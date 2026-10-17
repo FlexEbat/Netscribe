@@ -1,12 +1,19 @@
 // Package events fans server events out to the open event streams.
 package events
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/FlexEbat/Netscribe/internal/model"
+)
 
 // Event is one named message. Data is encoded as JSON by the stream.
 type Event struct {
 	Name string
 	Data any
+	// Perm, when set, is the right a reader of the stream needs to receive the event.
+	// The stream applies it, because only the stream knows who is reading.
+	Perm model.Permission
 }
 
 // subscriberBuffer is how many events a slow stream may fall behind before it loses some.
@@ -46,7 +53,15 @@ func (h *Hub) Subscribe() (<-chan Event, func()) {
 // Publish sends an event to all subscribers. It never blocks: a subscriber whose
 // buffer is full misses the event, because one stuck browser must not stall a scan.
 func (h *Hub) Publish(name string, data any) {
-	e := Event{Name: name, Data: data}
+	h.send(Event{Name: name, Data: data})
+}
+
+// PublishFor sends an event that only readers holding perm may receive.
+func (h *Hub) PublishFor(perm model.Permission, name string, data any) {
+	h.send(Event{Name: name, Data: data, Perm: perm})
+}
+
+func (h *Hub) send(e Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for ch := range h.subs {

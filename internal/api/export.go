@@ -33,7 +33,11 @@ func (s *server) export(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	f, err := render.Export(r.Context(), s.repo, format, s.now(), s.exportOpts)
+	var opts render.Options
+	if s.exportOpts != nil {
+		opts = s.exportOpts()
+	}
+	f, err := render.Export(r.Context(), s.repo, format, s.now(), opts)
 	switch {
 	case errors.Is(err, render.ErrUnknownFormat):
 		writeError(w, http.StatusNotFound, "not found")

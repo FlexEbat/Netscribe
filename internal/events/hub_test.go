@@ -4,6 +4,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
 func receive(t *testing.T, ch <-chan Event) Event {
@@ -76,5 +78,20 @@ func TestSubscribeLeavesNoGoroutineBehind(t *testing.T) {
 	}
 	if after := runtime.NumGoroutine(); after > before+2 {
 		t.Errorf("goroutines grew from %d to %d", before, after)
+	}
+}
+
+func TestPublishForCarriesTheRequiredRight(t *testing.T) {
+	h := NewHub()
+	ch, cancel := h.Subscribe()
+	defer cancel()
+
+	h.PublishFor(model.PermUsersManage, "config.error", "bad")
+	h.Publish("scan.started", 1)
+	if e := receive(t, ch); e.Name != "config.error" || e.Perm != model.PermUsersManage {
+		t.Errorf("event = %+v", e)
+	}
+	if e := receive(t, ch); e.Name != "scan.started" || e.Perm != "" {
+		t.Errorf("event = %+v, an ordinary event needs no right", e)
 	}
 }
