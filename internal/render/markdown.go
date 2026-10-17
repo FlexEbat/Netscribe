@@ -77,6 +77,21 @@ func Markdown(d Data, now time.Time) []byte {
 		return []byte(b.String())
 	}
 
+	b.WriteString("## Changes\n\n")
+	switch {
+	case d.LastScan == nil:
+		b.WriteString("_No scan has completed yet._\n\n")
+	case len(d.Changes) == 0:
+		fmt.Fprintf(&b, "Last scan: #%d, %s. _It found no changes._\n\n", d.LastScan.ID, scanTime(d.LastScan))
+	default:
+		fmt.Fprintf(&b, "Last scan: #%d, %s.\n\n", d.LastScan.ID, scanTime(d.LastScan))
+		rows := make([][]string, 0, len(d.Changes))
+		for _, c := range d.Changes {
+			rows = append(rows, []string{mdCell(changeLabel(c.Kind)), mdCell(c.Summary)})
+		}
+		mdTable(&b, []string{"Change", "Summary"}, rows)
+	}
+
 	b.WriteString("## Topology\n\n```mermaid\n" + mermaidGraph(d) + "```\n\n")
 
 	b.WriteString("## Devices\n\n")
@@ -135,4 +150,13 @@ func portList(ports []model.PortMapping) string {
 		}
 	}
 	return strings.Join(out, ", ")
+}
+
+// scanTime is when a scan finished, or started when it has no end.
+func scanTime(s *model.Scan) string {
+	t := s.StartedAt
+	if s.FinishedAt != nil {
+		t = *s.FinishedAt
+	}
+	return t.UTC().Format(time.RFC3339)
 }

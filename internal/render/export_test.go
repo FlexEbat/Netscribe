@@ -17,6 +17,8 @@ type fakeSource struct {
 	topo     model.Topology
 	ifaces   map[int64][]model.Interface
 	services []model.Service
+	scan     *model.Scan
+	changes  []model.Change
 	err      error
 }
 
@@ -26,6 +28,12 @@ func (f fakeSource) ListInterfaces(_ context.Context, id int64) ([]model.Interfa
 }
 func (f fakeSource) ListServices(context.Context, int64) ([]model.Service, error) {
 	return f.services, nil
+}
+func (f fakeSource) LatestChanges(context.Context) (model.Scan, []model.Change, bool, error) {
+	if f.scan == nil {
+		return model.Scan{}, nil, false, nil
+	}
+	return *f.scan, f.changes, true, nil
 }
 
 var at = time.Date(2026, 10, 15, 12, 30, 0, 0, time.UTC)
@@ -242,5 +250,66 @@ func TestExportRefusesAnUnknownFormatAndReportsReadErrors(t *testing.T) {
 	boom := errors.New("boom")
 	if _, err := Export(context.Background(), fakeSource{err: boom}, FormatMarkdown, at, Options{}); !errors.Is(err, boom) {
 		t.Errorf("err = %v, want the read error", err)
+	}
+}
+
+func withScan(src fakeSource, changes ...model.Change) fakeSource {
+	finished := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
+	src.scan = &model.Scan{ID: 7, Status: "done", StartedAt: finished.Add(-time.Minute), FinishedAt: &finished}
+	src.changes = changes
+	return src
+}
+
+func TestExportsCarryTheChangesOfTheLastScan(t *testing.T) {
+	src := withScan(sample(),
+		model.Change{ID: 2, ScanID: 7, Kind: "device_offline", EntityID: "2", Summary: "web went offline"},
+		model.Change{ID: 1, ScanID: 7, Kind: "device_added", EntityID: "3", Summary: "New device 192.168.1.9 (-, unknown)"},
+	)
+	md := string(export(t, src, FormatMarkdown).Body)
+	for _, want := range []string{
+		"## Changes", "Last scan: #7, 2026-10-15T12:00:00Z.", "| Change | Summary |",
+		"| Device added | New device 192.168.1.9 (-, unknown) |", "| Device offline | web went offline |",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("markdown lacks %q:\n%s", want, md)
+		}
+	}
+	if strings.Index(md, "| Device added |") > strings.Index(md, "| Device offline |") {
+		t.Error("the changes are not in the order they were written")
+	}
+	html := string(export(t, src, FormatHTML).Body)
+	for _, want := range []string{"<h2>Changes</h2>", "Last scan: #7, 2026-10-15T12:00:00Z.", "<td>Device added</td>", "<td>web went offline</td>"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("html lacks %q", want)
+		}
+	}
+}
+
+func TestExportsSayWhenThereAreNoChangesOrNoScan(t *testing.T) {
+	quiet := string(export(t, withScan(sample()), FormatMarkdown).Body)
+	if !strings.Contains(quiet, "It found no changes.") {
+		t.Errorf("markdown = %s", quiet)
+	}
+	if html := string(export(t, withScan(sample()), FormatHTML).Body); !strings.Contains(html, "It found no changes.") {
+		t.Error("html does not say the scan found no changes")
+	}
+	none := string(export(t, sample(), FormatMarkdown).Body)
+	if !strings.Contains(none, "No scan has completed yet.") {
+		t.Errorf("markdown = %s", none)
+	}
+	if html := string(export(t, sample(), FormatHTML).Body); !strings.Contains(html, "No scan has completed yet.") {
+		t.Error("html does not say that no scan has completed")
+	}
+}
+
+func TestChangeSummariesAreEscaped(t *testing.T) {
+	src := withScan(sample(), model.Change{ID: 1, ScanID: 7, Kind: "device_added", Summary: "<script>x</script> | a"})
+	md := string(export(t, src, FormatMarkdown).Body)
+	if strings.Contains(md, "<script>") || !strings.Contains(md, `&lt;script&gt;x&lt;/script&gt; \| a`) {
+		t.Errorf("markdown:\n%s", md)
+	}
+	html := string(export(t, src, FormatHTML).Body)
+	if strings.Contains(html, "<script>x") || !strings.Contains(html, "&lt;script&gt;x&lt;/script&gt; | a") {
+		t.Errorf("html does not escape the summary")
 	}
 }

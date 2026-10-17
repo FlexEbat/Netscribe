@@ -34,6 +34,15 @@ type AuditLog struct {
 	Detail   string
 }
 
+type Change struct {
+	ID       int64
+	ScanID   int64
+	Kind     string
+	EntityID string
+	Summary  string
+	At       string
+}
+
 type Container struct {
 	ID             string
 	DeviceID       int64

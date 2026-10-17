@@ -45,6 +45,19 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		return fmt.Errorf("apply result: %w", err)
 	}
 
+	// The first completed scan is the baseline: it has nothing to compare with, so it
+	// writes no changes. Later scans are compared with the state they started from.
+	done, err := q.CountDoneScansExcept(ctx, scanID)
+	if err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
+	var before snapshot
+	if done > 0 {
+		if before, err = takeSnapshot(ctx, q); err != nil {
+			return fmt.Errorf("apply result: %w", err)
+		}
+	}
+
 	ts := formatTime(s.now())
 	seen := make(map[int64]struct{}, len(r.Devices))
 	for _, in := range r.Devices {
@@ -77,6 +90,16 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 			continue
 		}
 		if err := q.SetDeviceOffline(ctx, d.ID); err != nil {
+			return fmt.Errorf("apply result: %w", err)
+		}
+	}
+
+	if done > 0 {
+		after, err := takeSnapshot(ctx, q)
+		if err != nil {
+			return fmt.Errorf("apply result: %w", err)
+		}
+		if err := writeChanges(ctx, q, scanID, ts, diffSnapshots(before, after)); err != nil {
 			return fmt.Errorf("apply result: %w", err)
 		}
 	}
