@@ -214,7 +214,7 @@ func mdnsQuery() []byte {
 	msg := make([]byte, 12, 64)
 	binary.BigEndian.PutUint16(msg[4:], 1) // one question
 	for _, label := range strings.Split(mdnsQuestion, ".") {
-		msg = append(msg, byte(len(label)))
+		msg = append(msg, byte(len(label))) //nolint:gosec // the labels are constants, none is longer than 63 bytes
 		msg = append(msg, label...)
 	}
 	msg = append(msg, 0)
