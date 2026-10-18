@@ -1,0 +1,36 @@
+# A small network with fixed addresses to test a scan against:
+#
+#   docker compose -f deploy/compose.lab.yaml up --build -d
+#   go test -tags lab ./cmd/netscribe -run Lab
+#
+# 172.30.0.10  snmpd  answers SNMP v2c, community "public"
+# 172.30.0.11  sshd   listens on port 22
+# 172.30.0.12  nginx  listens on port 80
+name: netscribe-lab
+
+services:
+  snmpd:
+    build: lab/snmpd
+    networks:
+      lab:
+        ipv4_address: 172.30.0.10
+  sshd:
+    build: lab/sshd
+    networks:
+      lab:
+        ipv4_address: 172.30.0.11
+  nginx:
+    image: nginx:stable-alpine
+    networks:
+      lab:
+        ipv4_address: 172.30.0.12
+
+networks:
+  lab:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: netscribe-lab
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+          gateway: 172.30.0.1
