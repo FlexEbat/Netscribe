@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest"
 import { filterServices, serviceLabel } from "@/lib/services"
 
 const services = [
-  { name: "ssh", port: 22 },
-  { name: "https", port: 443 },
-  { name: "http-alt", port: 8080 },
-  { name: "", port: 4444 },
+  { name: "ssh", banner: "", port: 22 },
+  { name: "https", banner: "", port: 443 },
+  { name: "http-alt", banner: "", port: 8080 },
+  { name: "", banner: "", port: 4444 },
 ]
 
 describe("filterServices", () => {

@@ -130,6 +130,9 @@ type TLSConfig struct {
 
 type DiscoveryConfig struct {
 	RouterTables       bool `yaml:"routerTables"`
+	HTTPHeaders        bool `yaml:"httpHeaders"` // HEAD / on the open web ports
+	MDNS               bool `yaml:"mdns"`        // one PTR query in each local segment
+	SSDP               bool `yaml:"ssdp"`        // one M-SEARCH in each local segment
 	ProbeRoutedTargets bool `yaml:"probeRoutedTargets"`
 }
 
@@ -160,7 +163,7 @@ func defaults() Config {
 			LockoutDuration:    Duration(15 * time.Minute),
 			Argon2:             Argon2Config{MemoryKiB: 65536, Iterations: 3, Parallelism: 2},
 		},
-		Discovery: DiscoveryConfig{RouterTables: true},
+		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true},
 	}
 }
 

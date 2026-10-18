@@ -39,6 +39,7 @@ function service(id: number, overrides: Partial<Service> = {}): Service {
     port: 22,
     proto: "tcp",
     name: "ssh",
+    banner: "",
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
     ...overrides,

@@ -37,6 +37,7 @@ function service(id: number, deviceId: number, port: number, name: string): Serv
     port,
     proto: "tcp",
     name,
+    banner: "",
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
   }

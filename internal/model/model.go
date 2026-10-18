@@ -65,6 +65,7 @@ type Service struct {
 	Port        int       `json:"port"`
 	Proto       string    `json:"proto"`
 	Name        string    `json:"name"`
+	Banner      string    `json:"banner"`
 	FirstSeenAt time.Time `json:"firstSeenAt"`
 	LastSeenAt  time.Time `json:"lastSeenAt"`
 }
@@ -234,6 +235,9 @@ type ServiceInput struct {
 	Port   int
 	Proto  string
 	Name   string
+	// Banner is what the service said about itself, for example the HTTP Server header.
+	// It comes from the network, so the store cleans and cuts it.
+	Banner string
 }
 
 type ContainerInput struct {
