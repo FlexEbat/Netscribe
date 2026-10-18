@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -129,11 +130,13 @@ type TLSConfig struct {
 }
 
 type DiscoveryConfig struct {
-	RouterTables       bool `yaml:"routerTables"`
-	HTTPHeaders        bool `yaml:"httpHeaders"` // HEAD / on the open web ports
-	MDNS               bool `yaml:"mdns"`        // one PTR query in each local segment
-	SSDP               bool `yaml:"ssdp"`        // one M-SEARCH in each local segment
-	ProbeRoutedTargets bool `yaml:"probeRoutedTargets"`
+	RouterTables       bool   `yaml:"routerTables"`
+	HTTPHeaders        bool   `yaml:"httpHeaders"` // HEAD / on the open web ports
+	MDNS               bool   `yaml:"mdns"`        // one PTR query in each local segment
+	SSDP               bool   `yaml:"ssdp"`        // one M-SEARCH in each local segment
+	Nmap               bool   `yaml:"nmap"`        // ask an installed nmap about devices nothing else could type
+	NmapPath           string `yaml:"nmapPath"`    // empty: look for nmap in PATH
+	ProbeRoutedTargets bool   `yaml:"probeRoutedTargets"`
 }
 
 type ExportConfig struct {
@@ -248,6 +251,9 @@ func (c Config) Validate() error {
 		if _, err := ParseTarget(t, c.AllowPublicTargets); err != nil {
 			fail(fmt.Sprintf("scan.targets[%d] %q", i, t), err)
 		}
+	}
+	if p := c.Discovery.NmapPath; p != "" && !filepath.IsAbs(p) {
+		fail("discovery.nmapPath", errors.New("must be an absolute path"))
 	}
 	if iv := c.Scan.Interval.Std(); iv != 0 && iv < time.Minute {
 		fail("scan.interval", errInterval)

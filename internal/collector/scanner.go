@@ -75,6 +75,10 @@ type Scanner struct {
 	// sysServices and open ports. Both are optional.
 	classifier *Classifier
 	facts      func(model.DeviceKey) Facts
+
+	// nmap is the optional last resort for devices nothing else could type. It is asked
+	// only when discovery.nmap is on, and then only about those devices.
+	nmap *Nmap
 }
 
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
@@ -82,6 +86,7 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	probe, snmp, services := NewProbe(log), NewSNMP(log), NewServices(log)
 	openWebPorts := func(ip string) []int { return mergePorts(probe.openPorts(ip), services.openPorts(ip)) }
 	httpBanner, mdns, ssdp := NewHTTPBanner(log, openWebPorts), NewMDNS(log), NewSSDP(log)
+	nmap := NewNmap(log)
 	docker := NewDocker(cfg.Docker, log)
 	lldp := NewLLDP(snmp, log)
 	classifier, err := DefaultClassifier()
@@ -98,10 +103,11 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		late:       []Collector{NewSSH(log), docker},
 		docker:     docker,
 		classifier: classifier,
+		nmap:       nmap,
 		facts: func(k model.DeviceKey) Facts {
 			f := Facts{
 				Services: -1, Ports: openWebPorts(k.IP),
-				HTTP: httpBanner.banner(k.IP), MDNS: mdns.serviceTypes(k.IP), SSDP: ssdp.announced(k.IP),
+				HTTP: httpBanner.banner(k.IP), MDNS: mdns.serviceTypes(k.IP), SSDP: ssdp.announced(k.IP), Nmap: nmap.guess(k.IP),
 			}
 			if n, ok := snmp.servicesOf(k.IP); ok {
 				f.Services = n
@@ -367,10 +373,35 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 	}
 	fillVendors(res.Devices)
 	if s.classifier != nil {
+		s.askNmap(ctx, targets, devices, res.Devices)
 		s.classifier.Apply(res.Devices, s.facts)
 	}
 	collect(s.late)
 	return res
+}
+
+// askNmap runs nmap on the devices that no other source could type, before the
+// classifier looks at what it guessed. It does nothing unless discovery.nmap is on.
+func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices []model.Device, inputs []model.DeviceInput) {
+	if s.nmap == nil || !s.scanCfg.Discovery.Nmap {
+		return
+	}
+	untyped := map[string]bool{}
+	for _, k := range s.classifier.Untyped(inputs, s.facts) {
+		untyped[k.IP] = true
+	}
+	var ask []model.Device
+	for _, d := range devices {
+		if untyped[d.IP] {
+			ask = append(ask, d)
+		}
+	}
+	if len(ask) == 0 {
+		return
+	}
+	if _, err := s.nmap.Collect(ctx, Input{Targets: targets, Devices: ask, Config: s.scanCfg}); err != nil && ctx.Err() == nil {
+		s.log.Warn("collector failed", "collector", s.nmap.Name(), "err", err)
+	}
 }
 
 // mergeServices adds the services of later to those of base. A service that is in both

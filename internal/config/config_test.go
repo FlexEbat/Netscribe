@@ -351,3 +351,26 @@ func TestDefaultPortsCoverTheClassifyRules(t *testing.T) {
 		t.Errorf("the example lists %v, the defaults are %v", example.Scan.Ports, cfg.Scan.Ports)
 	}
 }
+
+func TestNmapPathMustBeAbsolute(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		ok   bool
+	}{{"", true}, {"/usr/bin/nmap", true}, {"nmap", false}, {"./nmap", false}} {
+		body := "discovery:\n  nmap: true\n  nmapPath: \"" + tc.path + "\"\n"
+		_, err := Load(writeConfig(t, 0o600, body), false)
+		if (err == nil) != tc.ok {
+			t.Errorf("nmapPath %q: err = %v, want ok=%v", tc.path, err, tc.ok)
+		}
+	}
+}
+
+func TestNmapIsOffByDefault(t *testing.T) {
+	cfg, err := Load(writeConfig(t, 0o600, "scan:\n  targets: [192.168.1.0/24]\n"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Discovery.Nmap || cfg.Discovery.NmapPath != "" {
+		t.Errorf("discovery = %+v, want nmap off", cfg.Discovery)
+	}
+}
