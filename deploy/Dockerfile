@@ -1,14 +1,14 @@
 # Build the web interface, then the static binary, then copy both into an image
 # that holds nothing else: no shell, no package manager.
 
-FROM node:22-alpine AS web
+FROM node:25-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
