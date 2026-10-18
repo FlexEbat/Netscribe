@@ -38,7 +38,7 @@ func (f *fakeMulticast) sends() int {
 func dnsName(name string) []byte {
 	var b []byte
 	for _, l := range strings.Split(name, ".") {
-		b = append(b, byte(len(l)))
+		b = append(b, byte(len(l))) //nolint:gosec // test labels are short
 		b = append(b, l...)
 	}
 	return append(b, 0)
@@ -50,7 +50,7 @@ func rr(name []byte, typ uint16, data []byte) []byte {
 	b = binary.BigEndian.AppendUint16(b, typ)
 	b = binary.BigEndian.AppendUint16(b, 1)
 	b = binary.BigEndian.AppendUint32(b, 120)
-	b = binary.BigEndian.AppendUint16(b, uint16(len(data)))
+	b = binary.BigEndian.AppendUint16(b, uint16(len(data))) //nolint:gosec // test records are short
 	return append(b, data...)
 }
 
@@ -58,7 +58,7 @@ func rr(name []byte, typ uint16, data []byte) []byte {
 func response(records ...[]byte) []byte {
 	b := make([]byte, 12)
 	b[2] = 0x84 // a response, authoritative
-	binary.BigEndian.PutUint16(b[6:], uint16(len(records)))
+	binary.BigEndian.PutUint16(b[6:], uint16(len(records))) //nolint:gosec // a test packet holds a few records
 	for _, r := range records {
 		b = append(b, r...)
 	}
