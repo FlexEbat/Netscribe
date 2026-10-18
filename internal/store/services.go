@@ -28,7 +28,7 @@ func (s *Store) ListServices(ctx context.Context, deviceID int64) ([]model.Servi
 			return nil, fmt.Errorf("service %d: last_seen_at: %w", r.ID, err)
 		}
 		out = append(out, model.Service{
-			ID: r.ID, DeviceID: r.DeviceID, Port: int(r.Port), Proto: r.Proto, Name: r.Name,
+			ID: r.ID, DeviceID: r.DeviceID, Port: int(r.Port), Proto: r.Proto, Name: r.Name, Banner: r.Banner,
 			FirstSeenAt: first, LastSeenAt: last,
 		})
 	}

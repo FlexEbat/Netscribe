@@ -1,11 +1,14 @@
 # field,match,kind
 #
 # The first rule that matches wins. Rules are tried by field in this order, whatever
-# their place in the file: descr, services, port, vendor. Inside one field the file order
+# their place in the file: descr, http, mdns, ssdp, services, port, vendor. Inside one field the file order
 # decides. A kind that LLDP already reported is never changed, a device nothing matches
 # stays unknown.
 #
 #   descr     case-insensitive text inside sysDescr
+#   http      case-insensitive text inside the HTTP banner (Server, X-Powered-By, realm, CN)
+#   mdns      a service type the device announced over mDNS, such as _ipp._tcp
+#   ssdp      case-insensitive text inside the SERVER or ST value of an SSDP answer
 #   services  "bridge" (sysServices has the layer 2 bit) or "router" (the layer 3 bit)
 #   port      an open TCP port
 #   vendor    case-insensitive text inside the vendor name
@@ -28,6 +31,40 @@ descr,routeros,router
 descr,mikrotik,router
 descr,switch,switch
 descr,router,router
+http,cups,printer
+http,jetdirect,printer
+http,hp http server,printer
+http,hikvision,camera
+http,dahua,camera
+http,ipcam,camera
+http,webcam,camera
+http,synology,nas
+http,diskstation,nas
+http,qnap,nas
+http,routeros,router
+http,mikrotik,router
+http,fortigate,firewall
+http,pfsense,firewall
+http,opnsense,firewall
+mdns,_ipp._tcp,printer
+mdns,_ipps._tcp,printer
+mdns,_printer._tcp,printer
+mdns,_pdl-datastream._tcp,printer
+mdns,_scanner._tcp,printer
+mdns,_axis-video._tcp,camera
+mdns,_airplay._tcp,iot
+mdns,_googlecast._tcp,iot
+mdns,_hap._tcp,iot
+mdns,_homekit._tcp,iot
+mdns,_raop._tcp,iot
+ssdp,internetgatewaydevice,router
+ssdp,miniupnpd,router
+ssdp,fritz,router
+ssdp,device:printer,printer
+ssdp,synology,nas
+ssdp,roku,iot
+ssdp,sonos,iot
+ssdp,mediarenderer,iot
 services,bridge,switch
 services,router,router
 port,9100,printer

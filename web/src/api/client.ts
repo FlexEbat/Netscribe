@@ -280,6 +280,8 @@ export interface Service {
   port: number
   proto: string
   name: string
+  /** What the service said about itself, such as the HTTP Server header. May be empty. */
+  banner: string
   firstSeenAt: string
   lastSeenAt: string
 }

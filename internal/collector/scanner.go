@@ -80,6 +80,8 @@ type Scanner struct {
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
 func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	probe, snmp, services := NewProbe(log), NewSNMP(log), NewServices(log)
+	openWebPorts := func(ip string) []int { return mergePorts(probe.openPorts(ip), services.openPorts(ip)) }
+	httpBanner, mdns, ssdp := NewHTTPBanner(log, openWebPorts), NewMDNS(log), NewSSDP(log)
 	docker := NewDocker(cfg.Docker, log)
 	lldp := NewLLDP(snmp, log)
 	classifier, err := DefaultClassifier()
@@ -92,12 +94,15 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		wake: make(chan struct{}, 1),
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
-		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services},
+		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services, httpBanner, mdns, ssdp},
 		late:       []Collector{NewSSH(log), docker},
 		docker:     docker,
 		classifier: classifier,
 		facts: func(k model.DeviceKey) Facts {
-			f := Facts{Services: -1, Ports: mergePorts(probe.openPorts(k.IP), services.openPorts(k.IP))}
+			f := Facts{
+				Services: -1, Ports: openWebPorts(k.IP),
+				HTTP: httpBanner.banner(k.IP), MDNS: mdns.serviceTypes(k.IP), SSDP: ssdp.announced(k.IP),
+			}
 			if n, ok := snmp.servicesOf(k.IP); ok {
 				f.Services = n
 			}
@@ -350,7 +355,7 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 			res.Links = append(res.Links, out.Links...)
 			res.LinksPolled = append(res.LinksPolled, out.LinksPolled...)
 			res.FDBPolled = append(res.FDBPolled, out.FDBPolled...)
-			res.Services = append(res.Services, out.Services...)
+			res.Services = mergeServices(res.Services, out.Services)
 			res.ServicesPolled = append(res.ServicesPolled, out.ServicesPolled...)
 			res.Containers = append(res.Containers, out.Containers...)
 			res.ContainersPolled = append(res.ContainersPolled, out.ContainersPolled...)
@@ -366,6 +371,37 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 	}
 	collect(s.late)
 	return res
+}
+
+// mergeServices adds the services of later to those of base. A service that is in both
+// keeps one entry, where a banner or a name that is set wins over one that is empty, so
+// the port scan and the HTTP stage do not wipe each other when the store applies them.
+func mergeServices(base, later []model.ServiceInput) []model.ServiceInput {
+	type key struct {
+		dev   model.DeviceKey
+		port  int
+		proto string
+	}
+	index := make(map[key]int, len(base))
+	for i, s := range base {
+		index[key{s.Device, s.Port, s.Proto}] = i
+	}
+	for _, s := range later {
+		k := key{s.Device, s.Port, s.Proto}
+		i, ok := index[k]
+		if !ok {
+			index[k] = len(base)
+			base = append(base, s)
+			continue
+		}
+		if s.Name != "" {
+			base[i].Name = s.Name
+		}
+		if s.Banner != "" {
+			base[i].Banner = s.Banner
+		}
+	}
+	return base
 }
 
 // mergePorts joins two lists of open ports without repeats.

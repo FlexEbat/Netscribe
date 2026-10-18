@@ -96,6 +96,9 @@ first:
 | `snmp.communities` | SNMP v2c communities to try. Use a read-only community. |
 | `ssh.hosts` | Hosts to read over SSH, each with a user and a key file. |
 | `docker.enabled` | Read containers from the Docker socket. |
+| `discovery.httpHeaders` | Send one `HEAD /` to open web ports (80, 443, 8080) and keep the `Server` header. |
+| `discovery.mdns` | Send one mDNS query in each local segment. |
+| `discovery.ssdp` | Send one SSDP `M-SEARCH` in each local segment. |
 
 The server reloads the file when it changes and on `SIGHUP`. A new `scan.interval`,
 `scan.targets`, `snmp`, `ssh`, `docker`, `history` or `export` value applies without a
@@ -123,6 +126,13 @@ Netscribe holds a map of your network, so treat its database and config as sensi
 
 - **Config file.** It holds SNMP communities and key paths. The service refuses to start
   when the file is readable by other users, unless you pass `--allow-loose-permissions`.
+- **HTTP, mDNS and SSDP.** Each source is a switch under `discovery`, and a source that is
+  off sends no packet. The HTTP stage sends `HEAD /` with no credentials or cookies, reads
+  at most 8 KiB of headers within 2 seconds, never reads a body and never follows a
+  redirect. It skips certificate checks, because it reads headers only. mDNS and SSDP send
+  one packet from each local interface and stay in the segment of that interface. Netscribe
+  never requests the address in an SSDP `LOCATION` header. Everything these sources return
+  is untrusted: it is cut, stripped of control characters and shown as plain text.
 - **SNMP v2c** sends the community in clear text. Use a read-only community and limit it by
   ACL on the device.
 - **Scan targets** are limited to RFC 1918 ranges, no wider than /16. `allowPublicTargets`

@@ -567,3 +567,25 @@ func TestARunningScanKeepsItsConfigAndTheNextOneTakesTheNew(t *testing.T) {
 		t.Errorf("configs seen by the two scans = %v, want the old one then the new one", spy.seen)
 	}
 }
+
+func TestMergeServicesKeepsTheNameAndTheBannerOfOneService(t *testing.T) {
+	key := model.DeviceKey{MAC: "aa:aa:aa:aa:aa:01", IP: "192.168.1.1"}
+	base := []model.ServiceInput{
+		{Device: key, Port: 80, Proto: "tcp", Name: "http"},
+		{Device: key, Port: 22, Proto: "tcp", Name: "ssh"},
+	}
+	// The HTTP stage reports the same service again, with a banner.
+	got := mergeServices(base, []model.ServiceInput{
+		{Device: key, Port: 80, Proto: "tcp", Banner: "nginx"},
+		{Device: key, Port: 8080, Proto: "tcp", Name: "http-alt", Banner: "lighttpd"},
+	})
+	if len(got) != 3 {
+		t.Fatalf("services = %+v, want three, one per port", got)
+	}
+	if got[0].Name != "http" || got[0].Banner != "nginx" {
+		t.Errorf("port 80 = %+v, want its name kept and the banner added", got[0])
+	}
+	if got[2].Port != 8080 || got[2].Banner != "lighttpd" {
+		t.Errorf("port 8080 = %+v", got[2])
+	}
+}

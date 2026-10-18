@@ -39,6 +39,7 @@ function service(id: number, overrides: Partial<Service> = {}): Service {
     port: 22,
     proto: "tcp",
     name: "ssh",
+    banner: "",
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
     ...overrides,
@@ -108,7 +109,8 @@ describe("DevicePanel", () => {
     expect(within(rows[1]!).getByText("22")).toBeInTheDocument()
     expect(within(rows[1]!).getByText("tcp")).toBeInTheDocument()
     expect(within(rows[2]!).getByText("https")).toBeInTheDocument()
-    expect(within(rows[3]!).getByText("–")).toBeInTheDocument()
+    // A service without a name and without a banner shows a dash in both columns.
+    expect(within(rows[3]!).getAllByText("–")).toHaveLength(2)
   })
 
   it("says so when no port is open", async () => {
@@ -116,5 +118,18 @@ describe("DevicePanel", () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole("tab", { name: "Services (0)" }))
     expect(screen.getByText("No open ports were found on this device.")).toBeInTheDocument()
+  })
+})
+
+describe("DevicePanel service banner", () => {
+  it("shows the banner of a service in the services tab", async () => {
+    open({
+      device,
+      interfaces: [],
+      services: [service(1, { port: 80, name: "http", banner: "nginx/1.25.3" })],
+    })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole("tab", { name: "Services (1)" }))
+    expect(within(screen.getByRole("table")).getByText("nginx/1.25.3")).toBeInTheDocument()
   })
 })

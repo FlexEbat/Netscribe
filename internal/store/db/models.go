@@ -117,6 +117,7 @@ type Service struct {
 	Name        string
 	FirstSeenAt string
 	LastSeenAt  string
+	Banner      string
 }
 
 type Session struct {
