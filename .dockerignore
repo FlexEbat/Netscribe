@@ -1,0 +1,8 @@
+.git
+web/node_modules
+web/dist
+netscribe
+netscribe.yaml
+netscribe.db*
+tmp
+coverage

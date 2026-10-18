@@ -22,6 +22,7 @@ archives:
     name_template: "netscribe_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
+      - README.md
       - netscribe.example.yaml
 
 checksum:

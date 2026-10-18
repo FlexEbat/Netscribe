@@ -67,4 +67,20 @@ updates:
       # they are pinned by SHA and the CI run is the test.
       github-actions:
         patterns: ["*"]
-# Add the docker ecosystem together with deploy/Dockerfile.
+
+  - package-ecosystem: docker
+    directories: ["/deploy", "/deploy/lab/*"]
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:30"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deploy)"
+    labels: [dependencies, docker]
+    groups:
+      docker:
+        patterns: ["*"]
