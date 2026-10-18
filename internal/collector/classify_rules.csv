@@ -1,7 +1,7 @@
 # field,match,kind
 #
 # The first rule that matches wins. Rules are tried by field in this order, whatever
-# their place in the file: descr, http, mdns, ssdp, services, port, vendor. Inside one field the file order
+# their place in the file: descr, http, mdns, ssdp, nmap, services, port, vendor. Inside one field the file order
 # decides. A kind that LLDP already reported is never changed, a device nothing matches
 # stays unknown.
 #
@@ -9,6 +9,7 @@
 #   http      case-insensitive text inside the HTTP banner (Server, X-Powered-By, realm, CN)
 #   mdns      a service type the device announced over mDNS, such as _ipp._tcp
 #   ssdp      case-insensitive text inside the SERVER or ST value of an SSDP answer
+#   nmap      text inside what nmap guessed: "type=<device type>" or "os=<system name>"
 #   services  "bridge" (sysServices has the layer 2 bit) or "router" (the layer 3 bit)
 #   port      an open TCP port
 #   vendor    case-insensitive text inside the vendor name
@@ -65,6 +66,20 @@ ssdp,synology,nas
 ssdp,roku,iot
 ssdp,sonos,iot
 ssdp,mediarenderer,iot
+nmap,type=router,router
+nmap,type=broadband router,router
+nmap,type=switch,switch
+nmap,type=bridge,switch
+nmap,type=firewall,firewall
+nmap,type=printer,printer
+nmap,type=wap,ap
+nmap,type=webcam,camera
+nmap,type=storage-misc,nas
+nmap,type=voip phone,iot
+nmap,type=voip adapter,iot
+nmap,type=media device,iot
+nmap,type=game console,iot
+nmap,type=power-device,iot
 services,bridge,switch
 services,router,router
 port,9100,printer

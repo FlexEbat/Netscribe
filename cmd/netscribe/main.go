@@ -331,9 +331,13 @@ func newLogger(w io.Writer) *slog.Logger {
 // Both go through the same checks, so an argument cannot reach beyond the allowed ranges.
 func scan(args []string, e streams) error {
 	flags := newCommonFlags("scan", e.err)
+	useNmap := flags.fs.Bool("nmap", false, "ask nmap about devices nothing else could type, for this scan only")
 	cfg, logger, err := flags.load(args, e.err)
 	if err != nil {
 		return err
+	}
+	if *useNmap {
+		cfg.Discovery.Nmap = true
 	}
 	targets, err := scanTargets(flags.args, cfg)
 	if err != nil {

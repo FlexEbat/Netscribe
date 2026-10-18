@@ -56,6 +56,8 @@ discovery:
   httpHeaders: true # HEAD / on open web ports (80, 443, 8080): the Server header and the like
   mdns: true # one mDNS query in each local segment
   ssdp: true # one SSDP M-SEARCH in each local segment
+  nmap: false # ask an installed nmap (-O) about devices nothing else could type, see README
+  nmapPath: "" # empty: look for nmap in PATH, otherwise an absolute path
   probeRoutedTargets: false # ICMP and TCP probes of subnets behind a router
 
 export:

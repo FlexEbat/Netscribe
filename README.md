@@ -99,6 +99,8 @@ first:
 | `discovery.httpHeaders` | Send one `HEAD /` to open web ports (80, 443, 8080) and keep the `Server` header. |
 | `discovery.mdns` | Send one mDNS query in each local segment. |
 | `discovery.ssdp` | Send one SSDP `M-SEARCH` in each local segment. |
+| `discovery.nmap` | Ask an installed Nmap about devices nothing else could type. Off by default. |
+| `discovery.nmapPath` | Absolute path of `nmap`. Empty means look in `PATH`. |
 
 The server reloads the file when it changes and on `SIGHUP`. A new `scan.interval`,
 `scan.targets`, `snmp`, `ssh`, `docker`, `history` or `export` value applies without a
@@ -109,6 +111,45 @@ in place, and administrators see the error in the panel.
 
 Run a scan by hand with `netscribe scan`, or pass CIDRs as arguments. `netscribe devices`
 prints what the database holds.
+
+## Identify devices with Nmap
+
+Netscribe types a device from SNMP, LLDP, HTTP, mDNS, SSDP and open ports. A device that
+none of these sources can type stays `unknown`. If you have [Nmap](https://nmap.org)
+installed, Netscribe can ask it about those devices only. Nmap guesses the operating system
+and the device type from the way the TCP/IP stack answers, and Netscribe turns a guess of at
+least 85 percent accuracy into a kind with the `nmap` rules in `classify_rules.csv`.
+
+It is off by default, because it is loud: for every such device Nmap runs a TCP port scan of
+the 100 most common ports and sends the probes of OS detection. Use it only on networks you
+own.
+
+Turn it on for one scan from the command line:
+
+```sh
+./netscribe scan --nmap
+```
+
+or for every scan, including the ones you start in the panel and the scheduled ones, in
+`netscribe.yaml`:
+
+```yaml
+discovery:
+  nmap: true
+  nmapPath: "" # empty: look for nmap in PATH
+```
+
+OS detection needs raw sockets. Either run Netscribe as root, which this README does not
+recommend, or give the `nmap` binary the capabilities it needs. The second choice lets every
+local user run raw scans with that binary, so decide whether you accept that:
+
+```sh
+sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip "$(command -v nmap)"
+```
+
+Without them Nmap fails, Netscribe logs the reason once, skips the stage and finishes the
+scan. The Docker image has no Nmap and drops all capabilities, so this feature needs the
+binary install. The panel has no switch for it: it follows `discovery.nmap`.
 
 ## TLS and reverse proxy
 
