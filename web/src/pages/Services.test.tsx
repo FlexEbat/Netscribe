@@ -103,3 +103,15 @@ describe("Services page", () => {
     expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument()
   })
 })
+
+describe("Services banner", () => {
+  it("shows the banner of a service and filters by it", async () => {
+    const withBanner = { ...service(1, 1, 80, "http"), banner: "nginx/1.25.3" }
+    setup([withBanner, service(2, 1, 22, "ssh")], [device(1, "192.168.1.1", "gateway")])
+    expect(await screen.findByText("nginx/1.25.3")).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText("Filter by service name or banner"), "nginx")
+    expect(screen.getByText("nginx/1.25.3")).toBeInTheDocument()
+    expect(screen.queryByText("ssh")).not.toBeInTheDocument()
+  })
+})

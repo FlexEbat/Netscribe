@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -382,5 +384,49 @@ func TestServicesGoWithTheirDevice(t *testing.T) {
 	}
 	if got := services(t, s, 0); len(got) != 1 || got[0].Port != 80 {
 		t.Errorf("services = %+v, want only the other device's", got)
+	}
+}
+
+func TestApplyServiceBannerIsCleanedCutAndRefreshed(t *testing.T) {
+	s := newTestStore(t)
+	long := strings.Repeat("é", 250)
+	web := model.ServiceInput{Device: keyA, Port: 80, Proto: "tcp", Name: "http", Banner: "nginx/1.25\x00\x07 ok"}
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Services: []model.ServiceInput{web}, ServicesPolled: []model.DeviceKey{keyA}})
+	got := services(t, s, 0)
+	if len(got) != 1 || got[0].Banner != "nginx/1.25 ok" {
+		t.Fatalf("services = %+v, want the banner without control characters", got)
+	}
+
+	web.Banner = long
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Services: []model.ServiceInput{web}, ServicesPolled: []model.DeviceKey{keyA}})
+	if got := services(t, s, 0); utf8.RuneCountInString(got[0].Banner) != 200 {
+		t.Errorf("banner has %d characters, want it cut to 200", utf8.RuneCountInString(got[0].Banner))
+	}
+
+	// A scan that finds no banner this time clears the old one.
+	web.Banner = ""
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Services: []model.ServiceInput{web}, ServicesPolled: []model.DeviceKey{keyA}})
+	if got := services(t, s, 0); got[0].Banner != "" {
+		t.Errorf("banner = %q, want it empty", got[0].Banner)
+	}
+}
+
+func TestApplyMDNSNameOnlyFillsAnEmptyHostname(t *testing.T) {
+	s := newTestStore(t)
+	named := dev(keyA.MAC, keyA.IP)
+	named.Hostname = "gateway"
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{named, dev(keyB.MAC, keyB.IP)}})
+
+	mdns := func(k model.DeviceKey, name string) model.DeviceInput {
+		return model.DeviceInput{Key: k, Hostname: name, Source: "mdns"}
+	}
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{
+		named, dev(keyB.MAC, keyB.IP), mdns(keyA, "printer.local"), mdns(keyB, "laptop.local"),
+	}})
+	if got := byMAC(t, s, keyA.MAC).Hostname; got != "gateway" {
+		t.Errorf("hostname = %q, the mDNS name must not replace a known one", got)
+	}
+	if got := byMAC(t, s, keyB.MAC).Hostname; got != "laptop.local" {
+		t.Errorf("hostname = %q, the mDNS name must fill an empty one", got)
 	}
 }

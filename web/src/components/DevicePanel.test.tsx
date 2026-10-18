@@ -120,3 +120,16 @@ describe("DevicePanel", () => {
     expect(screen.getByText("No open ports were found on this device.")).toBeInTheDocument()
   })
 })
+
+describe("DevicePanel service banner", () => {
+  it("shows the banner of a service in the services tab", async () => {
+    open({
+      device,
+      interfaces: [],
+      services: [service(1, { port: 80, name: "http", banner: "nginx/1.25.3" })],
+    })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole("tab", { name: "Services (1)" }))
+    expect(within(screen.getByRole("table")).getByText("nginx/1.25.3")).toBeInTheDocument()
+  })
+})

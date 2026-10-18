@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
 )
@@ -295,7 +296,8 @@ func parseMDNS(b []byte) (mdnsMessage, bool) {
 		case dnsTypeA:
 			if rdlen == 4 {
 				addr := netip.AddrFrom4([4]byte(b[start : start+4]))
-				if host := strings.ToLower(name); strings.HasSuffix(host, ".local") && networkText(host) == host && len(host) <= 255 {
+				// The text is checked before ToLower, which would turn bad bytes into U+FFFD.
+				if host := strings.ToLower(name); utf8.ValidString(name) && strings.HasSuffix(host, ".local") && networkText(host) == host && len(host) <= 255 {
 					msg.hosts[host] = addr
 				}
 			}
@@ -308,6 +310,9 @@ func parseMDNS(b []byte) (mdnsMessage, bool) {
 // serviceType turns "_ipp._tcp.local" into "_ipp._tcp". Anything that does not look like
 // a service type is refused.
 func serviceType(name string) (string, bool) {
+	if !utf8.ValidString(name) {
+		return "", false
+	}
 	t := strings.TrimSuffix(strings.ToLower(name), ".local")
 	parts := strings.Split(t, ".")
 	if len(parts) != 2 || !strings.HasPrefix(parts[0], "_") || (parts[1] != "_tcp" && parts[1] != "_udp") {
