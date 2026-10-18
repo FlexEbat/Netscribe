@@ -23,6 +23,10 @@ export default tseslint.config(
     },
   },
   {
+    files: ["public/*.js"],
+    languageOptions: { globals: globals.browser },
+  },
+  {
     files: ["*.config.{js,ts}"],
     languageOptions: { globals: globals.node },
   },

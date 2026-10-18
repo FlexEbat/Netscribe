@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ApiError, listDevices, listScans, startScan, type Device, type Scan } from "@/api/client"
 import { openEvents, type ScanProgress } from "@/api/events"
 import { useSession } from "@/api/session"
@@ -32,6 +32,7 @@ export function Inventory() {
   const canWrite =
     session.status === "signedIn" && can(session.session.permissions, "devices:write")
 
+  const searchRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
   const [state, setState] = useState<State>({ status: "loading" })
@@ -40,6 +41,24 @@ export function Inventory() {
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [starting, setStarting] = useState(false)
   const [scanError, setScanError] = useState("")
+
+  // "/" jumps to the search field, unless the user is already typing somewhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return
+      const target = e.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
+      ) {
+        return
+      }
+      e.preventDefault()
+      searchRef.current?.focus()
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -120,8 +139,10 @@ export function Inventory() {
       />
       <div className="flex flex-wrap gap-3">
         <Input
+          ref={searchRef}
           type="search"
           aria-label="Search devices"
+          aria-keyshortcuts="/"
           placeholder="Search by IP, MAC, hostname or vendor"
           className="max-w-sm"
           value={search}
