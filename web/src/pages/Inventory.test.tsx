@@ -210,3 +210,38 @@ describe("Inventory", () => {
     expect(source.closed).toBe(true)
   })
 })
+
+describe("Inventory keyboard and layout", () => {
+  it("focuses the search field when / is pressed", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    await userEvent.keyboard("/")
+    expect(screen.getByRole("searchbox", { name: "Search devices" })).toHaveFocus()
+  })
+
+  it("types / into the search field instead of refocusing it", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    const field = screen.getByRole("searchbox", { name: "Search devices" })
+    await userEvent.click(field)
+    await userEvent.keyboard("a/b")
+    expect(field).toHaveValue("a/b")
+  })
+
+  it("does not steal / from the status filter", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    const filter = screen.getByRole("combobox", { name: "Filter by status" })
+    filter.focus()
+    await userEvent.keyboard("/")
+    expect(filter).toHaveFocus()
+  })
+
+  it("opens the navigation in a sheet behind the menu button", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    await userEvent.click(screen.getByRole("button", { name: "Open navigation" }))
+    const sheet = await screen.findByRole("dialog", { name: "Navigation" })
+    expect(within(sheet).getByRole("link", { name: "Services" })).toBeInTheDocument()
+  })
+})

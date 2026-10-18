@@ -7,10 +7,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { User } from "@/lib/permissions"
+import { parseChoice, setTheme, useTheme } from "@/lib/theme"
 
 interface UserMenuProps {
   user: User
@@ -18,6 +21,7 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ user, onSignOut }: UserMenuProps) {
+  const { choice } = useTheme()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -38,6 +42,14 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
             Account
           </Link>
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">Theme</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={choice} onValueChange={(v) => setTheme(parseChoice(v))}>
+          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSignOut}>
           <LogOut aria-hidden="true" className="size-4" />
           Sign out
