@@ -57,7 +57,7 @@ func rr(name []byte, typ uint16, data []byte) []byte {
 // response builds an mDNS answer packet that holds the given records.
 func response(records ...[]byte) []byte {
 	b := make([]byte, 12)
-	b[2] = 0x84 // a response, authoritative
+	b[2] = 0x84                                             // a response, authoritative
 	binary.BigEndian.PutUint16(b[6:], uint16(len(records))) //nolint:gosec // a test packet holds a few records
 	for _, r := range records {
 		b = append(b, r...)
