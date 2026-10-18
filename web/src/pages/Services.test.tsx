@@ -75,7 +75,7 @@ describe("Services page", () => {
     )
     const user = userEvent.setup()
     await screen.findByRole("table")
-    await user.type(screen.getByLabelText("Filter by service name"), "http")
+    await user.type(screen.getByLabelText("Filter by service name or banner"), "http")
     const rows = within(screen.getByRole("table")).getAllByRole("row")
     expect(rows).toHaveLength(3) // the header, https and http-alt
     expect(screen.queryByText("ssh")).not.toBeInTheDocument()
@@ -85,7 +85,7 @@ describe("Services page", () => {
     setup([service(1, 1, 22, "ssh")], [device(1, "192.168.1.1", "gateway")])
     const user = userEvent.setup()
     await screen.findByRole("table")
-    await user.type(screen.getByLabelText("Filter by service name"), "smtp")
+    await user.type(screen.getByLabelText("Filter by service name or banner"), "smtp")
     expect(screen.getByText("No service matches the filter.")).toBeInTheDocument()
   })
 

@@ -109,7 +109,8 @@ describe("DevicePanel", () => {
     expect(within(rows[1]!).getByText("22")).toBeInTheDocument()
     expect(within(rows[1]!).getByText("tcp")).toBeInTheDocument()
     expect(within(rows[2]!).getByText("https")).toBeInTheDocument()
-    expect(within(rows[3]!).getByText("–")).toBeInTheDocument()
+    // A service without a name and without a banner shows a dash in both columns.
+    expect(within(rows[3]!).getAllByText("–")).toHaveLength(2)
   })
 
   it("says so when no port is open", async () => {
