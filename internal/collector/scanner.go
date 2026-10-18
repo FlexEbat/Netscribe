@@ -187,7 +187,7 @@ func (s *Scanner) progress(scanID int64, stage string, done int) {
 
 // begin takes the single scan slot and records the new scan. The caller releases the
 // slot with s.busy.Store(false) once the scan has ended.
-func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
+func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix, withNmap bool) (model.Scan, error) {
 	if len(targets) == 0 {
 		return model.Scan{}, ErrNoTargets
 	}
@@ -200,6 +200,9 @@ func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan
 		return model.Scan{}, fmt.Errorf("start scan: %w", err)
 	}
 	s.scanCfg = s.config()
+	if withNmap {
+		s.scanCfg.Discovery.Nmap = true // for this scan only
+	}
 	s.log.Info("scan started", "scan", scan.ID, "target", scan.Target)
 	s.publish("scan.started", scan)
 	return scan, nil
@@ -209,7 +212,7 @@ func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan
 // outcome: when it fails, or the scan is canceled before the result is stored, the
 // scan ends as failed and the device state stays as it was.
 func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
-	scan, err := s.begin(ctx, targets)
+	scan, err := s.begin(ctx, targets, false)
 	if err != nil {
 		return model.Scan{}, err
 	}
@@ -220,7 +223,16 @@ func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, 
 // Start records the scan and returns it while the scan continues in the background
 // until it ends or ctx is canceled. ErrBusy means a scan is already running.
 func (s *Scanner) Start(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
-	scan, err := s.begin(ctx, targets)
+	return s.start(ctx, targets, false)
+}
+
+// StartWithNmap is Start with nmap switched on for this scan, whatever discovery.nmap says.
+func (s *Scanner) StartWithNmap(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
+	return s.start(ctx, targets, true)
+}
+
+func (s *Scanner) start(ctx context.Context, targets []netip.Prefix, withNmap bool) (model.Scan, error) {
+	scan, err := s.begin(ctx, targets, withNmap)
 	if err != nil {
 		return model.Scan{}, err
 	}
@@ -373,7 +385,7 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 	}
 	fillVendors(res.Devices)
 	if s.classifier != nil {
-		s.askNmap(ctx, targets, devices, res.Devices)
+		res.Devices = append(res.Devices, s.askNmap(ctx, targets, devices, res.Devices)...)
 		s.classifier.Apply(res.Devices, s.facts)
 	}
 	collect(s.late)
@@ -382,9 +394,9 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 
 // askNmap runs nmap on the devices that no other source could type, before the
 // classifier looks at what it guessed. It does nothing unless discovery.nmap is on.
-func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices []model.Device, inputs []model.DeviceInput) {
+func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices []model.Device, inputs []model.DeviceInput) []model.DeviceInput {
 	if s.nmap == nil || !s.scanCfg.Discovery.Nmap {
-		return
+		return nil
 	}
 	untyped := map[string]bool{}
 	for _, k := range s.classifier.Untyped(inputs, s.facts) {
@@ -397,11 +409,24 @@ func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices [
 		}
 	}
 	if len(ask) == 0 {
-		return
+		return nil
 	}
-	if _, err := s.nmap.Collect(ctx, Input{Targets: targets, Devices: ask, Config: s.scanCfg}); err != nil && ctx.Err() == nil {
-		s.log.Warn("collector failed", "collector", s.nmap.Name(), "err", err)
+	out, err := s.nmap.Collect(ctx, Input{Targets: targets, Devices: ask, Config: s.scanCfg})
+	if err != nil {
+		if ctx.Err() == nil {
+			s.log.Warn("collector failed", "collector", s.nmap.Name(), "err", err)
+		}
+		return nil
 	}
+	return out.Devices
+}
+
+// NmapState tells whether nmap is switched on and can be found.
+func (s *Scanner) NmapState() NmapState {
+	if s.nmap == nil {
+		return NmapState{Reason: "nmap is not part of this build"}
+	}
+	return s.nmap.State(s.config().Discovery)
 }
 
 // mergeServices adds the services of later to those of base. A service that is in both

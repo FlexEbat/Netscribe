@@ -183,6 +183,12 @@ function Details({ device: d }: { device: Device }) {
           <dd className="break-words">{d.description}</dd>
         </div>
       ) : null}
+      {d.osGuess ? (
+        <div className="contents">
+          <dt className="text-muted-foreground">System (Nmap)</dt>
+          <dd className="break-words">{d.osGuess}</dd>
+        </div>
+      ) : null}
     </dl>
   )
 }

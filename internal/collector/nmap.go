@@ -13,6 +13,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/FlexEbat/Netscribe/internal/config"
+	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
 const (
@@ -42,6 +45,34 @@ type Nmap struct {
 	facts map[string][]string // ip -> "type=router", "os=linux 5.x" of the last Collect
 }
 
+// NmapState tells the panel whether nmap can be used.
+type NmapState struct {
+	// Available is true when the program was found.
+	Available bool `json:"available"`
+	// Enabled is true when discovery.nmap is on, so every scan runs nmap.
+	Enabled bool `json:"enabled"`
+	// Reason says why nmap is not available, empty otherwise.
+	Reason string `json:"reason"`
+}
+
+// State reports whether nmap is on and can be found. It starts no program.
+func (c *Nmap) State(cfg config.DiscoveryConfig) NmapState {
+	st := NmapState{Enabled: cfg.Nmap}
+	file := cfg.NmapPath
+	if file == "" {
+		file = "nmap"
+	}
+	if _, err := c.lookPath(file); err != nil {
+		st.Reason = "nmap was not found"
+		if cfg.NmapPath != "" {
+			st.Reason = "nmap was not found at discovery.nmapPath"
+		}
+		return st
+	}
+	st.Available = true
+	return st
+}
+
 func NewNmap(log *slog.Logger) *Nmap {
 	return &Nmap{log: log, run: runNmap, lookPath: exec.LookPath, facts: map[string][]string{}}
 }
@@ -56,7 +87,8 @@ func (c *Nmap) guess(ip string) []string {
 }
 
 // Collect asks nmap about every device in in.Devices. discovery.nmap off runs nothing.
-// The result is empty: what nmap guessed only helps to classify the devices.
+// The result carries the operating system name of each device nmap had a guess for. The
+// rest of the guess only helps to classify the devices.
 func (c *Nmap) Collect(ctx context.Context, in Input) (Result, error) {
 	if !in.Config.Discovery.Nmap {
 		return Result{}, nil
@@ -77,6 +109,7 @@ func (c *Nmap) Collect(ctx context.Context, in Input) (Result, error) {
 		failures int
 		done     bool
 		found    = map[string][]string{}
+		guesses  = map[string]nmapGuess{}
 		sem      = make(chan struct{}, nmapConcurrency)
 	)
 	stopped := func() bool { mu.Lock(); defer mu.Unlock(); return done }
@@ -99,7 +132,7 @@ loop:
 		go func(ip string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			facts, err := c.ask(ctx, path, ip)
+			guess, err := c.ask(ctx, path, ip)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -117,8 +150,9 @@ loop:
 				return
 			}
 			failures = 0
-			if len(facts) > 0 {
-				found[ip] = facts
+			if len(guess.facts) > 0 {
+				found[ip] = guess.facts
+				guesses[ip] = guess
 			}
 		}(addr.String())
 	}
@@ -129,11 +163,22 @@ loop:
 	c.mu.Lock()
 	c.facts = found
 	c.mu.Unlock()
-	return Result{}, nil
+
+	// The operating system name is stored with the device. The kind comes from the
+	// classifier, which reads the facts.
+	var res Result
+	for _, d := range in.Devices {
+		if g, ok := guesses[d.IP]; ok && g.os != "" {
+			res.Devices = append(res.Devices, model.DeviceInput{
+				Key: model.DeviceKey{MAC: d.MAC, IP: d.IP}, OSGuess: g.os, Source: "nmap",
+			})
+		}
+	}
+	return res, nil
 }
 
 // ask runs nmap on one address and returns what it guessed.
-func (c *Nmap) ask(ctx context.Context, path, ip string) ([]string, error) {
+func (c *Nmap) ask(ctx context.Context, path, ip string) (nmapGuess, error) {
 	rctx, cancel := context.WithTimeout(ctx, nmapHostTimeout)
 	defer cancel()
 	// -O: OS detection. -n: no DNS lookups. -Pn: the device is known to be up, skip the
@@ -142,7 +187,7 @@ func (c *Nmap) ask(ctx context.Context, path, ip string) ([]string, error) {
 	args := []string{"-O", "-n", "-Pn", "--privileged", "--top-ports", "100", "--host-timeout", "60s", "-oX", "-", ip}
 	out, err := c.run(rctx, path, args)
 	if err != nil {
-		return nil, err
+		return nmapGuess{}, err
 	}
 	return parseNmap(out)
 }
@@ -163,15 +208,23 @@ type nmapRun struct {
 	} `xml:"host"`
 }
 
-// parseNmap returns the facts of the best OS guess: its name and the device types of its
-// classes, each with an accuracy of at least nmapMinAccuracy. The text comes from a
-// program that talked to the network, so it is cleaned and cut like any other.
-func parseNmap(b []byte) ([]string, error) {
+// nmapGuess is the best OS guess of one device: the facts for the classifier and the
+// name of the system as nmap wrote it.
+type nmapGuess struct {
+	facts []string
+	os    string
+}
+
+// parseNmap returns the best OS guess: its name and the device types of its classes, each
+// with an accuracy of at least nmapMinAccuracy. The text comes from a program that talked
+// to the network, so it is cleaned and cut like any other.
+func parseNmap(b []byte) (nmapGuess, error) {
 	var run nmapRun
 	if err := xml.NewDecoder(bytes.NewReader(b)).Decode(&run); err != nil {
-		return nil, fmt.Errorf("read nmap output: %w", err)
+		return nmapGuess{}, fmt.Errorf("read nmap output: %w", err)
 	}
 	var out []string
+	var osName string
 	add := func(prefix, v string) {
 		v = strings.ToLower(cutRunes(networkText(v), 100))
 		if v == "" {
@@ -196,6 +249,7 @@ func parseNmap(b []byte) ([]string, error) {
 			continue
 		}
 		m := h.OS.Matches[best]
+		osName = cutRunes(networkText(m.Name), 100)
 		add("os=", m.Name)
 		for _, cl := range m.Classes {
 			if cl.Accuracy >= nmapMinAccuracy {
@@ -204,7 +258,7 @@ func parseNmap(b []byte) ([]string, error) {
 		}
 	}
 	sort.Strings(out)
-	return out, nil
+	return nmapGuess{facts: out, os: osName}, nil
 }
 
 // capped keeps the first max bytes written to it and drops the rest, so a program that

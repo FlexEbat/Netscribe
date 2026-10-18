@@ -130,8 +130,9 @@ Turn it on for one scan from the command line:
 ./netscribe scan --nmap
 ```
 
-or for every scan, including the ones you start in the panel and the scheduled ones, in
-`netscribe.yaml`:
+or for one scan from the panel: when Nmap is found, a box "Identify unknown devices with
+Nmap" appears next to "Run scan". Or turn it on for every scan, including the scheduled
+ones, in `netscribe.yaml`:
 
 ```yaml
 discovery:
@@ -148,8 +149,25 @@ sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip "$(command -v nma
 ```
 
 Without them Nmap fails, Netscribe logs the reason once, skips the stage and finishes the
-scan. The Docker image has no Nmap and drops all capabilities, so this feature needs the
-binary install. The panel has no switch for it: it follows `discovery.nmap`.
+scan.
+
+Nmap's guess of the operating system, for example `Linux 5.3 - 5.4`, is stored with the
+device and shown in its panel as "System (Nmap)". The guess types a device only when Nmap
+names a device type such as `router` or `printer`. A plain Linux or Windows host is
+`general purpose` for Nmap, and Netscribe leaves its kind alone.
+
+### Nmap in Docker
+
+The default image has no Nmap. Use the variant, which has Nmap with file capabilities, and
+the matching compose file instead of `compose.yaml`:
+
+```sh
+docker compose -f deploy/compose.nmap.yaml up --build -d
+```
+
+It gives the container `NET_RAW`, `NET_ADMIN` and `NET_BIND_SERVICE` back and does not set
+`no-new-privileges`, because the kernel ignores file capabilities when that option is on.
+The user is still not root and the root filesystem is still read-only.
 
 ## TLS and reverse proxy
 

@@ -72,3 +72,43 @@ func TestLabScanFindsTheLabContainers(t *testing.T) {
 		}
 	}
 }
+
+// TestLabScanWithNmapStoresTheOSGuess needs the lab and an nmap that can open raw sockets
+// as the user who runs the test (setcap on the binary). Set NETSCRIBE_LAB_NMAP=1 to run it.
+func TestLabScanWithNmapStoresTheOSGuess(t *testing.T) {
+	if os.Getenv("NETSCRIBE_LAB_NMAP") != "1" {
+		t.Skip("set NETSCRIBE_LAB_NMAP=1 to run it against a real nmap")
+	}
+	dir := t.TempDir()
+	db := filepath.Join(dir, "lab.db")
+	cfgPath := filepath.Join(dir, "netscribe.yaml")
+	body := fmt.Sprintf("database: %s\nscan:\n  targets: [172.30.0.0/24]\nsnmp:\n  communities: [public]\n  timeout: 2s\ndocker:\n  enabled: false\n", db)
+	if err := os.WriteFile(cfgPath, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := run([]string{"scan", "--nmap", "--config", cfgPath}, streams{in: strings.NewReader(""), out: &out, err: &errOut}); code != 0 {
+		t.Fatalf("scan exited with %d: %s", code, errOut.String())
+	}
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	devices, err := st.ListDevices(context.Background(), store.DeviceFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var guesses []string
+	for _, d := range devices {
+		if d.OSGuess != "" {
+			guesses = append(guesses, d.IP+"="+d.OSGuess)
+		}
+	}
+	for _, d := range devices {
+		if (d.IP == "172.30.0.11" || d.IP == "172.30.0.12") && !strings.Contains(strings.ToLower(d.OSGuess), "linux") {
+			t.Errorf("%s: OS guess = %q, want a Linux guess from nmap (guesses: %v, log: %s)", d.IP, d.OSGuess, guesses, errOut.String())
+		}
+	}
+}

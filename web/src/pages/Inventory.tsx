@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ApiError, listDevices, listScans, startScan, type Device, type Scan } from "@/api/client"
+import {
+  ApiError,
+  getNmap,
+  listDevices,
+  listScans,
+  startScan,
+  type Device,
+  type NmapState,
+  type Scan,
+} from "@/api/client"
 import { openEvents, type ScanProgress } from "@/api/events"
 import { useSession } from "@/api/session"
 import { AddDeviceDialog } from "@/components/AddDeviceDialog"
@@ -33,6 +42,8 @@ export function Inventory() {
     session.status === "signedIn" && can(session.session.permissions, "devices:write")
 
   const searchRef = useRef<HTMLInputElement>(null)
+  const [nmap, setNmap] = useState<NmapState | null>(null)
+  const [useNmap, setUseNmap] = useState(false)
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<Filter>("all")
   const [state, setState] = useState<State>({ status: "loading" })
@@ -41,6 +52,18 @@ export function Inventory() {
   const [progress, setProgress] = useState<ScanProgress | null>(null)
   const [starting, setStarting] = useState(false)
   const [scanError, setScanError] = useState("")
+
+  // Whether nmap can be used decides if the scan bar offers it. A failure hides the option.
+  useEffect(() => {
+    if (!canRun) return
+    let cancelled = false
+    getNmap()
+      .then((state) => !cancelled && setNmap(state))
+      .catch(() => !cancelled && setNmap(null))
+    return () => {
+      cancelled = true
+    }
+  }, [canRun])
 
   // "/" jumps to the search field, unless the user is already typing somewhere.
   useEffect(() => {
@@ -107,19 +130,21 @@ export function Inventory() {
     setScanError("")
     setStarting(true)
     try {
-      setScan(await startScan())
+      setScan(await startScan(useNmap))
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
         setScanError("A scan is already running.")
       } else if (error instanceof ApiError && error.status === 400) {
-        setScanError("No scan targets are configured.")
+        setScanError(
+          useNmap ? "Nmap is not available on the server." : "No scan targets are configured.",
+        )
       } else {
         setScanError("The scan could not be started.")
       }
     } finally {
       setStarting(false)
     }
-  }, [])
+  }, [useNmap])
 
   const filtering = search.trim() !== "" || filter !== "all"
 
@@ -136,6 +161,9 @@ export function Inventory() {
         starting={starting}
         error={scanError}
         onStart={() => void run()}
+        nmap={nmap}
+        useNmap={useNmap}
+        onUseNmapChange={setUseNmap}
       />
       <div className="flex flex-wrap gap-3">
         <Input

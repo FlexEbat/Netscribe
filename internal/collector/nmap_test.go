@@ -78,8 +78,11 @@ func TestParseNmapTakesTheBestGuessOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "os=mikrotik routeros 7.2 - 7.5,type=general purpose,type=router"
-	if strings.Join(got, ",") != want {
-		t.Errorf("facts = %v, want %q", got, want)
+	if strings.Join(got.facts, ",") != want {
+		t.Errorf("facts = %v, want %q", got.facts, want)
+	}
+	if got.os != "MikroTik RouterOS 7.2 - 7.5" {
+		t.Errorf("os = %q, want the name as nmap wrote it", got.os)
 	}
 }
 
@@ -88,8 +91,8 @@ func TestParseNmapIgnoresGuessesBelowTheAccuracyLimit(t *testing.T) {
 	low = strings.ReplaceAll(low, `accuracy="90"`, `accuracy="60"`)
 	low = strings.ReplaceAll(low, `accuracy="88"`, `accuracy="60"`)
 	got, err := parseNmap([]byte(low))
-	if err != nil || len(got) != 0 {
-		t.Errorf("facts = %v, err = %v, want nothing from weak guesses", got, err)
+	if err != nil || len(got.facts) != 0 || got.os != "" {
+		t.Errorf("guess = %+v, err = %v, want nothing from weak guesses", got, err)
 	}
 }
 
@@ -107,7 +110,7 @@ func TestParseNmapRefusesBrokenAndHostileText(t *testing.T) {
 		// A control character that XML cannot hold is refused as a whole, which is fine.
 		return
 	}
-	for _, f := range got {
+	for _, f := range append(got.facts, got.os) {
 		if len([]rune(f)) > 110 || strings.ContainsAny(f, "\t\x01") {
 			t.Errorf("fact %q was not cleaned or cut", f)
 		}
@@ -305,14 +308,16 @@ func TestTheScannerAsksNmapOnlyAboutUntypedDevices(t *testing.T) {
 		{Key: model.DeviceKey{MAC: devices[2].MAC, IP: devices[2].IP}, Source: "arp"},
 	}
 
-	s.askNmap(context.Background(), nil, devices, inputs)
+	out := s.askNmap(context.Background(), nil, devices, inputs)
 	if f.count() != 1 || f.calls[0][len(f.calls[0])-1] != "192.168.1.2" {
 		t.Errorf("nmap runs = %v, want one run for 192.168.1.2 only", f.calls)
 	}
+	if len(out) != 1 || out[0].Key.IP != "192.168.1.2" || out[0].OSGuess == "" || out[0].Source != "nmap" {
+		t.Errorf("inputs = %+v, want the OS guess of the one device that was asked", out)
+	}
 
 	s.scanCfg.Discovery.Nmap = false
-	s.askNmap(context.Background(), nil, devices, inputs)
-	if f.count() != 1 {
+	if out := s.askNmap(context.Background(), nil, devices, inputs); len(out) != 0 || f.count() != 1 {
 		t.Errorf("nmap ran with the switch off")
 	}
 }

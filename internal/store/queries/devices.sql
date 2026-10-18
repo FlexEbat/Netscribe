@@ -11,13 +11,13 @@ SELECT * FROM devices WHERE mac = '' AND ip = ?;
 SELECT * FROM devices WHERE ip = ? ORDER BY online DESC, last_seen_at DESC, id DESC LIMIT 1;
 
 -- name: InsertDevice :one
-INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+INSERT INTO devices (mac, ip, hostname, vendor, kind, description, os_guess, source, online, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
 RETURNING id;
 
 -- name: UpdateDeviceFromScan :exec
 UPDATE devices
-SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, online = 1, last_seen_at = ?
+SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, os_guess = ?, online = 1, last_seen_at = ?
 WHERE id = ?;
 
 -- name: ListDevices :many
