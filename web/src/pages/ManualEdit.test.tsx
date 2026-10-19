@@ -52,6 +52,7 @@ function device(id: number, overrides: Partial<Device> = {}): Device {
     manual: true,
     label: `Device ${id}`,
     notes: "",
+    osGuess: "",
     kindLocked: false,
     version: 3,
     firstSeenAt: "2026-10-09T12:00:00.000Z",

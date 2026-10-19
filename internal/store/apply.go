@@ -161,6 +161,10 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 	}
 	// Names and descriptions come from the network, so a third party controls them.
 	in.Hostname, in.Vendor, in.Description = cleanText(in.Hostname), cleanText(in.Vendor), cleanText(in.Description)
+	in.OSGuess = cleanText(in.OSGuess)
+	if utf8.RuneCountInString(in.OSGuess) > maxOSGuessRunes {
+		in.OSGuess = string([]rune(in.OSGuess)[:maxOSGuessRunes])
+	}
 	kind := string(in.Kind)
 	if kind == "" {
 		kind = string(model.KindUnknown)
@@ -173,7 +177,7 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 	if !found {
 		id, err := q.InsertDevice(ctx, dbgen.InsertDeviceParams{
 			Mac: mac, Ip: ip, Hostname: in.Hostname, Vendor: in.Vendor, Kind: kind,
-			Description: in.Description, Source: in.Source, FirstSeenAt: ts, LastSeenAt: ts,
+			Description: in.Description, OsGuess: in.OSGuess, Source: in.Source, FirstSeenAt: ts, LastSeenAt: ts,
 		})
 		if err != nil {
 			return 0, fmt.Errorf("insert device: %w", err)
@@ -197,6 +201,7 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 		Kind:        kind,
 		Source:      betterSource(cur.Source, in.Source),
 		Description: firstNonEmpty(in.Description, cur.Description),
+		OsGuess:     firstNonEmpty(in.OSGuess, cur.OsGuess),
 		LastSeenAt:  ts,
 		ID:          cur.ID,
 	})
@@ -250,6 +255,9 @@ func cleanText(s string) string {
 
 // maxBannerRunes is the longest service banner that is stored.
 const maxBannerRunes = 200
+
+// maxOSGuessRunes is the longest operating system guess that is stored.
+const maxOSGuessRunes = 100
 
 // cleanBanner cleans a banner like any other text from the network and cuts it shorter.
 func cleanBanner(s string) string {

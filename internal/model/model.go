@@ -27,17 +27,20 @@ type Device struct {
 	Vendor      string     `json:"vendor"`
 	Kind        DeviceKind `json:"kind"`
 	Description string     `json:"description"`
-	Source      string     `json:"source"`
-	Online      bool       `json:"online"`
-	Manual      bool       `json:"manual"`
-	Label       string     `json:"label"`
-	Notes       string     `json:"notes"`
-	KindLocked  bool       `json:"kindLocked"`
-	Version     int64      `json:"version"`
-	FirstSeenAt time.Time  `json:"firstSeenAt"`
-	LastSeenAt  time.Time  `json:"lastSeenAt"`
-	X           *float64   `json:"x"`
-	Y           *float64   `json:"y"`
+	// OSGuess is the system nmap guessed, for example "Linux 5.3 - 5.4". It is empty when
+	// nmap never ran for the device or had no guess.
+	OSGuess     string    `json:"osGuess"`
+	Source      string    `json:"source"`
+	Online      bool      `json:"online"`
+	Manual      bool      `json:"manual"`
+	Label       string    `json:"label"`
+	Notes       string    `json:"notes"`
+	KindLocked  bool      `json:"kindLocked"`
+	Version     int64     `json:"version"`
+	FirstSeenAt time.Time `json:"firstSeenAt"`
+	LastSeenAt  time.Time `json:"lastSeenAt"`
+	X           *float64  `json:"x"`
+	Y           *float64  `json:"y"`
 }
 
 type Interface struct {
@@ -212,6 +215,7 @@ type DeviceInput struct {
 	Hostname    string
 	Vendor      string
 	Description string
+	OSGuess     string // the system nmap guessed, kept when a later input has none
 	Kind        DeviceKind
 	Source      string
 }

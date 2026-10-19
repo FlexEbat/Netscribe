@@ -171,7 +171,7 @@ func serve(args []string, e streams) error {
 	scanner.SetEvents(hub)
 	router := api.NewRouter(api.Options{
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
-		Containers: db, Docker: scanner.Docker(),
+		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		ExportOptions:  func() render.Options { return render.Options{ChromePath: live.Current().Export.ChromePath} },
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, config: live.Current},
 		TrustedProxies: proxies, Logger: logger,
@@ -222,6 +222,15 @@ func (s scanStarter) Start() (model.Scan, error) {
 		return model.Scan{}, err
 	}
 	return s.scanner.Start(s.ctx, targets)
+}
+
+// StartWithNmap is Start with nmap switched on for this scan.
+func (s scanStarter) StartWithNmap() (model.Scan, error) {
+	targets, err := configuredTargets(s.config())
+	if err != nil {
+		return model.Scan{}, err
+	}
+	return s.scanner.StartWithNmap(s.ctx, targets)
 }
 
 // configApplier takes a reloaded config. *collector.Scanner satisfies it.

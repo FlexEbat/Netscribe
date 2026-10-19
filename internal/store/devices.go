@@ -145,6 +145,7 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		Vendor:      r.Vendor,
 		Kind:        model.DeviceKind(r.Kind),
 		Description: r.Description,
+		OSGuess:     r.OsGuess,
 		Source:      r.Source,
 		Online:      r.Online != 0,
 		Manual:      r.Manual != 0,

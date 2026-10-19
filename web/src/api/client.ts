@@ -106,6 +106,8 @@ export interface Device {
   vendor: string
   kind: DeviceKind
   description: string
+  /** The system nmap guessed, such as "Linux 5.3 - 5.4". Empty when nmap never ran. */
+  osGuess: string
   source: string
   online: boolean
   manual: boolean
@@ -151,8 +153,21 @@ export async function listScans(): Promise<Scan[]> {
   return body.scans
 }
 
-export function startScan(): Promise<Scan> {
-  return api<Scan>("POST", "/api/scans")
+/** Starts a scan. With nmap true the scan runs nmap for devices nothing else could type. */
+export function startScan(nmap = false): Promise<Scan> {
+  return api<Scan>("POST", "/api/scans", nmap ? { body: { nmap: true } } : {})
+}
+
+export interface NmapState {
+  /** The program was found. */
+  available: boolean
+  /** discovery.nmap is on, so every scan runs nmap. */
+  enabled: boolean
+  reason: string
+}
+
+export function getNmap(): Promise<NmapState> {
+  return api<NmapState>("GET", "/api/nmap")
 }
 
 export interface Link {
