@@ -321,3 +321,65 @@ func TestTheScannerAsksNmapOnlyAboutUntypedDevices(t *testing.T) {
 		t.Errorf("nmap ran with the switch off")
 	}
 }
+
+func TestNmapStateTellsWhetherTheProgramIsThere(t *testing.T) {
+	found := newFakeNmapCollector(&fakeNmap{}, "/usr/bin/nmap")
+	if st := found.State(config.DiscoveryConfig{}); !st.Available || st.Enabled || st.Reason != "" {
+		t.Errorf("state = %+v, want available and not enabled", st)
+	}
+	if st := found.State(config.DiscoveryConfig{Nmap: true}); !st.Available || !st.Enabled {
+		t.Errorf("state = %+v, want available and enabled", st)
+	}
+
+	missing := newFakeNmapCollector(&fakeNmap{}, "")
+	st := missing.State(config.DiscoveryConfig{})
+	if st.Available || st.Reason == "" {
+		t.Errorf("state = %+v, want a reason when nmap is not found", st)
+	}
+	st = missing.State(config.DiscoveryConfig{NmapPath: "/opt/nmap"})
+	if st.Available || !strings.Contains(st.Reason, "nmapPath") {
+		t.Errorf("state = %+v, want the reason to name discovery.nmapPath", st)
+	}
+}
+
+func TestACollectResultCarriesTheOSNameOfEachDevice(t *testing.T) {
+	f := &fakeNmap{}
+	c := newFakeNmapCollector(f, "/usr/bin/nmap")
+	res, err := c.Collect(context.Background(), nmapInput(true, "", "192.168.1.9"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Devices) != 1 || res.Devices[0].OSGuess != "MikroTik RouterOS 7.2 - 7.5" || res.Devices[0].Source != "nmap" {
+		t.Errorf("devices = %+v, want the OS name from the best guess", res.Devices)
+	}
+	if res.Devices[0].Hostname != "" || res.Devices[0].Description != "" || res.Devices[0].Kind != "" {
+		t.Errorf("device = %+v, nmap must not set anything but the OS guess", res.Devices[0])
+	}
+}
+
+func TestScannerStartWithNmapSwitchesItOnForThatScanOnly(t *testing.T) {
+	st := &fakeStore{}
+	spy := &configSpy{}
+	s := newTestScanner(st, &fakeCollector{}, &fakeResolver{})
+	s.enrichers = []Collector{spy}
+	s.cfg = scheduleConfig(0, "192.168.1.0/24")
+	targets, _ := lanTargets(config.Config{})
+
+	if _, err := s.begin(context.Background(), targets, true); err != nil {
+		t.Fatal(err)
+	}
+	if !s.scanCfg.Discovery.Nmap {
+		t.Error("nmap is off for a scan that asked for it")
+	}
+	s.busy.Store(false)
+	if _, err := s.begin(context.Background(), targets, false); err != nil {
+		t.Fatal(err)
+	}
+	if s.scanCfg.Discovery.Nmap {
+		t.Error("nmap stayed on for the next scan")
+	}
+	s.busy.Store(false)
+	if s.config().Discovery.Nmap {
+		t.Error("the config in force was changed by a one-scan switch")
+	}
+}

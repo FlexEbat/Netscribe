@@ -430,3 +430,36 @@ func TestApplyMDNSNameOnlyFillsAnEmptyHostname(t *testing.T) {
 		t.Errorf("hostname = %q, the mDNS name must fill an empty one", got)
 	}
 }
+
+func TestApplyOSGuessIsStoredCutAndKeptUntilAnotherOneComes(t *testing.T) {
+	s := newTestStore(t)
+	guess := model.DeviceInput{Key: keyA, OSGuess: "Linux 5.3 - 5.4\x00", Source: "nmap"}
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP), guess}})
+	if got := byMAC(t, s, keyA.MAC).OSGuess; got != "Linux 5.3 - 5.4" {
+		t.Fatalf("OS guess = %q, want it stored without control characters", got)
+	}
+
+	// A scan without nmap does not erase what is known.
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
+	if got := byMAC(t, s, keyA.MAC).OSGuess; got != "Linux 5.3 - 5.4" {
+		t.Errorf("OS guess = %q, want it kept", got)
+	}
+
+	// A new guess replaces it, and a long one is cut.
+	guess.OSGuess = strings.Repeat("é", 150)
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP), guess}})
+	if got := byMAC(t, s, keyA.MAC).OSGuess; utf8.RuneCountInString(got) != 100 {
+		t.Errorf("OS guess has %d characters, want it cut to 100", utf8.RuneCountInString(got))
+	}
+}
+
+func TestApplyNmapSourceDoesNotTakeOverTheDevice(t *testing.T) {
+	s := newTestStore(t)
+	arp := dev(keyA.MAC, keyA.IP)
+	arp.Hostname = "gateway"
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{arp, {Key: keyA, OSGuess: "Linux 5.4", Source: "nmap"}}})
+	d := byMAC(t, s, keyA.MAC)
+	if d.Source != "arp" || d.Hostname != "gateway" {
+		t.Errorf("device = %+v, the nmap input must not change the source or the name", d)
+	}
+}

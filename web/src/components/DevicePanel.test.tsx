@@ -134,3 +134,17 @@ describe("DevicePanel service banner", () => {
     expect(within(screen.getByRole("table")).getByText("nginx/1.25.3")).toBeInTheDocument()
   })
 })
+
+describe("DevicePanel OS guess", () => {
+  it("shows what nmap guessed", async () => {
+    open({ device: { ...device, osGuess: "Linux 5.3 - 5.4" }, interfaces: [], services: [] })
+    expect(await screen.findByText("System (Nmap)")).toBeInTheDocument()
+    expect(screen.getByText("Linux 5.3 - 5.4")).toBeInTheDocument()
+  })
+
+  it("hides the row when there is no guess", async () => {
+    open({ device: { ...device, osGuess: "" }, interfaces: [], services: [] })
+    await screen.findByRole("tab", { name: /Services/ })
+    expect(screen.queryByText("System (Nmap)")).not.toBeInTheDocument()
+  })
+})
