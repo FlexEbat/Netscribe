@@ -531,3 +531,91 @@ func TestApplyIdentityOfAMissingDevice(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
+
+// feedOf returns the summaries of the changes of the last completed scan.
+func feedOf(t *testing.T, s *Store) []string {
+	t.Helper()
+	_, changes, ok, err := s.LatestChanges(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("latest changes: ok=%v err=%v", ok, err)
+	}
+	var out []string
+	for _, c := range changes {
+		out = append(out, c.Summary)
+	}
+	return out
+}
+
+func TestApplyIdentityWritesTheChangeToTheFeedOfTheLastScan(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices()}) // the baseline writes no changes
+	if got := feedOf(t, s); len(got) != 0 {
+		t.Fatalf("feed = %v, want it empty after the first scan", got)
+	}
+	d := byMAC(t, s, keyA.MAC)
+
+	if _, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindRouter); err != nil {
+		t.Fatal(err)
+	}
+	feed := feedOf(t, s)
+	if len(feed) != 1 || !strings.HasPrefix(feed[0], "Nmap: ") ||
+		!strings.Contains(feed[0], "kind unknown -> router") || !strings.Contains(feed[0], "system - -> Linux 5.4") {
+		t.Fatalf("feed = %v, want one Nmap entry with the new kind and system", feed)
+	}
+
+	// The same answer again changes nothing, so it adds nothing to the feed.
+	if _, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindRouter); err != nil {
+		t.Fatal(err)
+	}
+	if got := feedOf(t, s); len(got) != 1 {
+		t.Errorf("feed = %v, an answer that changes nothing must not be written", got)
+	}
+}
+
+func TestApplyIdentityOnlyWritesWhatChanged(t *testing.T) {
+	s := newTestStore(t)
+	typed := dev(keyA.MAC, keyA.IP)
+	typed.Kind = model.KindSwitch
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{typed, dev(keyB.MAC, keyB.IP)}})
+	a := byMAC(t, s, keyA.MAC)
+
+	// The kind is known, so only the system changes.
+	if _, err := s.ApplyIdentity(context.Background(), a.ID, "Cisco IOS", model.KindRouter); err != nil {
+		t.Fatal(err)
+	}
+	feed := feedOf(t, s)
+	if len(feed) != 1 || strings.Contains(feed[0], "kind") || !strings.Contains(feed[0], "system - -> Cisco IOS") {
+		t.Errorf("feed = %v, want a change of the system only", feed)
+	}
+}
+
+func TestApplyIdentityWithNoCompletedScanWritesNoFeed(t *testing.T) {
+	s := newTestStore(t)
+	d, err := s.CreateDevice(context.Background(), model.ManualDevice{IP: "192.168.1.50"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ApplyIdentity(context.Background(), d.ID, "Linux", model.KindRouter)
+	if err != nil {
+		t.Fatalf("err = %v, want the identity stored without a feed", err)
+	}
+	if got.OSGuess != "Linux" {
+		t.Errorf("device = %+v, want the guess stored", got)
+	}
+	changes, err := s.ListChanges(context.Background(), 10)
+	if err != nil || len(changes) != 0 {
+		t.Errorf("changes = %v, err = %v, want none", changes, err)
+	}
+}
+
+func TestAScanReportsAChangedSystemInTheFeed(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{
+		dev(keyA.MAC, keyA.IP), {Key: keyA, OSGuess: "Linux 5.4", Source: "nmap"},
+	}})
+	feed := feedOf(t, s)
+	if len(feed) != 1 || !strings.Contains(feed[0], "system - -> Linux 5.4") || strings.HasPrefix(feed[0], "Nmap: ") {
+		t.Errorf("feed = %v, want the scan to report the new system", feed)
+	}
+}
