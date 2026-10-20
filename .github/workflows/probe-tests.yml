@@ -18,7 +18,11 @@ jobs:
       - name: Tests with their failures in annotations
         run: |
           set +e
-          go test -count=1 ./... 2>&1 | tee /tmp/t.txt
-          grep -E "^(--- FAIL|FAIL|panic)|_test.go:[0-9]+" /tmp/t.txt | head -c 3500 | tr '\n' '|' > /tmp/f.txt
-          echo "::notice title=go test failures::$(cat /tmp/f.txt)"
+          go vet ./... > /tmp/v.txt 2>&1
+          echo "::notice title=vet::exit $? $(head -c 800 /tmp/v.txt | tr '\n' '|')"
+          gofmt -l cmd internal > /tmp/g.txt 2>&1
+          echo "::notice title=gofmt::$(head -c 400 /tmp/g.txt | tr '\n' '|') end"
+          go test -race -count=1 ./... 2>&1 | tee /tmp/t.txt
+          grep -E "^(--- FAIL|FAIL|panic|WARNING: DATA RACE)|_test.go:[0-9]+|^ok" /tmp/t.txt | head -c 3500 | tr '\n' '|' > /tmp/f.txt
+          echo "::notice title=go test race::$(cat /tmp/f.txt) end"
           exit 0
