@@ -10,6 +10,31 @@ import (
 	"database/sql"
 )
 
+const applyDeviceIdentity = `-- name: ApplyDeviceIdentity :execrows
+UPDATE devices SET
+  os_guess = CASE WHEN ?1 <> '' THEN ?1 ELSE os_guess END,
+  kind = CASE
+    WHEN kind = 'unknown' AND kind_locked = 0 AND ?2 <> '' AND ?2 <> 'unknown'
+    THEN ?2 ELSE kind END
+WHERE id = ?3
+`
+
+type ApplyDeviceIdentityParams struct {
+	OsGuess interface{}
+	Kind    interface{}
+	ID      int64
+}
+
+// An OS guess replaces the old one when it is not empty. The kind changes only while it
+// is unknown and was not set by hand.
+func (q *Queries) ApplyDeviceIdentity(ctx context.Context, arg ApplyDeviceIdentityParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, applyDeviceIdentity, arg.OsGuess, arg.Kind, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteDevice = `-- name: DeleteDevice :execrows
 DELETE FROM devices WHERE id = ?
 `

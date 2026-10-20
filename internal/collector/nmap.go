@@ -40,6 +40,9 @@ type Nmap struct {
 	log      *slog.Logger
 	run      nmapRunner
 	lookPath func(file string) (string, error)
+	// ports returns the open TCP ports of a device. OS detection needs an open and a
+	// closed port, so a device with no open port is not asked. Nil asks every device.
+	ports func(ip string) []int
 
 	mu    sync.Mutex
 	facts map[string][]string // ip -> "type=router", "os=linux 5.x" of the last Collect
@@ -53,6 +56,49 @@ type NmapState struct {
 	Enabled bool `json:"enabled"`
 	// Reason says why nmap is not available, empty otherwise.
 	Reason string `json:"reason"`
+}
+
+var (
+	// ErrNmapUnavailable is returned when nmap cannot be found.
+	ErrNmapUnavailable = errors.New("nmap is not available")
+	// ErrNoAddress is returned for a device that has no IPv4 address nmap could be asked about.
+	ErrNoAddress = errors.New("the device has no IPv4 address")
+)
+
+// resolve returns the program to run: discovery.nmapPath, or nmap from PATH.
+func (c *Nmap) resolve(cfg config.DiscoveryConfig) (string, error) {
+	if cfg.NmapPath != "" {
+		return cfg.NmapPath, nil
+	}
+	found, err := c.lookPath("nmap")
+	if err != nil {
+		return "", ErrNmapUnavailable
+	}
+	return found, nil
+}
+
+// NmapIdentity is what nmap said about one device.
+type NmapIdentity struct {
+	OS    string   // the system name, empty when nmap had no guess
+	Facts []string // for the classifier
+}
+
+// Identify asks nmap about one device. It runs whatever discovery.nmap says, because the
+// person asked for this device by hand.
+func (c *Nmap) Identify(ctx context.Context, cfg config.DiscoveryConfig, ip string) (NmapIdentity, error) {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is4() {
+		return NmapIdentity{}, ErrNoAddress
+	}
+	path, err := c.resolve(cfg)
+	if err != nil {
+		return NmapIdentity{}, err
+	}
+	g, err := c.ask(ctx, path, addr.String())
+	if err != nil {
+		return NmapIdentity{}, err
+	}
+	return NmapIdentity{OS: g.os, Facts: g.facts}, nil
 }
 
 // State reports whether nmap is on and can be found. It starts no program.
@@ -93,14 +139,10 @@ func (c *Nmap) Collect(ctx context.Context, in Input) (Result, error) {
 	if !in.Config.Discovery.Nmap {
 		return Result{}, nil
 	}
-	path := in.Config.Discovery.NmapPath
-	if path == "" {
-		found, err := c.lookPath("nmap")
-		if err != nil {
-			c.log.Warn("discovery.nmap is on, but nmap was not found in PATH, set discovery.nmapPath")
-			return Result{}, nil
-		}
-		path = found
+	path, err := c.resolve(in.Config.Discovery)
+	if err != nil {
+		c.log.Warn("discovery.nmap is on, but nmap was not found, set discovery.nmapPath")
+		return Result{}, nil
 	}
 
 	var (
@@ -118,6 +160,9 @@ loop:
 		addr, err := netip.ParseAddr(d.IP)
 		if err != nil || !addr.Is4() {
 			continue // only an IPv4 address that parses is ever passed to nmap
+		}
+		if c.ports != nil && len(c.ports(d.IP)) == 0 {
+			continue // no open port, nmap would wait for a timeout and learn nothing
 		}
 		select {
 		case sem <- struct{}{}:
@@ -201,6 +246,7 @@ type nmapRun struct {
 				Accuracy int    `xml:"accuracy,attr"`
 				Classes  []struct {
 					Type     string `xml:"type,attr"`
+					Family   string `xml:"osfamily,attr"`
 					Accuracy int    `xml:"accuracy,attr"`
 				} `xml:"osclass"`
 			} `xml:"osmatch"`
@@ -254,6 +300,7 @@ func parseNmap(b []byte) (nmapGuess, error) {
 		for _, cl := range m.Classes {
 			if cl.Accuracy >= nmapMinAccuracy {
 				add("type=", cl.Type)
+				add("family=", cl.Family)
 			}
 		}
 	}

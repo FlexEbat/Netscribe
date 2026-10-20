@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
 	dbgen "github.com/FlexEbat/Netscribe/internal/store/db"
@@ -178,4 +179,22 @@ func toLink(r dbgen.Link) (model.Link, error) {
 		ID: r.ID, ADeviceID: r.ADeviceID, APort: r.APort, BDeviceID: r.BDeviceID, BPort: r.BPort,
 		Source: r.Source, LastSeenAt: seen,
 	}, nil
+}
+
+// ApplyIdentity records what nmap found out about one device. A guess that is not empty
+// replaces the old OS guess. The kind changes only while it is unknown and was not set by
+// hand, so a person's choice is never overwritten.
+func (s *Store) ApplyIdentity(ctx context.Context, id int64, osGuess string, kind model.DeviceKind) (model.Device, error) {
+	osGuess = cleanText(osGuess)
+	if utf8.RuneCountInString(osGuess) > maxOSGuessRunes {
+		osGuess = string([]rune(osGuess)[:maxOSGuessRunes])
+	}
+	n, err := s.q.ApplyDeviceIdentity(ctx, dbgen.ApplyDeviceIdentityParams{OsGuess: osGuess, Kind: string(kind), ID: id})
+	if err != nil {
+		return model.Device{}, err
+	}
+	if n == 0 {
+		return model.Device{}, model.ErrNotFound
+	}
+	return s.GetDevice(ctx, id)
 }

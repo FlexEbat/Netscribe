@@ -80,6 +80,9 @@ nmap,type=voip adapter,iot
 nmap,type=media device,iot
 nmap,type=game console,iot
 nmap,type=power-device,iot
+nmap,family=windows,host
+nmap,family=mac os x,host
+nmap,family=android,host
 services,bridge,switch
 services,router,router
 port,9100,printer

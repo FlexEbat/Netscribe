@@ -374,3 +374,20 @@ func TestNmapIsOffByDefault(t *testing.T) {
 		t.Errorf("discovery = %+v, want nmap off", cfg.Discovery)
 	}
 }
+
+func TestNmapScope(t *testing.T) {
+	for _, tc := range []struct {
+		scope string
+		ok    bool
+	}{{"", true}, {"untyped", true}, {"all", true}, {"everything", false}} {
+		body := "discovery:\n  nmapScope: \"" + tc.scope + "\"\n"
+		_, err := Load(writeConfig(t, 0o600, body), false)
+		if (err == nil) != tc.ok {
+			t.Errorf("scope %q: err = %v, want ok=%v", tc.scope, err, tc.ok)
+		}
+	}
+	cfg, err := Load(writeConfig(t, 0o600, "scan:\n  targets: [192.168.1.0/24]\n"), false)
+	if err != nil || cfg.Discovery.NmapScope != "untyped" {
+		t.Errorf("scope = %q, err = %v, want the default untyped when the key is missing", cfg.Discovery.NmapScope, err)
+	}
+}
