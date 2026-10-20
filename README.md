@@ -161,9 +161,14 @@ by hand.
 Nmap's guess of the operating system, for example `Linux 5.3 - 5.4`, is stored with the
 device and shown in its panel as "System (Nmap)". The guess types a device only when Nmap
 names a device type such as `router` or `printer`. A device whose
-Nmap system family is Windows, macOS or Android becomes a `host`. A Linux host is
-`general purpose` for Nmap and says nothing about its role, so Netscribe leaves its kind
-alone. iOS is left alone too, because Nmap uses the same family name for Cisco IOS.
+Nmap system family is Windows, macOS, Android or Apple iOS becomes a `host`. Nmap uses the
+name "IOS" for Cisco's system as well, so Netscribe tells Apple's apart by the vendor in
+the guess, and a Cisco device is never made a host. A Linux host is `general purpose` for
+Nmap and says nothing about its role, so Netscribe leaves its kind alone.
+
+A change that Nmap makes, a new kind or a new system line, shows up on the Changes page
+as `Nmap: <device> changed: ...`. It is filed under the last completed scan, because the
+feed is kept per scan. With no completed scan yet it is not written.
 
 ### Nmap in Docker
 

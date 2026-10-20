@@ -246,6 +246,7 @@ type nmapRun struct {
 				Accuracy int    `xml:"accuracy,attr"`
 				Classes  []struct {
 					Type     string `xml:"type,attr"`
+					Vendor   string `xml:"vendor,attr"`
 					Family   string `xml:"osfamily,attr"`
 					Accuracy int    `xml:"accuracy,attr"`
 				} `xml:"osclass"`
@@ -259,6 +260,16 @@ type nmapRun struct {
 type nmapGuess struct {
 	facts []string
 	os    string
+}
+
+// osFamily names the family of an OS class. Nmap calls both Apple iOS and Cisco IOS
+// "IOS", which would make a Cisco switch look like a phone, so the Apple one is told
+// apart by its vendor and becomes "apple ios". A Cisco class stays "ios".
+func osFamily(family, vendor string) string {
+	if strings.EqualFold(strings.TrimSpace(family), "ios") && strings.Contains(strings.ToLower(vendor), "apple") {
+		return "apple ios"
+	}
+	return family
 }
 
 // parseNmap returns the best OS guess: its name and the device types of its classes, each
@@ -300,7 +311,7 @@ func parseNmap(b []byte) (nmapGuess, error) {
 		for _, cl := range m.Classes {
 			if cl.Accuracy >= nmapMinAccuracy {
 				add("type=", cl.Type)
-				add("family=", cl.Family)
+				add("family=", osFamily(cl.Family, cl.Vendor))
 			}
 		}
 	}

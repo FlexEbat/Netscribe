@@ -83,6 +83,7 @@ nmap,type=power-device,iot
 nmap,family=windows,host
 nmap,family=mac os x,host
 nmap,family=android,host
+nmap,family=apple ios,host
 services,bridge,switch
 services,router,router
 port,9100,printer

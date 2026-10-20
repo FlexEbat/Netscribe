@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -184,17 +185,53 @@ func toLink(r dbgen.Link) (model.Link, error) {
 // ApplyIdentity records what nmap found out about one device. A guess that is not empty
 // replaces the old OS guess. The kind changes only while it is unknown and was not set by
 // hand, so a person's choice is never overwritten.
+//
+// A change is written to the feed of the last completed scan, because the feed is kept
+// per scan: "Nmap: <device> changed: kind unknown -> router". With no completed scan yet
+// there is nothing to attach it to, and nothing is written.
 func (s *Store) ApplyIdentity(ctx context.Context, id int64, osGuess string, kind model.DeviceKind) (model.Device, error) {
 	osGuess = cleanText(osGuess)
 	if utf8.RuneCountInString(osGuess) > maxOSGuessRunes {
 		osGuess = string([]rune(osGuess)[:maxOSGuessRunes])
 	}
-	n, err := s.q.ApplyDeviceIdentity(ctx, dbgen.ApplyDeviceIdentityParams{OsGuess: osGuess, Kind: string(kind), ID: id})
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return model.Device{}, err
+		return model.Device{}, fmt.Errorf("apply identity: %w", err)
 	}
-	if n == 0 {
+	defer func() { _ = tx.Rollback() }() // after Commit this is a no-op
+	q := s.q.WithTx(tx)
+
+	before, err := q.GetDeviceByID(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
 		return model.Device{}, model.ErrNotFound
 	}
-	return s.GetDevice(ctx, id)
+	if err != nil {
+		return model.Device{}, fmt.Errorf("apply identity: %w", err)
+	}
+	if _, err := q.ApplyDeviceIdentity(ctx, dbgen.ApplyDeviceIdentityParams{OsGuess: osGuess, Kind: string(kind), ID: id}); err != nil {
+		return model.Device{}, fmt.Errorf("apply identity: %w", err)
+	}
+	after, err := q.GetDeviceByID(ctx, id)
+	if err != nil {
+		return model.Device{}, fmt.Errorf("apply identity: %w", err)
+	}
+
+	if parts := deviceParts(before, after); len(parts) > 0 {
+		scan, err := q.LatestDoneScan(ctx)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			// No completed scan: the feed has no place for it.
+		case err != nil:
+			return model.Device{}, fmt.Errorf("apply identity: %w", err)
+		default:
+			c := change{ChangeDeviceChanged, strconv.FormatInt(id, 10), "Nmap: " + deviceName(after) + " changed: " + strings.Join(parts, "; ")}
+			if err := writeChanges(ctx, q, scan.ID, formatTime(s.now()), []change{c}); err != nil {
+				return model.Device{}, fmt.Errorf("apply identity: %w", err)
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return model.Device{}, fmt.Errorf("apply identity: %w", err)
+	}
+	return toDevice(after)
 }

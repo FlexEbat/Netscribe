@@ -537,3 +537,50 @@ func TestStartIdentifyReportsAFailedRunAndStillFreesTheSlot(t *testing.T) {
 	}
 	waitUntil(t, "the scan slot to be free", func() bool { return !s.busy.Load() })
 }
+
+func TestOSFamilyTellsAppleIOSFromCiscoIOS(t *testing.T) {
+	cases := []struct{ family, vendor, want string }{
+		{"iOS", "Apple", "apple ios"},
+		{"IOS", "Apple Inc.", "apple ios"},
+		{"IOS", "Cisco", "IOS"},
+		{"IOS", "", "IOS"},
+		{"Linux", "Apple", "Linux"},
+		{"Windows", "Microsoft", "Windows"},
+	}
+	for _, tc := range cases {
+		if got := osFamily(tc.family, tc.vendor); got != tc.want {
+			t.Errorf("osFamily(%q, %q) = %q, want %q", tc.family, tc.vendor, got, tc.want)
+		}
+	}
+}
+
+func TestParseNmapKeepsAppleAndCiscoIOSApart(t *testing.T) {
+	doc := func(vendor, typ string) []byte {
+		return []byte(`<nmaprun><host><os><osmatch name="x" accuracy="95">` +
+			`<osclass type="` + typ + `" vendor="` + vendor + `" osfamily="iOS" accuracy="95"/></osmatch></os></host></nmaprun>`)
+	}
+	apple, err := parseNmap(doc("Apple", "phone"))
+	if err != nil || !strings.Contains(strings.Join(apple.facts, ","), "family=apple ios") {
+		t.Errorf("apple facts = %v, err = %v, want family=apple ios", apple.facts, err)
+	}
+	cisco, err := parseNmap(doc("Cisco", "switch"))
+	if err != nil || !strings.Contains(strings.Join(cisco.facts, ","), "family=ios") || strings.Contains(strings.Join(cisco.facts, ","), "apple") {
+		t.Errorf("cisco facts = %v, err = %v, want family=ios", cisco.facts, err)
+	}
+}
+
+func TestAnAppleIOSDeviceIsAHostAndACiscoIOSDeviceIsNot(t *testing.T) {
+	c, err := DefaultClassifier()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"family=apple ios", "type=phone"}}); got != model.KindHost {
+		t.Errorf("apple: kind = %q, want host", got)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"family=ios", "type=general purpose"}}); got != model.KindUnknown {
+		t.Errorf("cisco: kind = %q, want it left alone", got)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"family=ios", "type=switch"}}); got != model.KindSwitch {
+		t.Errorf("cisco switch: kind = %q, want switch", got)
+	}
+}
