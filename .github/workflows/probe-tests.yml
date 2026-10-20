@@ -1,0 +1,24 @@
+name: Probe tests
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - run: mkdir -p web/dist && touch web/dist/.gitkeep
+      - name: Tests with their failures in annotations
+        run: |
+          set +e
+          go test -count=1 ./... 2>&1 | tee /tmp/t.txt
+          grep -E "^(--- FAIL|FAIL|panic)|_test.go:[0-9]+" /tmp/t.txt | head -c 3500 | tr '\n' '|' > /tmp/f.txt
+          echo "::notice title=go test failures::$(cat /tmp/f.txt)"
+          exit 0
