@@ -100,6 +100,7 @@ first:
 | `discovery.mdns` | Send one mDNS query in each local segment. |
 | `discovery.ssdp` | Send one SSDP `M-SEARCH` in each local segment. |
 | `discovery.nmap` | Ask an installed Nmap about devices nothing else could type. Off by default. |
+| `discovery.nmapScope` | `untyped` asks Nmap only about devices nothing else could type, `all` asks every device that has an open port. |
 | `discovery.nmapPath` | Absolute path of `nmap`. Empty means look in `PATH`. |
 
 The server reloads the file when it changes and on `SIGHUP`. A new `scan.interval`,
@@ -151,10 +152,18 @@ sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip "$(command -v nma
 Without them Nmap fails, Netscribe logs the reason once, skips the stage and finishes the
 scan.
 
+Nmap runs only for devices that have at least one open TCP port, because OS detection needs
+an open and a closed port and would otherwise wait for a timeout. To ask about a single
+device, open it in the topology and press "Identify with Nmap". That works for any device,
+fills in its system line and sets its kind only while the kind is `unknown` and was not set
+by hand.
+
 Nmap's guess of the operating system, for example `Linux 5.3 - 5.4`, is stored with the
 device and shown in its panel as "System (Nmap)". The guess types a device only when Nmap
-names a device type such as `router` or `printer`. A plain Linux or Windows host is
-`general purpose` for Nmap, and Netscribe leaves its kind alone.
+names a device type such as `router` or `printer`. A device whose
+Nmap system family is Windows, macOS or Android becomes a `host`. A Linux host is
+`general purpose` for Nmap and says nothing about its role, so Netscribe leaves its kind
+alone. iOS is left alone too, because Nmap uses the same family name for Cisco IOS.
 
 ### Nmap in Docker
 

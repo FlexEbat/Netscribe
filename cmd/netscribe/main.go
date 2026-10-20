@@ -172,6 +172,7 @@ func serve(args []string, e streams) error {
 	router := api.NewRouter(api.Options{
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
+		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},
 		ExportOptions:  func() render.Options { return render.Options{ChromePath: live.Current().Export.ChromePath} },
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, config: live.Current},
 		TrustedProxies: proxies, Logger: logger,
@@ -231,6 +232,49 @@ func (s scanStarter) StartWithNmap() (model.Scan, error) {
 		return model.Scan{}, err
 	}
 	return s.scanner.StartWithNmap(s.ctx, targets)
+}
+
+// deviceIdentifier runs nmap for one device on behalf of the API. The work goes on after
+// the request ended, for as long as the server lives.
+type deviceIdentifier struct {
+	scanner identifyStarter
+	repo    identityStore
+	hub     *events.Hub
+	ctx     context.Context
+	log     *slog.Logger
+}
+
+// identifyStarter starts the nmap run. *collector.Scanner satisfies it.
+type identifyStarter interface {
+	StartIdentify(ctx context.Context, ip string, done func(collector.IdentifyResult, error)) error
+}
+
+// identityStore is the part of the store the identification needs.
+type identityStore interface {
+	GetDevice(ctx context.Context, id int64) (model.Device, error)
+	ApplyIdentity(ctx context.Context, id int64, osGuess string, kind model.DeviceKind) (model.Device, error)
+}
+
+func (d deviceIdentifier) Identify(id int64) error {
+	dev, err := d.repo.GetDevice(d.ctx, id)
+	if err != nil {
+		return err
+	}
+	return d.scanner.StartIdentify(d.ctx, dev.IP, func(res collector.IdentifyResult, err error) {
+		if err != nil {
+			if d.ctx.Err() == nil {
+				d.log.Warn("identify device", "device", id, "err", err)
+			}
+			return
+		}
+		if _, err := d.repo.ApplyIdentity(d.ctx, id, res.OS, res.Kind); err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				d.log.Error("store identity", "device", id, "err", err)
+			}
+			return
+		}
+		d.hub.Publish("topology.changed", struct{}{})
+	})
 }
 
 // configApplier takes a reloaded config. *collector.Scanner satisfies it.

@@ -135,6 +135,7 @@ type DiscoveryConfig struct {
 	MDNS               bool   `yaml:"mdns"`        // one PTR query in each local segment
 	SSDP               bool   `yaml:"ssdp"`        // one M-SEARCH in each local segment
 	Nmap               bool   `yaml:"nmap"`        // ask an installed nmap about devices nothing else could type
+	NmapScope          string `yaml:"nmapScope"`   // untyped (default) or all
 	NmapPath           string `yaml:"nmapPath"`    // empty: look for nmap in PATH
 	ProbeRoutedTargets bool   `yaml:"probeRoutedTargets"`
 }
@@ -166,7 +167,7 @@ func defaults() Config {
 			LockoutDuration:    Duration(15 * time.Minute),
 			Argon2:             Argon2Config{MemoryKiB: 65536, Iterations: 3, Parallelism: 2},
 		},
-		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true},
+		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true, NmapScope: "untyped"},
 	}
 }
 
@@ -251,6 +252,9 @@ func (c Config) Validate() error {
 		if _, err := ParseTarget(t, c.AllowPublicTargets); err != nil {
 			fail(fmt.Sprintf("scan.targets[%d] %q", i, t), err)
 		}
+	}
+	if sc := c.Discovery.NmapScope; sc != "" && sc != "untyped" && sc != "all" {
+		fail("discovery.nmapScope", errors.New("must be untyped or all"))
 	}
 	if p := c.Discovery.NmapPath; p != "" && !filepath.IsAbs(p) {
 		fail("discovery.nmapPath", errors.New("must be an absolute path"))

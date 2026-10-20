@@ -1,8 +1,9 @@
-import { render, screen, within } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type { Device, DeviceInterface, Service } from "@/api/client"
 import { DevicePanel } from "@/components/DevicePanel"
+import { setCsrfToken } from "@/api/client"
 import { json, mockFetch } from "@/test-utils"
 
 afterEach(() => vi.unstubAllGlobals())
@@ -146,5 +147,97 @@ describe("DevicePanel OS guess", () => {
     open({ device: { ...device, osGuess: "" }, interfaces: [], services: [] })
     await screen.findByRole("tab", { name: /Services/ })
     expect(screen.queryByText("System (Nmap)")).not.toBeInTheDocument()
+  })
+})
+
+class FakeEvents {
+  static instances: FakeEvents[] = []
+  closed = false
+  private listeners = new Map<string, ((e: MessageEvent) => void)[]>()
+  constructor() {
+    FakeEvents.instances.push(this)
+  }
+  addEventListener(name: string, fn: (e: MessageEvent) => void) {
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), fn])
+  }
+  close() {
+    this.closed = true
+  }
+  emit(name: string) {
+    for (const fn of this.listeners.get(name) ?? []) fn(new MessageEvent(name, { data: "{}" }))
+  }
+}
+
+describe("DevicePanel identify with Nmap", () => {
+  function openIdentify(
+    options: { nmap?: unknown; identify?: () => Response; canIdentify?: boolean; ip?: string } = {},
+  ) {
+    FakeEvents.instances = []
+    vi.stubGlobal("EventSource", FakeEvents)
+    setCsrfToken("token")
+    const body = {
+      device: { ...device, ip: options.ip ?? device.ip },
+      interfaces: [],
+      services: [],
+    }
+    const mock = mockFetch({
+      "GET /api/devices/3": () => json(200, body),
+      "GET /api/nmap": () =>
+        json(200, options.nmap ?? { available: true, enabled: false, reason: "" }),
+      "POST /api/devices/3/identify":
+        options.identify ?? (() => new Response(null, { status: 202 })),
+    })
+    render(
+      <DevicePanel deviceId={3} onClose={() => {}} canIdentify={options.canIdentify ?? true} />,
+    )
+    return mock
+  }
+
+  it("asks the server and reloads the device when the topology changes", async () => {
+    const mock = openIdentify()
+    const button = await screen.findByRole("button", { name: "Identify with Nmap" })
+    await userEvent.click(button)
+    expect(await screen.findByRole("button", { name: "Asking Nmap…" })).toBeDisabled()
+    expect(
+      mock.calls.filter((c) => c.method === "POST" && c.path === "/api/devices/3/identify"),
+    ).toHaveLength(1)
+
+    const before = mock.calls.filter(
+      (c) => c.method === "GET" && c.path === "/api/devices/3",
+    ).length
+    act(() => FakeEvents.instances.at(-1)!.emit("topology.changed"))
+    await waitFor(() =>
+      expect(
+        mock.calls.filter((c) => c.method === "GET" && c.path === "/api/devices/3").length,
+      ).toBe(before + 1),
+    )
+    expect(await screen.findByRole("button", { name: "Identify with Nmap" })).toBeEnabled()
+  })
+
+  it("is hidden when nmap is missing, the person may not run scans or the device has no address", async () => {
+    openIdentify({ nmap: { available: false, enabled: false, reason: "nmap was not found" } })
+    await screen.findByText("Cisco Systems")
+    expect(screen.queryByRole("button", { name: /Nmap/ })).not.toBeInTheDocument()
+    cleanup()
+
+    openIdentify({ canIdentify: false })
+    await screen.findByText("Cisco Systems")
+    expect(screen.queryByRole("button", { name: /Nmap/ })).not.toBeInTheDocument()
+    cleanup()
+
+    openIdentify({ ip: "" })
+    await screen.findByText("Cisco Systems")
+    expect(screen.queryByRole("button", { name: /Nmap/ })).not.toBeInTheDocument()
+  })
+
+  it("explains a refusal and lets the person try again", async () => {
+    openIdentify({
+      identify: () => json(409, { error: "a scan or another identification is running" }),
+    })
+    await userEvent.click(await screen.findByRole("button", { name: "Identify with Nmap" }))
+    expect(
+      await screen.findByText("A scan or another identification is running."),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Identify with Nmap" })).toBeEnabled()
   })
 })

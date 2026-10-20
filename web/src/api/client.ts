@@ -59,8 +59,11 @@ export async function api<T = void>(
   if (!response.ok) {
     throw new ApiError(response.status, await errorMessage(response), retryAfter(response))
   }
+  // A 204, or a 202 that carries no body, has nothing to parse.
   if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  const text = await response.text()
+  if (text === "") return undefined as T
+  return JSON.parse(text) as T
 }
 
 async function errorMessage(response: Response): Promise<string> {
@@ -164,6 +167,11 @@ export interface NmapState {
   /** discovery.nmap is on, so every scan runs nmap. */
   enabled: boolean
   reason: string
+}
+
+/** Asks nmap about one device in the background. The new data shows when the topology changes. */
+export function identifyDevice(id: number): Promise<void> {
+  return api<void>("POST", `/api/devices/${id}/identify`)
 }
 
 export function getNmap(): Promise<NmapState> {

@@ -44,3 +44,13 @@ WHERE id = ? AND version = ?;
 
 -- name: DeleteDevice :execrows
 DELETE FROM devices WHERE id = ?;
+
+-- name: ApplyDeviceIdentity :execrows
+-- An OS guess replaces the old one when it is not empty. The kind changes only while it
+-- is unknown and was not set by hand.
+UPDATE devices SET
+  os_guess = CASE WHEN sqlc.arg(os_guess) <> '' THEN sqlc.arg(os_guess) ELSE os_guess END,
+  kind = CASE
+    WHEN kind = 'unknown' AND kind_locked = 0 AND sqlc.arg(kind) <> '' AND sqlc.arg(kind) <> 'unknown'
+    THEN sqlc.arg(kind) ELSE kind END
+WHERE id = sqlc.arg(id);

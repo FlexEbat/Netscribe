@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/FlexEbat/Netscribe/internal/auth"
+	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/config"
+	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/store"
 )
@@ -693,5 +695,120 @@ func TestAnAuditFailureDoesNotUndoAReload(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "disk full") {
 		t.Errorf("the audit failure is not logged: %q", logs.String())
+	}
+}
+
+type fakeIdentifyStarter struct {
+	err    error
+	ips    []string
+	result collector.IdentifyResult
+	runErr error
+}
+
+func (f *fakeIdentifyStarter) StartIdentify(_ context.Context, ip string, done func(collector.IdentifyResult, error)) error {
+	f.ips = append(f.ips, ip)
+	if f.err != nil {
+		return f.err
+	}
+	done(f.result, f.runErr)
+	return nil
+}
+
+type fakeIdentityStore struct {
+	device  model.Device
+	getErr  error
+	applied []struct {
+		id   int64
+		os   string
+		kind model.DeviceKind
+	}
+	applyErr error
+}
+
+func (f *fakeIdentityStore) GetDevice(context.Context, int64) (model.Device, error) {
+	return f.device, f.getErr
+}
+
+func (f *fakeIdentityStore) ApplyIdentity(_ context.Context, id int64, osGuess string, kind model.DeviceKind) (model.Device, error) {
+	f.applied = append(f.applied, struct {
+		id   int64
+		os   string
+		kind model.DeviceKind
+	}{id, osGuess, kind})
+	return f.device, f.applyErr
+}
+
+func newIdentifier(starter *fakeIdentifyStarter, st *fakeIdentityStore) (deviceIdentifier, *events.Hub) {
+	hub := events.NewHub()
+	return deviceIdentifier{
+		scanner: starter, repo: st, hub: hub, ctx: context.Background(),
+		log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}, hub
+}
+
+func TestIdentifyStoresTheAnswerAndTellsTheClients(t *testing.T) {
+	starter := &fakeIdentifyStarter{result: collector.IdentifyResult{OS: "Linux 5.4", Kind: model.KindRouter}}
+	st := &fakeIdentityStore{device: model.Device{ID: 7, IP: "192.168.1.7"}}
+	d, hub := newIdentifier(starter, st)
+	ch, cancel := hub.Subscribe()
+	defer cancel()
+
+	if err := d.Identify(7); err != nil {
+		t.Fatal(err)
+	}
+	if len(starter.ips) != 1 || starter.ips[0] != "192.168.1.7" {
+		t.Errorf("nmap was asked about %v, want the address of the device", starter.ips)
+	}
+	if len(st.applied) != 1 || st.applied[0].os != "Linux 5.4" || st.applied[0].kind != model.KindRouter || st.applied[0].id != 7 {
+		t.Errorf("stored = %+v, want the answer for device 7", st.applied)
+	}
+	select {
+	case e := <-ch:
+		if e.Name != "topology.changed" {
+			t.Errorf("event = %q, want topology.changed", e.Name)
+		}
+	case <-time.After(time.Second):
+		t.Error("no event after the answer was stored")
+	}
+}
+
+func TestIdentifyPassesOnWhyItCannotStart(t *testing.T) {
+	for name, tc := range map[string]struct {
+		starterErr, getErr, want error
+	}{
+		"unknown device": {getErr: model.ErrNotFound, want: model.ErrNotFound},
+		"scan running":   {starterErr: collector.ErrBusy, want: collector.ErrBusy},
+		"no nmap":        {starterErr: collector.ErrNmapUnavailable, want: collector.ErrNmapUnavailable},
+		"no address":     {starterErr: collector.ErrNoAddress, want: collector.ErrNoAddress},
+	} {
+		starter := &fakeIdentifyStarter{err: tc.starterErr}
+		st := &fakeIdentityStore{device: model.Device{ID: 7, IP: "192.168.1.7"}, getErr: tc.getErr}
+		d, _ := newIdentifier(starter, st)
+		if err := d.Identify(7); !errors.Is(err, tc.want) {
+			t.Errorf("%s: err = %v, want %v", name, err, tc.want)
+		}
+		if len(st.applied) != 0 {
+			t.Errorf("%s: something was stored", name)
+		}
+	}
+}
+
+func TestIdentifyStoresNothingWhenNmapFails(t *testing.T) {
+	starter := &fakeIdentifyStarter{runErr: errors.New("requires root privileges")}
+	st := &fakeIdentityStore{device: model.Device{ID: 7, IP: "192.168.1.7"}}
+	d, hub := newIdentifier(starter, st)
+	ch, cancel := hub.Subscribe()
+	defer cancel()
+
+	if err := d.Identify(7); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.applied) != 0 {
+		t.Errorf("stored = %+v, a failed run must store nothing", st.applied)
+	}
+	select {
+	case e := <-ch:
+		t.Errorf("event %q after a failed run", e.Name)
+	case <-time.After(50 * time.Millisecond):
 	}
 }

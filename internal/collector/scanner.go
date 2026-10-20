@@ -87,6 +87,7 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	openWebPorts := func(ip string) []int { return mergePorts(probe.openPorts(ip), services.openPorts(ip)) }
 	httpBanner, mdns, ssdp := NewHTTPBanner(log, openWebPorts), NewMDNS(log), NewSSDP(log)
 	nmap := NewNmap(log)
+	nmap.ports = openWebPorts
 	docker := NewDocker(cfg.Docker, log)
 	lldp := NewLLDP(snmp, log)
 	classifier, err := DefaultClassifier()
@@ -398,13 +399,16 @@ func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices [
 	if s.nmap == nil || !s.scanCfg.Discovery.Nmap {
 		return nil
 	}
+	// With discovery.nmapScope "all" every device is asked, with the default only the
+	// ones nothing else could type. The collector itself skips a device with no open port.
 	untyped := map[string]bool{}
 	for _, k := range s.classifier.Untyped(inputs, s.facts) {
 		untyped[k.IP] = true
 	}
+	all := s.scanCfg.Discovery.NmapScope == "all"
 	var ask []model.Device
 	for _, d := range devices {
-		if untyped[d.IP] {
+		if all || untyped[d.IP] {
 			ask = append(ask, d)
 		}
 	}
@@ -419,6 +423,37 @@ func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices [
 		return nil
 	}
 	return out.Devices
+}
+
+// IdentifyResult is what nmap found out about one device.
+type IdentifyResult struct {
+	OS   string           // the system name, may be empty
+	Kind model.DeviceKind // the kind the classifier derives from it, unknown when none
+}
+
+// StartIdentify asks nmap about one device in the background and calls done with the
+// answer. It refuses at once when nmap cannot be found, when the address is not IPv4, or
+// when a scan or another identification is running, because they share the scan slot.
+func (s *Scanner) StartIdentify(ctx context.Context, ip string, done func(IdentifyResult, error)) error {
+	if s.nmap == nil || !s.nmap.State(s.config().Discovery).Available {
+		return ErrNmapUnavailable
+	}
+	if addr, err := netip.ParseAddr(ip); err != nil || !addr.Is4() {
+		return ErrNoAddress
+	}
+	if !s.busy.CompareAndSwap(false, true) {
+		return ErrBusy
+	}
+	go func() {
+		defer s.busy.Store(false)
+		id, err := s.nmap.Identify(ctx, s.config().Discovery, ip)
+		res := IdentifyResult{OS: id.OS, Kind: model.KindUnknown}
+		if err == nil && s.classifier != nil {
+			res.Kind = s.classifier.Kind("", "", Facts{Services: -1, Nmap: id.Facts})
+		}
+		done(res, err)
+	}()
+	return nil
 }
 
 // NmapState tells whether nmap is switched on and can be found.

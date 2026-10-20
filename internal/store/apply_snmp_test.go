@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -461,5 +462,72 @@ func TestApplyNmapSourceDoesNotTakeOverTheDevice(t *testing.T) {
 	d := byMAC(t, s, keyA.MAC)
 	if d.Source != "arp" || d.Hostname != "gateway" {
 		t.Errorf("device = %+v, the nmap input must not change the source or the name", d)
+	}
+}
+
+func TestApplyIdentitySetsTheOSAndTheKindOfAnUntypedDevice(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices()})
+	d := byMAC(t, s, keyA.MAC)
+
+	got, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindRouter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OSGuess != "Linux 5.4" || got.Kind != model.KindRouter {
+		t.Errorf("device = %+v, want the OS guess and the kind", got)
+	}
+}
+
+func TestApplyIdentityKeepsAKindThatIsKnownOrSetByHand(t *testing.T) {
+	s := newTestStore(t)
+	typed := dev(keyA.MAC, keyA.IP)
+	typed.Kind = model.KindSwitch
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{typed, dev(keyB.MAC, keyB.IP)}})
+
+	a := byMAC(t, s, keyA.MAC)
+	got, err := s.ApplyIdentity(context.Background(), a.ID, "Cisco IOS", model.KindRouter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != model.KindSwitch || got.OSGuess != "Cisco IOS" {
+		t.Errorf("device = %+v, want the OS stored and the known kind kept", got)
+	}
+
+	// A kind chosen by a person stays, even though the device was unknown before.
+	b := byMAC(t, s, keyB.MAC)
+	printer := model.KindPrinter
+	if _, err := s.UpdateDevice(context.Background(), b.ID, model.DeviceEdit{Kind: &printer, Version: b.Version}, 0); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.ApplyIdentity(context.Background(), b.ID, "Linux", model.KindCamera)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != model.KindPrinter {
+		t.Errorf("kind = %q, a kind set by hand must not change", got.Kind)
+	}
+}
+
+func TestApplyIdentityWithoutAnswerChangesNothing(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices()})
+	d := byMAC(t, s, keyA.MAC)
+	if _, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindUnknown); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ApplyIdentity(context.Background(), d.ID, "", model.KindUnknown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OSGuess != "Linux 5.4" || got.Kind != model.KindUnknown {
+		t.Errorf("device = %+v, an empty answer must keep what is there", got)
+	}
+}
+
+func TestApplyIdentityOfAMissingDevice(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.ApplyIdentity(context.Background(), 999, "Linux", model.KindRouter); !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
