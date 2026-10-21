@@ -28,6 +28,14 @@ func TestValidate(t *testing.T) {
 	}{
 		{"valid defaults with a private target", func(*Config) {}, nil},
 		{"no targets", func(c *Config) { c.Scan.Targets = nil }, nil},
+		{"listen on all interfaces", func(c *Config) { c.Listen = ":8080" }, nil},
+		{"listen on an IPv6 address", func(c *Config) { c.Listen = "[::1]:9000" }, nil},
+		{"listen without a port", func(c *Config) { c.Listen = "127.0.0.1" }, errListen},
+		{"listen with only a number", func(c *Config) { c.Listen = "8080" }, errListen},
+		{"listen with port 0", func(c *Config) { c.Listen = "127.0.0.1:0" }, errListen},
+		{"listen with port 65536", func(c *Config) { c.Listen = "127.0.0.1:65536" }, errListen},
+		{"listen with a port name", func(c *Config) { c.Listen = "127.0.0.1:http" }, errListen},
+		{"empty listen", func(c *Config) { c.Listen = "" }, errListen},
 		{"target is not a CIDR", func(c *Config) { c.Scan.Targets = []string{"192.168.1.0"} }, errTargetCIDR},
 		{"target is not a CIDR at all", func(c *Config) { c.Scan.Targets = []string{"lan"} }, errTargetCIDR},
 		{"IPv6 target", func(c *Config) { c.Scan.Targets = []string{"fd00::/64"} }, errTargetIPv4},
@@ -349,5 +357,45 @@ func TestDefaultPortsCoverTheClassifyRules(t *testing.T) {
 	}
 	if fmt.Sprint(example.Scan.Ports) != fmt.Sprint(cfg.Scan.Ports) {
 		t.Errorf("the example lists %v, the defaults are %v", example.Scan.Ports, cfg.Scan.Ports)
+	}
+}
+
+func TestNmapPathMustBeAbsolute(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		ok   bool
+	}{{"", true}, {"/usr/bin/nmap", true}, {"nmap", false}, {"./nmap", false}} {
+		body := "discovery:\n  nmap: true\n  nmapPath: \"" + tc.path + "\"\n"
+		_, err := Load(writeConfig(t, 0o600, body), false)
+		if (err == nil) != tc.ok {
+			t.Errorf("nmapPath %q: err = %v, want ok=%v", tc.path, err, tc.ok)
+		}
+	}
+}
+
+func TestNmapIsOffByDefault(t *testing.T) {
+	cfg, err := Load(writeConfig(t, 0o600, "scan:\n  targets: [192.168.1.0/24]\n"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Discovery.Nmap || cfg.Discovery.NmapPath != "" {
+		t.Errorf("discovery = %+v, want nmap off", cfg.Discovery)
+	}
+}
+
+func TestNmapScope(t *testing.T) {
+	for _, tc := range []struct {
+		scope string
+		ok    bool
+	}{{"", true}, {"untyped", true}, {"all", true}, {"everything", false}} {
+		body := "discovery:\n  nmapScope: \"" + tc.scope + "\"\n"
+		_, err := Load(writeConfig(t, 0o600, body), false)
+		if (err == nil) != tc.ok {
+			t.Errorf("scope %q: err = %v, want ok=%v", tc.scope, err, tc.ok)
+		}
+	}
+	cfg, err := Load(writeConfig(t, 0o600, "scan:\n  targets: [192.168.1.0/24]\n"), false)
+	if err != nil || cfg.Discovery.NmapScope != "untyped" {
+		t.Errorf("scope = %q, err = %v, want the default untyped when the key is missing", cfg.Discovery.NmapScope, err)
 	}
 }

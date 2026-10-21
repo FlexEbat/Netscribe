@@ -104,15 +104,7 @@ func diffSnapshots(before, after snapshot) []change {
 		if was.Online != 0 && now.Online == 0 {
 			out = append(out, change{ChangeDeviceOffline, key, deviceName(now) + " went offline"})
 		}
-		var parts []string
-		for _, f := range []struct{ name, old, new string }{
-			{"ip", was.Ip, now.Ip}, {"hostname", was.Hostname, now.Hostname}, {"kind", was.Kind, now.Kind},
-		} {
-			if f.old != f.new {
-				parts = append(parts, fmt.Sprintf("%s %s -> %s", f.name, dashIfEmpty(f.old), dashIfEmpty(f.new)))
-			}
-		}
-		if len(parts) > 0 {
+		if parts := deviceParts(was, now); len(parts) > 0 {
 			out = append(out, change{ChangeDeviceChanged, key, deviceName(now) + " changed: " + strings.Join(parts, "; ")})
 		}
 	}
@@ -171,6 +163,20 @@ func diffSnapshots(before, after snapshot) []change {
 		out = append(out, change{ChangeContainerRemoved, id, fmt.Sprintf("Container %s (%s) is gone from %s", c.Name, c.Image, name(c.DeviceID))})
 	}
 	return out
+}
+
+// deviceParts lists what changed in the fields of a device that the feed reports.
+func deviceParts(was, now dbgen.Device) []string {
+	var parts []string
+	for _, f := range []struct{ name, old, new string }{
+		{"ip", was.Ip, now.Ip}, {"hostname", was.Hostname, now.Hostname}, {"kind", was.Kind, now.Kind},
+		{"system", was.OsGuess, now.OsGuess},
+	} {
+		if f.old != f.new {
+			parts = append(parts, fmt.Sprintf("%s %s -> %s", f.name, dashIfEmpty(f.old), dashIfEmpty(f.new)))
+		}
+	}
+	return parts
 }
 
 func dashIfEmpty(s string) string {

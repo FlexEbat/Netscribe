@@ -22,6 +22,7 @@ type State =
 export function Topology() {
   const { state: session } = useSession()
   const canMove = session.status === "signedIn" && can(session.session.permissions, "devices:write")
+  const canRun = session.status === "signedIn" && can(session.session.permissions, "scans:run")
   const canExport = session.status === "signedIn" && can(session.session.permissions, "export:run")
   const [params, setParams] = useSearchParams()
   const [state, setState] = useState<State>({ status: "loading" })
@@ -167,6 +168,7 @@ export function Topology() {
           deviceId={deviceId}
           onClose={() => select(null)}
           canEdit={canMove}
+          canIdentify={canRun}
           onChanged={load}
         />
       ) : null}

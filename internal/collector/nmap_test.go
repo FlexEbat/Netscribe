@@ -1,0 +1,586 @@
+package collector
+
+import (
+	"context"
+	"errors"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/FlexEbat/Netscribe/internal/config"
+	"github.com/FlexEbat/Netscribe/internal/model"
+)
+
+const nmapSample = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<nmaprun scanner="nmap">
+<host><status state="up"/><address addr="192.168.1.9" addrtype="ipv4"/>
+<os>
+<osmatch name="MikroTik RouterOS 7.2 - 7.5" accuracy="97" line="1">
+<osclass type="router" vendor="MikroTik" osfamily="RouterOS" osgen="7.X" accuracy="97"/>
+<osclass type="general purpose" vendor="Linux" osfamily="Linux" accuracy="90"/>
+</osmatch>
+<osmatch name="Linux 5.4" accuracy="88" line="2">
+<osclass type="general purpose" vendor="Linux" osfamily="Linux" accuracy="88"/>
+</osmatch>
+</os>
+</host>
+</nmaprun>`
+
+// fakeNmap records every run and answers from a function.
+type fakeNmap struct {
+	mu    sync.Mutex
+	paths []string
+	calls [][]string
+	reply func(args []string) ([]byte, error)
+}
+
+func (f *fakeNmap) run(_ context.Context, path string, args []string) ([]byte, error) {
+	f.mu.Lock()
+	f.paths = append(f.paths, path)
+	f.calls = append(f.calls, args)
+	f.mu.Unlock()
+	if f.reply == nil {
+		return []byte(nmapSample), nil
+	}
+	return f.reply(args)
+}
+
+func (f *fakeNmap) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
+func newFakeNmapCollector(f *fakeNmap, found string) *Nmap {
+	c := NewNmap(quietLogger())
+	c.run = f.run
+	c.lookPath = func(string) (string, error) {
+		if found == "" {
+			return "", errors.New("not found")
+		}
+		return found, nil
+	}
+	return c
+}
+
+func nmapInput(on bool, path string, ips ...string) Input {
+	cfg := testConfig()
+	cfg.Discovery = config.DiscoveryConfig{Nmap: on, NmapPath: path}
+	return Input{Devices: liveDevices(ips...), Config: cfg}
+}
+
+func TestParseNmapTakesTheBestGuessOnly(t *testing.T) {
+	got, err := parseNmap([]byte(nmapSample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "family=linux,family=routeros,os=mikrotik routeros 7.2 - 7.5,type=general purpose,type=router"
+	if strings.Join(got.facts, ",") != want {
+		t.Errorf("facts = %v, want %q", got.facts, want)
+	}
+	if got.os != "MikroTik RouterOS 7.2 - 7.5" {
+		t.Errorf("os = %q, want the name as nmap wrote it", got.os)
+	}
+}
+
+func TestParseNmapIgnoresGuessesBelowTheAccuracyLimit(t *testing.T) {
+	low := strings.ReplaceAll(nmapSample, `accuracy="97"`, `accuracy="60"`)
+	low = strings.ReplaceAll(low, `accuracy="90"`, `accuracy="60"`)
+	low = strings.ReplaceAll(low, `accuracy="88"`, `accuracy="60"`)
+	got, err := parseNmap([]byte(low))
+	if err != nil || len(got.facts) != 0 || got.os != "" {
+		t.Errorf("guess = %+v, err = %v, want nothing from weak guesses", got, err)
+	}
+}
+
+func TestParseNmapRefusesBrokenAndHostileText(t *testing.T) {
+	if _, err := parseNmap([]byte("<nmaprun><host>")); err == nil {
+		t.Error("a cut XML document was accepted")
+	}
+	if _, err := parseNmap([]byte("not xml at all")); err == nil {
+		t.Error("text that is not XML was accepted")
+	}
+	hostile := `<nmaprun><host><os><osmatch name="Evil&#9;OS ` + strings.Repeat("x", 300) + `" accuracy="99">` +
+		`<osclass type="router&#1;" accuracy="99"/></osmatch></os></host></nmaprun>`
+	got, err := parseNmap([]byte(hostile))
+	if err != nil {
+		// A control character that XML cannot hold is refused as a whole, which is fine.
+		return
+	}
+	for _, f := range append(got.facts, got.os) {
+		if len([]rune(f)) > 110 || strings.ContainsAny(f, "\t\x01") {
+			t.Errorf("fact %q was not cleaned or cut", f)
+		}
+	}
+}
+
+func TestNmapRunsOnlyWithFixedArgumentsAndAParsedAddress(t *testing.T) {
+	f := &fakeNmap{}
+	c := newFakeNmapCollector(f, "/usr/bin/nmap")
+	in := nmapInput(true, "", "192.168.1.9", "fe80::1", "not-an-ip", "1.2.3.4; reboot")
+
+	if _, err := c.Collect(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if f.count() != 1 {
+		t.Fatalf("nmap ran %d times, want once: only the IPv4 address is asked", f.count())
+	}
+	args := f.calls[0]
+	if args[len(args)-1] != "192.168.1.9" {
+		t.Errorf("last argument = %q, want the address", args[len(args)-1])
+	}
+	for _, want := range []string{"-O", "-n", "-Pn", "-oX"} {
+		found := false
+		for _, a := range args {
+			found = found || a == want
+		}
+		if !found {
+			t.Errorf("arguments %v lack %s", args, want)
+		}
+	}
+	if f.paths[0] != "/usr/bin/nmap" {
+		t.Errorf("path = %q, want the one found in PATH", f.paths[0])
+	}
+	if got := c.guess("192.168.1.9"); len(got) == 0 {
+		t.Error("the guess is not kept for the classifier")
+	}
+}
+
+func TestNmapUsesThePathOfTheConfig(t *testing.T) {
+	f := &fakeNmap{}
+	c := newFakeNmapCollector(f, "") // PATH has no nmap
+	if _, err := c.Collect(context.Background(), nmapInput(true, "/opt/nmap/bin/nmap", "192.168.1.9")); err != nil {
+		t.Fatal(err)
+	}
+	if f.count() != 1 || f.paths[0] != "/opt/nmap/bin/nmap" {
+		t.Errorf("runs = %d, paths = %v, want one run of the configured path", f.count(), f.paths)
+	}
+}
+
+func TestNmapDoesNothingWhenOffOrMissing(t *testing.T) {
+	f := &fakeNmap{}
+	if _, err := newFakeNmapCollector(f, "/usr/bin/nmap").Collect(context.Background(), nmapInput(false, "", "192.168.1.9")); err != nil || f.count() != 0 {
+		t.Errorf("err = %v, runs = %d, want nothing run while the switch is off", err, f.count())
+	}
+	res, err := newFakeNmapCollector(f, "").Collect(context.Background(), nmapInput(true, "", "192.168.1.9"))
+	if err != nil || f.count() != 0 || len(res.Devices) != 0 {
+		t.Errorf("err = %v, runs = %d, want a missing nmap to be skipped without an error", err, f.count())
+	}
+}
+
+func TestNmapStopsAfterRepeatedFailuresButSurvivesOne(t *testing.T) {
+	failing := &fakeNmap{reply: func([]string) ([]byte, error) { return nil, errors.New("requires root privileges") }}
+	ips := make([]string, 20)
+	for i := range ips {
+		ips[i] = "10.0.0." + strconv.Itoa(i+1)
+	}
+	c := newFakeNmapCollector(failing, "/usr/bin/nmap")
+	if _, err := c.Collect(context.Background(), nmapInput(true, "", ips...)); err != nil {
+		t.Fatal(err)
+	}
+	if n := failing.count(); n > nmapGiveUpAfter+nmapConcurrency {
+		t.Errorf("nmap ran %d times, want the stage to stop after %d failures", n, nmapGiveUpAfter)
+	}
+
+	// One failure among successes does not stop the stage.
+	var once sync.Once
+	mixed := &fakeNmap{reply: func([]string) ([]byte, error) {
+		failed := false
+		once.Do(func() { failed = true })
+		if failed {
+			return nil, errors.New("one bad run")
+		}
+		return []byte(nmapSample), nil
+	}}
+	c = newFakeNmapCollector(mixed, "/usr/bin/nmap")
+	if _, err := c.Collect(context.Background(), nmapInput(true, "", ips[:6]...)); err != nil {
+		t.Fatal(err)
+	}
+	if mixed.count() != 6 {
+		t.Errorf("nmap ran %d times, want all 6 after a single failure", mixed.count())
+	}
+}
+
+func TestNmapStopsWhenTheScanIsCanceled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	f := &fakeNmap{reply: func([]string) ([]byte, error) {
+		cancel()
+		time.Sleep(10 * time.Millisecond)
+		return nil, ctx.Err()
+	}}
+	c := newFakeNmapCollector(f, "/usr/bin/nmap")
+	if _, err := c.Collect(ctx, nmapInput(true, "", "192.168.1.9", "192.168.1.10", "192.168.1.11")); !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
+	}
+}
+
+func TestCappedKeepsOnlyTheFirstBytes(t *testing.T) {
+	c := &capped{max: 5}
+	n, err := c.Write([]byte("abcdefgh"))
+	if err != nil || n != 8 {
+		t.Errorf("Write = %d, %v, want the whole write reported as taken", n, err)
+	}
+	_, _ = c.Write([]byte("more"))
+	if c.buf.String() != "abcde" {
+		t.Errorf("kept %q, want abcde", c.buf.String())
+	}
+}
+
+const nmapRules = "nmap,type=router,router\nnmap,type=printer,printer\nmdns,_ipp._tcp,printer\nport,22,server\n"
+
+func TestClassifierNmapRulesAndOrder(t *testing.T) {
+	c := mustClassifier(t, nmapRules)
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"os=routeros 7", "type=router"}}); got != model.KindRouter {
+		t.Errorf("kind = %q, want router from the nmap type", got)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"type=general purpose"}}); got != model.KindUnknown {
+		t.Errorf("kind = %q, a general purpose guess must not type a device", got)
+	}
+	// mDNS is tried before nmap, a port after it.
+	if got := c.Kind("", "", Facts{Services: -1, MDNS: []string{"_ipp._tcp"}, Nmap: []string{"type=router"}}); got != model.KindPrinter {
+		t.Errorf("kind = %q, want mdns to beat nmap", got)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Ports: []int{22}, Nmap: []string{"type=router"}}); got != model.KindRouter {
+		t.Errorf("kind = %q, want nmap to beat a port", got)
+	}
+}
+
+func TestDefaultRulesMapTheNmapTypes(t *testing.T) {
+	c, err := DefaultClassifier()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]model.DeviceKind{
+		"type=router": model.KindRouter, "type=wap": model.KindAP, "type=printer": model.KindPrinter,
+		"type=webcam": model.KindCamera, "type=storage-misc": model.KindNAS, "type=general purpose": model.KindUnknown,
+	}
+	for fact, want := range cases {
+		if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{fact}}); got != want {
+			t.Errorf("%s -> %q, want %q", fact, got, want)
+		}
+	}
+}
+
+func TestUntypedListsOnlyWhatNothingCouldType(t *testing.T) {
+	c := mustClassifier(t, "mdns,_ipp._tcp,printer\n")
+	a, b, d := model.DeviceKey{IP: "192.168.1.1"}, model.DeviceKey{IP: "192.168.1.2"}, model.DeviceKey{IP: "192.168.1.3"}
+	devs := []model.DeviceInput{
+		{Key: a, Source: "lldp", Kind: model.KindSwitch}, // typed by LLDP
+		{Key: b, Source: "arp"},                          // nothing says what it is
+		{Key: d, Source: "arp"},                          // mDNS will type it
+	}
+	facts := func(k model.DeviceKey) Facts {
+		if k == d {
+			return Facts{Services: -1, MDNS: []string{"_ipp._tcp"}}
+		}
+		return Facts{Services: -1}
+	}
+	got := c.Untyped(devs, facts)
+	if len(got) != 1 || got[0] != b {
+		t.Errorf("untyped = %v, want only %v", got, b)
+	}
+	if devs[2].Kind != "" {
+		t.Error("Untyped changed the devices it was given")
+	}
+}
+
+func TestTheScannerAsksNmapOnlyAboutUntypedDevices(t *testing.T) {
+	f := &fakeNmap{}
+	s := &Scanner{
+		log:        quietLogger(),
+		classifier: mustClassifier(t, "mdns,_ipp._tcp,printer\n"),
+		nmap:       newFakeNmapCollector(f, "/usr/bin/nmap"),
+		scanCfg:    nmapInput(true, "").Config,
+	}
+	s.facts = func(k model.DeviceKey) Facts {
+		if k.IP == "192.168.1.3" {
+			return Facts{Services: -1, MDNS: []string{"_ipp._tcp"}}
+		}
+		return Facts{Services: -1}
+	}
+	devices := liveDevices("192.168.1.1", "192.168.1.2", "192.168.1.3")
+	inputs := []model.DeviceInput{
+		{Key: model.DeviceKey{MAC: devices[0].MAC, IP: devices[0].IP}, Source: "lldp", Kind: model.KindSwitch},
+		{Key: model.DeviceKey{MAC: devices[1].MAC, IP: devices[1].IP}, Source: "arp"},
+		{Key: model.DeviceKey{MAC: devices[2].MAC, IP: devices[2].IP}, Source: "arp"},
+	}
+
+	out := s.askNmap(context.Background(), nil, devices, inputs)
+	if f.count() != 1 || f.calls[0][len(f.calls[0])-1] != "192.168.1.2" {
+		t.Errorf("nmap runs = %v, want one run for 192.168.1.2 only", f.calls)
+	}
+	if len(out) != 1 || out[0].Key.IP != "192.168.1.2" || out[0].OSGuess == "" || out[0].Source != "nmap" {
+		t.Errorf("inputs = %+v, want the OS guess of the one device that was asked", out)
+	}
+
+	s.scanCfg.Discovery.Nmap = false
+	if out := s.askNmap(context.Background(), nil, devices, inputs); len(out) != 0 || f.count() != 1 {
+		t.Errorf("nmap ran with the switch off")
+	}
+}
+
+func TestNmapStateTellsWhetherTheProgramIsThere(t *testing.T) {
+	found := newFakeNmapCollector(&fakeNmap{}, "/usr/bin/nmap")
+	if st := found.State(config.DiscoveryConfig{}); !st.Available || st.Enabled || st.Reason != "" {
+		t.Errorf("state = %+v, want available and not enabled", st)
+	}
+	if st := found.State(config.DiscoveryConfig{Nmap: true}); !st.Available || !st.Enabled {
+		t.Errorf("state = %+v, want available and enabled", st)
+	}
+
+	missing := newFakeNmapCollector(&fakeNmap{}, "")
+	st := missing.State(config.DiscoveryConfig{})
+	if st.Available || st.Reason == "" {
+		t.Errorf("state = %+v, want a reason when nmap is not found", st)
+	}
+	st = missing.State(config.DiscoveryConfig{NmapPath: "/opt/nmap"})
+	if st.Available || !strings.Contains(st.Reason, "nmapPath") {
+		t.Errorf("state = %+v, want the reason to name discovery.nmapPath", st)
+	}
+}
+
+func TestACollectResultCarriesTheOSNameOfEachDevice(t *testing.T) {
+	f := &fakeNmap{}
+	c := newFakeNmapCollector(f, "/usr/bin/nmap")
+	res, err := c.Collect(context.Background(), nmapInput(true, "", "192.168.1.9"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Devices) != 1 || res.Devices[0].OSGuess != "MikroTik RouterOS 7.2 - 7.5" || res.Devices[0].Source != "nmap" {
+		t.Errorf("devices = %+v, want the OS name from the best guess", res.Devices)
+	}
+	if res.Devices[0].Hostname != "" || res.Devices[0].Description != "" || res.Devices[0].Kind != "" {
+		t.Errorf("device = %+v, nmap must not set anything but the OS guess", res.Devices[0])
+	}
+}
+
+func TestScannerStartWithNmapSwitchesItOnForThatScanOnly(t *testing.T) {
+	st := &fakeStore{}
+	spy := &configSpy{}
+	s := newTestScanner(st, &fakeCollector{}, &fakeResolver{})
+	s.enrichers = []Collector{spy}
+	s.cfg = scheduleConfig(0, "192.168.1.0/24")
+	targets, _ := lanTargets(config.Config{})
+
+	if _, err := s.begin(context.Background(), targets, true); err != nil {
+		t.Fatal(err)
+	}
+	if !s.scanCfg.Discovery.Nmap {
+		t.Error("nmap is off for a scan that asked for it")
+	}
+	s.busy.Store(false)
+	if _, err := s.begin(context.Background(), targets, false); err != nil {
+		t.Fatal(err)
+	}
+	if s.scanCfg.Discovery.Nmap {
+		t.Error("nmap stayed on for the next scan")
+	}
+	s.busy.Store(false)
+	if s.config().Discovery.Nmap {
+		t.Error("the config in force was changed by a one-scan switch")
+	}
+}
+
+func TestNmapSkipsADeviceWithNoOpenPort(t *testing.T) {
+	f := &fakeNmap{}
+	c := newFakeNmapCollector(f, "/usr/bin/nmap")
+	c.ports = func(ip string) []int {
+		if ip == "192.168.1.10" {
+			return []int{22}
+		}
+		return nil // nothing is open, nmap would only wait for a timeout
+	}
+	res, err := c.Collect(context.Background(), nmapInput(true, "", "192.168.1.9", "192.168.1.10"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.count() != 1 || f.calls[0][len(f.calls[0])-1] != "192.168.1.10" {
+		t.Errorf("nmap runs = %v, want one run for the device with an open port", f.calls)
+	}
+	if len(res.Devices) != 1 || res.Devices[0].Key.IP != "192.168.1.10" {
+		t.Errorf("devices = %+v", res.Devices)
+	}
+}
+
+func TestClassifierTypesTheOSFamilyAndLetsTheTypeWin(t *testing.T) {
+	c, err := DefaultClassifier()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name  string
+		facts []string
+		want  model.DeviceKind
+	}{
+		{"windows", []string{"family=windows", "type=general purpose"}, model.KindHost},
+		{"mac os x", []string{"family=mac os x", "type=general purpose"}, model.KindHost},
+		{"android", []string{"family=android", "type=phone"}, model.KindHost},
+		{"linux says nothing", []string{"family=linux", "type=general purpose"}, model.KindUnknown},
+		{"a type wins over a family", []string{"family=windows", "type=router"}, model.KindRouter},
+		{"ios is left alone", []string{"family=ios", "type=general purpose"}, model.KindUnknown},
+	}
+	for _, tc := range cases {
+		if got := c.Kind("", "", Facts{Services: -1, Nmap: tc.facts}); got != tc.want {
+			t.Errorf("%s: kind = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestTheScannerAsksTypedDevicesToo_WhenTheScopeIsAll(t *testing.T) {
+	f := &fakeNmap{}
+	s := &Scanner{
+		log:        quietLogger(),
+		classifier: mustClassifier(t, "mdns,_ipp._tcp,printer\n"),
+		nmap:       newFakeNmapCollector(f, "/usr/bin/nmap"),
+		scanCfg:    nmapInput(true, "").Config,
+	}
+	s.scanCfg.Discovery.NmapScope = "all"
+	s.facts = func(model.DeviceKey) Facts { return Facts{Services: -1} }
+	devices := liveDevices("192.168.1.1", "192.168.1.2")
+	inputs := []model.DeviceInput{
+		{Key: model.DeviceKey{MAC: devices[0].MAC, IP: devices[0].IP}, Source: "lldp", Kind: model.KindSwitch},
+		{Key: model.DeviceKey{MAC: devices[1].MAC, IP: devices[1].IP}, Source: "arp"},
+	}
+	out := s.askNmap(context.Background(), nil, devices, inputs)
+	if f.count() != 2 || len(out) != 2 {
+		t.Errorf("runs = %d, inputs = %d, want both devices asked with the scope all", f.count(), len(out))
+	}
+}
+
+func TestIdentifyAsksOneDeviceWhateverTheSwitchSays(t *testing.T) {
+	f := &fakeNmap{}
+	c := newFakeNmapCollector(f, "/usr/bin/nmap")
+	id, err := c.Identify(context.Background(), config.DiscoveryConfig{Nmap: false}, "192.168.1.9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id.OS != "MikroTik RouterOS 7.2 - 7.5" || len(id.Facts) == 0 || f.count() != 1 {
+		t.Errorf("identity = %+v, runs = %d", id, f.count())
+	}
+	if _, err := c.Identify(context.Background(), config.DiscoveryConfig{}, "fe80::1"); !errors.Is(err, ErrNoAddress) {
+		t.Errorf("err = %v, want ErrNoAddress for an IPv6 address", err)
+	}
+	if _, err := newFakeNmapCollector(f, "").Identify(context.Background(), config.DiscoveryConfig{}, "192.168.1.9"); !errors.Is(err, ErrNmapUnavailable) {
+		t.Errorf("err = %v, want ErrNmapUnavailable", err)
+	}
+}
+
+func identifyScanner(t *testing.T, f *fakeNmap, found string) *Scanner {
+	t.Helper()
+	return &Scanner{
+		log:        quietLogger(),
+		classifier: mustClassifier(t, "nmap,type=router,router\n"),
+		nmap:       newFakeNmapCollector(f, found),
+		cfg:        nmapInput(false, "").Config,
+	}
+}
+
+func TestStartIdentifyAnswersThroughDoneAndFreesTheSlot(t *testing.T) {
+	s := identifyScanner(t, &fakeNmap{}, "/usr/bin/nmap")
+	got := make(chan IdentifyResult, 1)
+	if err := s.StartIdentify(context.Background(), "192.168.1.9", func(r IdentifyResult, err error) {
+		if err != nil {
+			t.Error(err)
+		}
+		got <- r
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case r := <-got:
+		if r.OS != "MikroTik RouterOS 7.2 - 7.5" || r.Kind != model.KindRouter {
+			t.Errorf("result = %+v, want the OS and the kind from the classifier", r)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("done was not called")
+	}
+	waitUntil(t, "the scan slot to be free", func() bool { return !s.busy.Load() })
+}
+
+func TestStartIdentifyRefusesWhenItCannotRun(t *testing.T) {
+	noop := func(IdentifyResult, error) {}
+	if err := identifyScanner(t, &fakeNmap{}, "").StartIdentify(context.Background(), "192.168.1.9", noop); !errors.Is(err, ErrNmapUnavailable) {
+		t.Errorf("no nmap: err = %v, want ErrNmapUnavailable", err)
+	}
+	s := identifyScanner(t, &fakeNmap{}, "/usr/bin/nmap")
+	for _, ip := range []string{"fe80::1", "", "not-an-ip"} {
+		if err := s.StartIdentify(context.Background(), ip, noop); !errors.Is(err, ErrNoAddress) {
+			t.Errorf("%q: err = %v, want ErrNoAddress", ip, err)
+		}
+	}
+	s.busy.Store(true) // a scan is running
+	if err := s.StartIdentify(context.Background(), "192.168.1.9", noop); !errors.Is(err, ErrBusy) {
+		t.Errorf("busy: err = %v, want ErrBusy", err)
+	}
+	if s.nmap.run == nil {
+		t.Fatal("test setup")
+	}
+}
+
+func TestStartIdentifyReportsAFailedRunAndStillFreesTheSlot(t *testing.T) {
+	f := &fakeNmap{reply: func([]string) ([]byte, error) { return nil, errors.New("requires root privileges") }}
+	s := identifyScanner(t, f, "/usr/bin/nmap")
+	errs := make(chan error, 1)
+	if err := s.StartIdentify(context.Background(), "192.168.1.9", func(_ IdentifyResult, err error) { errs <- err }); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-errs:
+		if err == nil {
+			t.Error("done got no error")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("done was not called")
+	}
+	waitUntil(t, "the scan slot to be free", func() bool { return !s.busy.Load() })
+}
+
+func TestOSFamilyTellsAppleIOSFromCiscoIOS(t *testing.T) {
+	cases := []struct{ family, vendor, want string }{
+		{"iOS", "Apple", "apple ios"},
+		{"IOS", "Apple Inc.", "apple ios"},
+		{"IOS", "Cisco", "IOS"},
+		{"IOS", "", "IOS"},
+		{"Linux", "Apple", "Linux"},
+		{"Windows", "Microsoft", "Windows"},
+	}
+	for _, tc := range cases {
+		if got := osFamily(tc.family, tc.vendor); got != tc.want {
+			t.Errorf("osFamily(%q, %q) = %q, want %q", tc.family, tc.vendor, got, tc.want)
+		}
+	}
+}
+
+func TestParseNmapKeepsAppleAndCiscoIOSApart(t *testing.T) {
+	doc := func(vendor, typ string) []byte {
+		return []byte(`<nmaprun><host><os><osmatch name="x" accuracy="95">` +
+			`<osclass type="` + typ + `" vendor="` + vendor + `" osfamily="iOS" accuracy="95"/></osmatch></os></host></nmaprun>`)
+	}
+	apple, err := parseNmap(doc("Apple", "phone"))
+	if err != nil || !strings.Contains(strings.Join(apple.facts, ","), "family=apple ios") {
+		t.Errorf("apple facts = %v, err = %v, want family=apple ios", apple.facts, err)
+	}
+	cisco, err := parseNmap(doc("Cisco", "switch"))
+	if err != nil || !strings.Contains(strings.Join(cisco.facts, ","), "family=ios") || strings.Contains(strings.Join(cisco.facts, ","), "apple") {
+		t.Errorf("cisco facts = %v, err = %v, want family=ios", cisco.facts, err)
+	}
+}
+
+func TestAnAppleIOSDeviceIsAHostAndACiscoIOSDeviceIsNot(t *testing.T) {
+	c, err := DefaultClassifier()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"family=apple ios", "type=phone"}}); got != model.KindHost {
+		t.Errorf("apple: kind = %q, want host", got)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"family=ios", "type=general purpose"}}); got != model.KindUnknown {
+		t.Errorf("cisco: kind = %q, want it left alone", got)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"family=ios", "type=switch"}}); got != model.KindSwitch {
+		t.Errorf("cisco switch: kind = %q, want switch", got)
+	}
+}

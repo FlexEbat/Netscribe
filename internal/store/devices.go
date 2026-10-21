@@ -145,6 +145,7 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		Vendor:      r.Vendor,
 		Kind:        model.DeviceKind(r.Kind),
 		Description: r.Description,
+		OSGuess:     r.OsGuess,
 		Source:      r.Source,
 		Online:      r.Online != 0,
 		Manual:      r.Manual != 0,
@@ -194,6 +195,21 @@ func (s *Store) FinishScan(ctx context.Context, id int64, status, errMsg string)
 		return fmt.Errorf("finish scan: scan %d is not running", id)
 	}
 	return nil
+}
+
+// FailRunningScans closes every scan that is still marked running as failed and returns
+// how many it closed. Call it at start, before the first scan: a scan stays in that
+// state only when the process that began it ended without finishing it, and nothing else
+// would ever close it, because a running scan is exempt from pruning.
+func (s *Store) FailRunningScans(ctx context.Context, reason string) (int64, error) {
+	n, err := s.q.FailRunningScans(ctx, dbgen.FailRunningScansParams{
+		FinishedAt: sql.NullString{String: formatTime(s.now()), Valid: true},
+		Error:      reason,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("fail running scans: %w", err)
+	}
+	return n, nil
 }
 
 // ListScans returns the most recent scans, newest first.

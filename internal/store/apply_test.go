@@ -464,3 +464,40 @@ func TestIdentityIndexesRejectDuplicates(t *testing.T) {
 		t.Errorf("rows with neither MAC nor IP must not collide: %v", err)
 	}
 }
+
+func TestFailRunningScansClosesOnlyTheRunningOnes(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	stuck, err := s.StartScan(ctx, "192.168.1.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	finished, err := s.StartScan(ctx, "192.168.1.0/24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FinishScan(ctx, finished.ID, "done", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := s.FailRunningScans(ctx, "interrupted by a restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Errorf("closed %d scans, want 1", n)
+	}
+	got, err := s.GetScan(ctx, stuck.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != "failed" || got.Error != "interrupted by a restart" || got.FinishedAt == nil {
+		t.Errorf("stuck scan = %+v, want failed with the reason and a finish time", got)
+	}
+	if kept, err := s.GetScan(ctx, finished.ID); err != nil || kept.Status != "done" {
+		t.Errorf("finished scan = %+v, %v, want it untouched", kept, err)
+	}
+	if n, err := s.FailRunningScans(ctx, "again"); err != nil || n != 0 {
+		t.Errorf("second call closed %d scans, %v, want 0", n, err)
+	}
+}

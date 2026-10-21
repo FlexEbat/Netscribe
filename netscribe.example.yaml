@@ -53,6 +53,12 @@ trustedProxies: [] # CIDRs of reverse proxies whose X-Forwarded-* headers are tr
 
 discovery:
   routerTables: true # ARP and FDB over SNMP from known routers and switches
+  httpHeaders: true # HEAD / on open web ports (80, 443, 8080): the Server header and the like
+  mdns: true # one mDNS query in each local segment
+  ssdp: true # one SSDP M-SEARCH in each local segment
+  nmap: false # ask an installed nmap (-O) about devices nothing else could type, see README
+  nmapScope: untyped # untyped: only devices nothing else could type, all: every device with an open port
+  nmapPath: "" # empty: look for nmap in PATH, otherwise an absolute path
   probeRoutedTargets: false # ICMP and TCP probes of subnets behind a router
 
 export:

@@ -64,6 +64,27 @@ type DockerStatus interface {
 	State() collector.DockerState
 }
 
+// NmapStatus tells whether nmap is switched on and can be found. *collector.Scanner
+// implements it.
+type NmapStatus interface {
+	NmapState() collector.NmapState
+}
+
+// NmapScanner is a Scanner that can also run one scan with nmap switched on. A POST
+// /api/scans that asks for nmap needs it. *scanStarter in cmd/netscribe implements it.
+type NmapScanner interface {
+	Scanner
+	StartWithNmap() (model.Scan, error)
+}
+
+// DeviceIdentifier asks nmap about one device in the background. Identify returns at once:
+// model.ErrNotFound for an unknown device, collector.ErrBusy while a scan or another
+// identification runs, collector.ErrNmapUnavailable or collector.ErrNoAddress when it
+// cannot start. *deviceIdentifier in cmd/netscribe implements it.
+type DeviceIdentifier interface {
+	Identify(id int64) error
+}
+
 // Scanner starts scans. The scanner behind it is told which targets to use.
 type Scanner interface {
 	// Start records a scan and returns it while it continues in the background.
@@ -88,6 +109,10 @@ type Options struct {
 	ExportOptions func() render.Options
 	// Containers serves GET /api/containers. Without it that route is not registered.
 	Containers ContainerReader
+	// Identifier serves POST /api/devices/{id}/identify. Without it that route is not registered.
+	Identifier DeviceIdentifier
+	// Nmap serves GET /api/nmap. Without it that route is not registered.
+	Nmap NmapStatus
 	// Docker reports whether the daemon can be read. Without it the daemon counts as available.
 	Docker DockerStatus
 	// Scanner runs scans for POST /api/scans. Without it that route is not registered.
@@ -110,6 +135,8 @@ type server struct {
 	exportOpts func() render.Options
 	containers ContainerReader
 	docker     DockerStatus
+	nmap       NmapStatus
+	identifier DeviceIdentifier
 	auditLog   AuditReader
 	scanner    Scanner
 	hub        *events.Hub
@@ -167,6 +194,12 @@ func (s *server) routes() []Route {
 		if s.scanner != nil {
 			table = append(table, route(http.MethodPost, "/api/scans", model.PermScansRun, s.startScan))
 		}
+		if s.nmap != nil {
+			table = append(table, route(http.MethodGet, "/api/nmap", model.PermScansRun, s.getNmap))
+		}
+		if s.identifier != nil {
+			table = append(table, route(http.MethodPost, "/api/devices/{id}/identify", model.PermScansRun, s.identifyDevice))
+		}
 	}
 	if s.hub != nil {
 		table = append(table, route(http.MethodGet, "/api/events", model.PermTopologyRead, s.streamEvents))
@@ -200,6 +233,8 @@ func newServer(opts Options) *server {
 		exportOpts: opts.ExportOptions,
 		containers: opts.Containers,
 		docker:     opts.Docker,
+		nmap:       opts.Nmap,
+		identifier: opts.Identifier,
 		auditLog:   opts.AuditLog,
 		scanner:    opts.Scanner,
 		hub:        opts.Events,

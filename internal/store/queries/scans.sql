@@ -4,6 +4,9 @@ INSERT INTO scans (target, status, started_at) VALUES (?, 'running', ?) RETURNIN
 -- name: GetScan :one
 SELECT * FROM scans WHERE id = ?;
 
+-- name: FailRunningScans :execrows
+UPDATE scans SET status = 'failed', finished_at = ?, error = ? WHERE status = 'running';
+
 -- name: FinishScan :execrows
 UPDATE scans SET status = ?, finished_at = ?, error = ? WHERE id = ? AND status = 'running';
 

@@ -124,6 +124,20 @@ func (s *server) authenticate(next http.Handler) http.Handler {
 	})
 }
 
+// reauthenticate repeats the sign-in check for a request that is still open. It does not
+// refresh the idle timer of a session.
+func (s *server) reauthenticate(r *http.Request) (auth.Principal, error) {
+	if header := r.Header.Get("Authorization"); header != "" {
+		_, value, _ := strings.Cut(header, " ")
+		return s.auth.AuthenticateToken(r.Context(), strings.TrimSpace(value))
+	}
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return auth.Principal{}, auth.ErrUnauthenticated
+	}
+	return s.auth.Recheck(r.Context(), c.Value)
+}
+
 // csrf requires the session's token on every request that can change state.
 func (s *server) csrf(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

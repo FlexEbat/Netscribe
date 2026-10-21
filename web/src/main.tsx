@@ -7,7 +7,10 @@ import { SessionProvider, useSession } from "@/api/session"
 import { routes } from "@/App"
 import { Toaster } from "@/components/ui/sonner"
 import { can } from "@/lib/permissions"
+import { initTheme } from "@/lib/theme"
 import "./index.css"
+
+initTheme()
 
 const router = createBrowserRouter(routes)
 

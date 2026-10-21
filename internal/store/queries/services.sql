@@ -2,11 +2,11 @@
 SELECT * FROM services WHERE device_id = ? AND port = ? AND proto = ?;
 
 -- name: InsertService :exec
-INSERT INTO services (device_id, port, proto, name, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO services (device_id, port, proto, name, banner, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: TouchService :exec
-UPDATE services SET name = ?, last_seen_at = ? WHERE id = ?;
+UPDATE services SET name = ?, banner = ?, last_seen_at = ? WHERE id = ?;
 
 -- name: DeleteDeviceServicesBefore :exec
 DELETE FROM services WHERE device_id = ? AND last_seen_at < ?;

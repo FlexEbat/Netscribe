@@ -8,9 +8,12 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -129,8 +132,14 @@ type TLSConfig struct {
 }
 
 type DiscoveryConfig struct {
-	RouterTables       bool `yaml:"routerTables"`
-	ProbeRoutedTargets bool `yaml:"probeRoutedTargets"`
+	RouterTables       bool   `yaml:"routerTables"`
+	HTTPHeaders        bool   `yaml:"httpHeaders"` // HEAD / on the open web ports
+	MDNS               bool   `yaml:"mdns"`        // one PTR query in each local segment
+	SSDP               bool   `yaml:"ssdp"`        // one M-SEARCH in each local segment
+	Nmap               bool   `yaml:"nmap"`        // ask an installed nmap about devices nothing else could type
+	NmapScope          string `yaml:"nmapScope"`   // untyped (default) or all
+	NmapPath           string `yaml:"nmapPath"`    // empty: look for nmap in PATH
+	ProbeRoutedTargets bool   `yaml:"probeRoutedTargets"`
 }
 
 type ExportConfig struct {
@@ -160,7 +169,7 @@ func defaults() Config {
 			LockoutDuration:    Duration(15 * time.Minute),
 			Argon2:             Argon2Config{MemoryKiB: 65536, Iterations: 3, Parallelism: 2},
 		},
-		Discovery: DiscoveryConfig{RouterTables: true},
+		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true, NmapScope: "untyped"},
 	}
 }
 
@@ -226,6 +235,7 @@ var (
 	errMinPassword = errors.New("min password length is below 12")
 	errMaxFailed   = errors.New("max failed logins is out of range")
 	errProxyCIDR   = errors.New("trusted proxy is not a valid CIDR")
+	errListen      = errors.New("listen must be host:port with a port from 1 to 65535")
 )
 
 var rfc1918 = []netip.Prefix{
@@ -241,10 +251,20 @@ func (c Config) Validate() error {
 		errs = append(errs, fmt.Errorf("%s: %w", where, err))
 	}
 
+	if err := ValidateListen(c.Listen); err != nil {
+		fail("listen", err)
+	}
+
 	for i, t := range c.Scan.Targets {
 		if _, err := ParseTarget(t, c.AllowPublicTargets); err != nil {
 			fail(fmt.Sprintf("scan.targets[%d] %q", i, t), err)
 		}
+	}
+	if sc := c.Discovery.NmapScope; sc != "" && sc != "untyped" && sc != "all" {
+		fail("discovery.nmapScope", errors.New("must be untyped or all"))
+	}
+	if p := c.Discovery.NmapPath; p != "" && !filepath.IsAbs(p) {
+		fail("discovery.nmapPath", errors.New("must be an absolute path"))
 	}
 	if iv := c.Scan.Interval.Std(); iv != 0 && iv < time.Minute {
 		fail("scan.interval", errInterval)
@@ -281,6 +301,20 @@ func (c Config) Validate() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// ValidateListen checks a listen address before the server binds it, so a typo such as
+// "8080" without a colon is reported at load time and not after the workers started.
+func ValidateListen(addr string) error {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return errListen
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return errListen
+	}
+	return nil
 }
 
 // ParseTarget parses and checks one scan target, from the config or from a CLI argument.

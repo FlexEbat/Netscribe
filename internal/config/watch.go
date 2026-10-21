@@ -28,6 +28,10 @@ type Watcher struct {
 	log        *slog.Logger
 	delay      time.Duration
 	cur        atomic.Pointer[Config]
+
+	// watching, when set, is called once the directory watch is in place. Tests use it
+	// to know when a file change can no longer be missed.
+	watching func()
 }
 
 // NewWatcher returns a watcher whose current config is initial, loaded from path.
@@ -108,6 +112,9 @@ func (w *Watcher) Run(ctx context.Context, hup <-chan os.Signal, reloaded func(C
 	}()
 	if err := fw.Add(filepath.Dir(path)); err != nil {
 		return fmt.Errorf("watch config: %w", err)
+	}
+	if w.watching != nil {
+		w.watching()
 	}
 
 	apply := func() {

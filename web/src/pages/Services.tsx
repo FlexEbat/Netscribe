@@ -46,8 +46,8 @@ export function Services() {
       <h1 className="text-lg font-semibold">Services</h1>
       <Input
         type="search"
-        aria-label="Filter by service name"
-        placeholder="Filter by service name"
+        aria-label="Filter by service name or banner"
+        placeholder="Filter by service name or banner"
         className="max-w-sm"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -101,6 +101,7 @@ function Results({ state, query }: { state: State; query: string }) {
           <TableHead>Service</TableHead>
           <TableHead>Port</TableHead>
           <TableHead>Protocol</TableHead>
+          <TableHead>Banner</TableHead>
           <TableHead>Device</TableHead>
         </TableRow>
       </TableHeader>
@@ -112,6 +113,9 @@ function Results({ state, query }: { state: State; query: string }) {
               <TableCell>{s.name || "–"}</TableCell>
               <TableCell className="font-mono">{s.port}</TableCell>
               <TableCell className="uppercase">{s.proto}</TableCell>
+              <TableCell className="max-w-64 break-words text-muted-foreground">
+                {s.banner || "–"}
+              </TableCell>
               <TableCell>
                 {deviceName(d)}
                 {d?.ip && deviceName(d) !== d.ip ? (
