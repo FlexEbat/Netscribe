@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -224,5 +225,35 @@ func TestConfigEventsReachOnlyThoseWithUsersManage(t *testing.T) {
 		if got := strings.Join(eventNames(t, resp, 1), " "); got != "topology.changed" {
 			t.Errorf("%s got %q first, want only the marker: config events are for users:manage", name, got)
 		}
+	}
+}
+
+func TestEventStreamEndsWhenTheAccountIsDisabled(t *testing.T) {
+	old := heartbeat
+	heartbeat = 20 * time.Millisecond
+	t.Cleanup(func() { heartbeat = old })
+	e, _, srv := streamEnv(t)
+	e.addUser("vera", model.RoleViewer)
+	resp, closeStream := openStream(t, srv, e.mustLogin("vera"))
+	defer closeStream()
+
+	ended := make(chan struct{})
+	go func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		close(ended)
+	}()
+	select {
+	case <-ended:
+		t.Fatal("the stream ended while the account was enabled")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	if _, err := e.svc.SetDisabled(context.Background(), "vera", true); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-ended:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the stream stayed open after the account was disabled")
 	}
 }
