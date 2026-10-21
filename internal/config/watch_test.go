@@ -119,6 +119,8 @@ type reloads struct {
 func runWatcher(t *testing.T, w *Watcher) *reloads {
 	t.Helper()
 	r := &reloads{ok: make(chan Config, 8), failed: make(chan error, 8), hup: make(chan os.Signal, 1)}
+	ready := make(chan struct{})
+	w.watching = func() { close(ready) }
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
@@ -135,9 +137,29 @@ func runWatcher(t *testing.T, w *Watcher) *reloads {
 			t.Error("Run did not stop when its context ended")
 		}
 	})
-	// The directory watch is added inside Run, give it a moment to start.
-	time.Sleep(100 * time.Millisecond)
+	// The directory watch is added inside Run: a change made before that is never seen.
+	select {
+	case <-ready:
+	case err := <-done:
+		t.Fatalf("Run ended before it started watching: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the watcher did not start")
+	}
 	return r
+}
+
+// writeAtomic replaces the file in one step, like an editor does. os.WriteFile truncates
+// first, so a reload that lands between the truncate and the write would read an empty
+// file and fail.
+func writeAtomic(t *testing.T, path, body string) {
+	t.Helper()
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func waitConfig(t *testing.T, r *reloads) Config {
@@ -175,20 +197,21 @@ func TestRunPicksUpAFileReplacedByRename(t *testing.T) {
 
 func TestRunReloadsOnceForABurstOfWrites(t *testing.T) {
 	w, path := testWatcher(t, "scan:\n  targets: [192.168.1.0/24]\n", quietLog())
-	w.delay = 150 * time.Millisecond
+	w.delay = 300 * time.Millisecond
 	r := runWatcher(t, w)
 
+	// No pauses between the writes: a pause longer than the delay, which a loaded
+	// runner can cause, would end the burst early and count as a second reload.
 	for i := 0; i < 5; i++ {
-		if err := os.WriteFile(path, []byte("scan:\n  targets: [192.168.1.0/24]\n  interval: 20m\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		time.Sleep(10 * time.Millisecond)
+		writeAtomic(t, path, "scan:\n  targets: [192.168.1.0/24]\n  interval: 20m\n")
 	}
 	waitConfig(t, r)
 	select {
 	case <-r.ok:
 		t.Error("a second reload followed the burst")
-	case <-time.After(400 * time.Millisecond):
+	case err := <-r.failed:
+		t.Errorf("reload failed: %v", err)
+	case <-time.After(700 * time.Millisecond):
 	}
 }
 
@@ -196,9 +219,7 @@ func TestRunReportsABrokenFileAndKeepsWorking(t *testing.T) {
 	w, path := testWatcher(t, "scan:\n  targets: [192.168.1.0/24]\n  interval: 15m\n", quietLog())
 	r := runWatcher(t, w)
 
-	if err := os.WriteFile(path, []byte("scan: [\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeAtomic(t, path, "scan: [\n")
 	select {
 	case err := <-r.failed:
 		if err == nil {
@@ -211,9 +232,7 @@ func TestRunReportsABrokenFileAndKeepsWorking(t *testing.T) {
 		t.Errorf("interval = %v, want the previous 15m", got)
 	}
 
-	if err := os.WriteFile(path, []byte("scan:\n  targets: [192.168.1.0/24]\n  interval: 25m\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeAtomic(t, path, "scan:\n  targets: [192.168.1.0/24]\n  interval: 25m\n")
 	if got := waitConfig(t, r).Scan.Interval.Std(); got != 25*time.Minute {
 		t.Errorf("interval = %v after the repair, want 25m", got)
 	}
@@ -222,9 +241,7 @@ func TestRunReportsABrokenFileAndKeepsWorking(t *testing.T) {
 func TestRunReloadsOnSIGHUP(t *testing.T) {
 	w, path := testWatcher(t, "scan:\n  targets: [192.168.1.0/24]\n  interval: 15m\n", quietLog())
 	// The file changes before the watch starts, so only the signal can trigger the reload.
-	if err := os.WriteFile(path, []byte("scan:\n  targets: [192.168.1.0/24]\n  interval: 50m\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeAtomic(t, path, "scan:\n  targets: [192.168.1.0/24]\n  interval: 50m\n")
 	r := runWatcher(t, w)
 	r.hup <- os.Interrupt
 	if got := waitConfig(t, r).Scan.Interval.Std(); got != 50*time.Minute {

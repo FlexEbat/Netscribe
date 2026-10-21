@@ -20,6 +20,7 @@ export function ServicesTable({ services }: { services: readonly Service[] }) {
           <TableHead>Service</TableHead>
           <TableHead>Port</TableHead>
           <TableHead>Protocol</TableHead>
+          <TableHead>Banner</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -28,6 +29,9 @@ export function ServicesTable({ services }: { services: readonly Service[] }) {
             <TableCell>{s.name || "–"}</TableCell>
             <TableCell className="font-mono">{s.port}</TableCell>
             <TableCell className="uppercase">{s.proto}</TableCell>
+            <TableCell className="max-w-64 break-words text-muted-foreground">
+              {s.banner || "–"}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>

@@ -161,6 +161,10 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 	}
 	// Names and descriptions come from the network, so a third party controls them.
 	in.Hostname, in.Vendor, in.Description = cleanText(in.Hostname), cleanText(in.Vendor), cleanText(in.Description)
+	in.OSGuess = cleanText(in.OSGuess)
+	if utf8.RuneCountInString(in.OSGuess) > maxOSGuessRunes {
+		in.OSGuess = string([]rune(in.OSGuess)[:maxOSGuessRunes])
+	}
 	kind := string(in.Kind)
 	if kind == "" {
 		kind = string(model.KindUnknown)
@@ -173,7 +177,7 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 	if !found {
 		id, err := q.InsertDevice(ctx, dbgen.InsertDeviceParams{
 			Mac: mac, Ip: ip, Hostname: in.Hostname, Vendor: in.Vendor, Kind: kind,
-			Description: in.Description, Source: in.Source, FirstSeenAt: ts, LastSeenAt: ts,
+			Description: in.Description, OsGuess: in.OSGuess, Source: in.Source, FirstSeenAt: ts, LastSeenAt: ts,
 		})
 		if err != nil {
 			return 0, fmt.Errorf("insert device: %w", err)
@@ -184,14 +188,20 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 	if kind == string(model.KindUnknown) || cur.KindLocked != 0 {
 		kind = cur.Kind // an unknown kind never replaces a known one, a person's choice stays
 	}
+	hostname := firstNonEmpty(in.Hostname, cur.Hostname)
+	if in.Source == "mdns" {
+		// A name from mDNS only fills an empty hostname, it never replaces a known one.
+		hostname = firstNonEmpty(cur.Hostname, in.Hostname)
+	}
 	err = q.UpdateDeviceFromScan(ctx, dbgen.UpdateDeviceFromScanParams{
 		Mac:         firstNonEmpty(mac, cur.Mac),
 		Ip:          firstNonEmpty(ip, cur.Ip),
-		Hostname:    firstNonEmpty(in.Hostname, cur.Hostname),
+		Hostname:    hostname,
 		Vendor:      firstNonEmpty(in.Vendor, cur.Vendor),
 		Kind:        kind,
 		Source:      betterSource(cur.Source, in.Source),
 		Description: firstNonEmpty(in.Description, cur.Description),
+		OsGuess:     firstNonEmpty(in.OSGuess, cur.OsGuess),
 		LastSeenAt:  ts,
 		ID:          cur.ID,
 	})
@@ -241,6 +251,21 @@ func cleanText(s string) string {
 		return s
 	}
 	return string([]rune(s)[:maxTextRunes])
+}
+
+// maxBannerRunes is the longest service banner that is stored.
+const maxBannerRunes = 200
+
+// maxOSGuessRunes is the longest operating system guess that is stored.
+const maxOSGuessRunes = 100
+
+// cleanBanner cleans a banner like any other text from the network and cuts it shorter.
+func cleanBanner(s string) string {
+	s = cleanText(s)
+	if utf8.RuneCountInString(s) <= maxBannerRunes {
+		return s
+	}
+	return string([]rune(s)[:maxBannerRunes])
 }
 
 func firstNonEmpty(preferred, fallback string) string {
@@ -428,16 +453,16 @@ func applyServices(ctx context.Context, q *dbgen.Queries, r collector.Result, ts
 		if !found {
 			continue
 		}
-		name := cleanText(in.Name)
+		name, banner := cleanText(in.Name), cleanBanner(in.Banner)
 		cur, err := q.GetServiceByKey(ctx, dbgen.GetServiceByKeyParams{DeviceID: id, Port: int64(in.Port), Proto: proto})
 		switch {
 		case err == nil:
-			if err := q.TouchService(ctx, dbgen.TouchServiceParams{Name: name, LastSeenAt: ts, ID: cur.ID}); err != nil {
+			if err := q.TouchService(ctx, dbgen.TouchServiceParams{Name: name, Banner: banner, LastSeenAt: ts, ID: cur.ID}); err != nil {
 				return fmt.Errorf("touch service %d: %w", cur.ID, err)
 			}
 		case errors.Is(err, sql.ErrNoRows):
 			err := q.InsertService(ctx, dbgen.InsertServiceParams{
-				DeviceID: id, Port: int64(in.Port), Proto: proto, Name: name, FirstSeenAt: ts, LastSeenAt: ts,
+				DeviceID: id, Port: int64(in.Port), Proto: proto, Name: name, Banner: banner, FirstSeenAt: ts, LastSeenAt: ts,
 			})
 			if err != nil {
 				return fmt.Errorf("insert service: %w", err)

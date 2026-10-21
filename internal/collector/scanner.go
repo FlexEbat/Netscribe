@@ -75,11 +75,19 @@ type Scanner struct {
 	// sysServices and open ports. Both are optional.
 	classifier *Classifier
 	facts      func(model.DeviceKey) Facts
+
+	// nmap is the optional last resort for devices nothing else could type. It is asked
+	// only when discovery.nmap is on, and then only about those devices.
+	nmap *Nmap
 }
 
 // NewScanner returns a scanner that discovers hosts with ARP and resolves names with system DNS.
 func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	probe, snmp, services := NewProbe(log), NewSNMP(log), NewServices(log)
+	openWebPorts := func(ip string) []int { return mergePorts(probe.openPorts(ip), services.openPorts(ip)) }
+	httpBanner, mdns, ssdp := NewHTTPBanner(log, openWebPorts), NewMDNS(log), NewSSDP(log)
+	nmap := NewNmap(log)
+	nmap.ports = openWebPorts
 	docker := NewDocker(cfg.Docker, log)
 	lldp := NewLLDP(snmp, log)
 	classifier, err := DefaultClassifier()
@@ -92,12 +100,16 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		wake: make(chan struct{}, 1),
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
-		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services},
+		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services, httpBanner, mdns, ssdp},
 		late:       []Collector{NewSSH(log), docker},
 		docker:     docker,
 		classifier: classifier,
+		nmap:       nmap,
 		facts: func(k model.DeviceKey) Facts {
-			f := Facts{Services: -1, Ports: mergePorts(probe.openPorts(k.IP), services.openPorts(k.IP))}
+			f := Facts{
+				Services: -1, Ports: openWebPorts(k.IP),
+				HTTP: httpBanner.banner(k.IP), MDNS: mdns.serviceTypes(k.IP), SSDP: ssdp.announced(k.IP), Nmap: nmap.guess(k.IP),
+			}
 			if n, ok := snmp.servicesOf(k.IP); ok {
 				f.Services = n
 			}
@@ -176,7 +188,7 @@ func (s *Scanner) progress(scanID int64, stage string, done int) {
 
 // begin takes the single scan slot and records the new scan. The caller releases the
 // slot with s.busy.Store(false) once the scan has ended.
-func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
+func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix, withNmap bool) (model.Scan, error) {
 	if len(targets) == 0 {
 		return model.Scan{}, ErrNoTargets
 	}
@@ -189,6 +201,9 @@ func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan
 		return model.Scan{}, fmt.Errorf("start scan: %w", err)
 	}
 	s.scanCfg = s.config()
+	if withNmap {
+		s.scanCfg.Discovery.Nmap = true // for this scan only
+	}
 	s.log.Info("scan started", "scan", scan.ID, "target", scan.Target)
 	s.publish("scan.started", scan)
 	return scan, nil
@@ -198,7 +213,7 @@ func (s *Scanner) begin(ctx context.Context, targets []netip.Prefix) (model.Scan
 // outcome: when it fails, or the scan is canceled before the result is stored, the
 // scan ends as failed and the device state stays as it was.
 func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
-	scan, err := s.begin(ctx, targets)
+	scan, err := s.begin(ctx, targets, false)
 	if err != nil {
 		return model.Scan{}, err
 	}
@@ -209,7 +224,16 @@ func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, 
 // Start records the scan and returns it while the scan continues in the background
 // until it ends or ctx is canceled. ErrBusy means a scan is already running.
 func (s *Scanner) Start(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
-	scan, err := s.begin(ctx, targets)
+	return s.start(ctx, targets, false)
+}
+
+// StartWithNmap is Start with nmap switched on for this scan, whatever discovery.nmap says.
+func (s *Scanner) StartWithNmap(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
+	return s.start(ctx, targets, true)
+}
+
+func (s *Scanner) start(ctx context.Context, targets []netip.Prefix, withNmap bool) (model.Scan, error) {
+	scan, err := s.begin(ctx, targets, withNmap)
 	if err != nil {
 		return model.Scan{}, err
 	}
@@ -350,7 +374,7 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 			res.Links = append(res.Links, out.Links...)
 			res.LinksPolled = append(res.LinksPolled, out.LinksPolled...)
 			res.FDBPolled = append(res.FDBPolled, out.FDBPolled...)
-			res.Services = append(res.Services, out.Services...)
+			res.Services = mergeServices(res.Services, out.Services)
 			res.ServicesPolled = append(res.ServicesPolled, out.ServicesPolled...)
 			res.Containers = append(res.Containers, out.Containers...)
 			res.ContainersPolled = append(res.ContainersPolled, out.ContainersPolled...)
@@ -362,10 +386,113 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 	}
 	fillVendors(res.Devices)
 	if s.classifier != nil {
+		res.Devices = append(res.Devices, s.askNmap(ctx, targets, devices, res.Devices)...)
 		s.classifier.Apply(res.Devices, s.facts)
 	}
 	collect(s.late)
 	return res
+}
+
+// askNmap runs nmap on the devices that no other source could type, before the
+// classifier looks at what it guessed. It does nothing unless discovery.nmap is on.
+func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices []model.Device, inputs []model.DeviceInput) []model.DeviceInput {
+	if s.nmap == nil || !s.scanCfg.Discovery.Nmap {
+		return nil
+	}
+	// With discovery.nmapScope "all" every device is asked, with the default only the
+	// ones nothing else could type. The collector itself skips a device with no open port.
+	untyped := map[string]bool{}
+	for _, k := range s.classifier.Untyped(inputs, s.facts) {
+		untyped[k.IP] = true
+	}
+	all := s.scanCfg.Discovery.NmapScope == "all"
+	var ask []model.Device
+	for _, d := range devices {
+		if all || untyped[d.IP] {
+			ask = append(ask, d)
+		}
+	}
+	if len(ask) == 0 {
+		return nil
+	}
+	out, err := s.nmap.Collect(ctx, Input{Targets: targets, Devices: ask, Config: s.scanCfg})
+	if err != nil {
+		if ctx.Err() == nil {
+			s.log.Warn("collector failed", "collector", s.nmap.Name(), "err", err)
+		}
+		return nil
+	}
+	return out.Devices
+}
+
+// IdentifyResult is what nmap found out about one device.
+type IdentifyResult struct {
+	OS   string           // the system name, may be empty
+	Kind model.DeviceKind // the kind the classifier derives from it, unknown when none
+}
+
+// StartIdentify asks nmap about one device in the background and calls done with the
+// answer. It refuses at once when nmap cannot be found, when the address is not IPv4, or
+// when a scan or another identification is running, because they share the scan slot.
+func (s *Scanner) StartIdentify(ctx context.Context, ip string, done func(IdentifyResult, error)) error {
+	if s.nmap == nil || !s.nmap.State(s.config().Discovery).Available {
+		return ErrNmapUnavailable
+	}
+	if addr, err := netip.ParseAddr(ip); err != nil || !addr.Is4() {
+		return ErrNoAddress
+	}
+	if !s.busy.CompareAndSwap(false, true) {
+		return ErrBusy
+	}
+	go func() {
+		defer s.busy.Store(false)
+		id, err := s.nmap.Identify(ctx, s.config().Discovery, ip)
+		res := IdentifyResult{OS: id.OS, Kind: model.KindUnknown}
+		if err == nil && s.classifier != nil {
+			res.Kind = s.classifier.Kind("", "", Facts{Services: -1, Nmap: id.Facts})
+		}
+		done(res, err)
+	}()
+	return nil
+}
+
+// NmapState tells whether nmap is switched on and can be found.
+func (s *Scanner) NmapState() NmapState {
+	if s.nmap == nil {
+		return NmapState{Reason: "nmap is not part of this build"}
+	}
+	return s.nmap.State(s.config().Discovery)
+}
+
+// mergeServices adds the services of later to those of base. A service that is in both
+// keeps one entry, where a banner or a name that is set wins over one that is empty, so
+// the port scan and the HTTP stage do not wipe each other when the store applies them.
+func mergeServices(base, later []model.ServiceInput) []model.ServiceInput {
+	type key struct {
+		dev   model.DeviceKey
+		port  int
+		proto string
+	}
+	index := make(map[key]int, len(base))
+	for i, s := range base {
+		index[key{s.Device, s.Port, s.Proto}] = i
+	}
+	for _, s := range later {
+		k := key{s.Device, s.Port, s.Proto}
+		i, ok := index[k]
+		if !ok {
+			index[k] = len(base)
+			base = append(base, s)
+			continue
+		}
+		if s.Name != "" {
+			base[i].Name = s.Name
+		}
+		if s.Banner != "" {
+			base[i].Banner = s.Banner
+		}
+	}
+	return base
 }
 
 // mergePorts joins two lists of open ports without repeats.

@@ -2,7 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -382,5 +385,237 @@ func TestServicesGoWithTheirDevice(t *testing.T) {
 	}
 	if got := services(t, s, 0); len(got) != 1 || got[0].Port != 80 {
 		t.Errorf("services = %+v, want only the other device's", got)
+	}
+}
+
+func TestApplyServiceBannerIsCleanedCutAndRefreshed(t *testing.T) {
+	s := newTestStore(t)
+	long := strings.Repeat("é", 250)
+	web := model.ServiceInput{Device: keyA, Port: 80, Proto: "tcp", Name: "http", Banner: "nginx/1.25\x00\x07 ok"}
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Services: []model.ServiceInput{web}, ServicesPolled: []model.DeviceKey{keyA}})
+	got := services(t, s, 0)
+	if len(got) != 1 || got[0].Banner != "nginx/1.25 ok" {
+		t.Fatalf("services = %+v, want the banner without control characters", got)
+	}
+
+	web.Banner = long
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Services: []model.ServiceInput{web}, ServicesPolled: []model.DeviceKey{keyA}})
+	if got := services(t, s, 0); utf8.RuneCountInString(got[0].Banner) != 200 {
+		t.Errorf("banner has %d characters, want it cut to 200", utf8.RuneCountInString(got[0].Banner))
+	}
+
+	// A scan that finds no banner this time clears the old one.
+	web.Banner = ""
+	scanResult(t, s, collector.Result{Devices: twoDevices(), Services: []model.ServiceInput{web}, ServicesPolled: []model.DeviceKey{keyA}})
+	if got := services(t, s, 0); got[0].Banner != "" {
+		t.Errorf("banner = %q, want it empty", got[0].Banner)
+	}
+}
+
+func TestApplyMDNSNameOnlyFillsAnEmptyHostname(t *testing.T) {
+	s := newTestStore(t)
+	named := dev(keyA.MAC, keyA.IP)
+	named.Hostname = "gateway"
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{named, dev(keyB.MAC, keyB.IP)}})
+
+	mdns := func(k model.DeviceKey, name string) model.DeviceInput {
+		return model.DeviceInput{Key: k, Hostname: name, Source: "mdns"}
+	}
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{
+		named, dev(keyB.MAC, keyB.IP), mdns(keyA, "printer.local"), mdns(keyB, "laptop.local"),
+	}})
+	if got := byMAC(t, s, keyA.MAC).Hostname; got != "gateway" {
+		t.Errorf("hostname = %q, the mDNS name must not replace a known one", got)
+	}
+	if got := byMAC(t, s, keyB.MAC).Hostname; got != "laptop.local" {
+		t.Errorf("hostname = %q, the mDNS name must fill an empty one", got)
+	}
+}
+
+func TestApplyOSGuessIsStoredCutAndKeptUntilAnotherOneComes(t *testing.T) {
+	s := newTestStore(t)
+	guess := model.DeviceInput{Key: keyA, OSGuess: "Linux 5.3 - 5.4\x00", Source: "nmap"}
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP), guess}})
+	if got := byMAC(t, s, keyA.MAC).OSGuess; got != "Linux 5.3 - 5.4" {
+		t.Fatalf("OS guess = %q, want it stored without control characters", got)
+	}
+
+	// A scan without nmap does not erase what is known.
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
+	if got := byMAC(t, s, keyA.MAC).OSGuess; got != "Linux 5.3 - 5.4" {
+		t.Errorf("OS guess = %q, want it kept", got)
+	}
+
+	// A new guess replaces it, and a long one is cut.
+	guess.OSGuess = strings.Repeat("é", 150)
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP), guess}})
+	if got := byMAC(t, s, keyA.MAC).OSGuess; utf8.RuneCountInString(got) != 100 {
+		t.Errorf("OS guess has %d characters, want it cut to 100", utf8.RuneCountInString(got))
+	}
+}
+
+func TestApplyNmapSourceDoesNotTakeOverTheDevice(t *testing.T) {
+	s := newTestStore(t)
+	arp := dev(keyA.MAC, keyA.IP)
+	arp.Hostname = "gateway"
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{arp, {Key: keyA, OSGuess: "Linux 5.4", Source: "nmap"}}})
+	d := byMAC(t, s, keyA.MAC)
+	if d.Source != "arp" || d.Hostname != "gateway" {
+		t.Errorf("device = %+v, the nmap input must not change the source or the name", d)
+	}
+}
+
+func TestApplyIdentitySetsTheOSAndTheKindOfAnUntypedDevice(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices()})
+	d := byMAC(t, s, keyA.MAC)
+
+	got, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindRouter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OSGuess != "Linux 5.4" || got.Kind != model.KindRouter {
+		t.Errorf("device = %+v, want the OS guess and the kind", got)
+	}
+}
+
+func TestApplyIdentityKeepsAKindThatIsKnownOrSetByHand(t *testing.T) {
+	s := newTestStore(t)
+	typed := dev(keyA.MAC, keyA.IP)
+	typed.Kind = model.KindSwitch
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{typed, dev(keyB.MAC, keyB.IP)}})
+
+	a := byMAC(t, s, keyA.MAC)
+	got, err := s.ApplyIdentity(context.Background(), a.ID, "Cisco IOS", model.KindRouter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != model.KindSwitch || got.OSGuess != "Cisco IOS" {
+		t.Errorf("device = %+v, want the OS stored and the known kind kept", got)
+	}
+
+	// A kind chosen by a person stays, even though the device was unknown before.
+	b := byMAC(t, s, keyB.MAC)
+	printer := model.KindPrinter
+	if _, err := s.UpdateDevice(context.Background(), b.ID, model.DeviceEdit{Kind: &printer, Version: b.Version}, 0); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.ApplyIdentity(context.Background(), b.ID, "Linux", model.KindCamera)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != model.KindPrinter {
+		t.Errorf("kind = %q, a kind set by hand must not change", got.Kind)
+	}
+}
+
+func TestApplyIdentityWithoutAnswerChangesNothing(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices()})
+	d := byMAC(t, s, keyA.MAC)
+	if _, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindUnknown); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ApplyIdentity(context.Background(), d.ID, "", model.KindUnknown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OSGuess != "Linux 5.4" || got.Kind != model.KindUnknown {
+		t.Errorf("device = %+v, an empty answer must keep what is there", got)
+	}
+}
+
+func TestApplyIdentityOfAMissingDevice(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.ApplyIdentity(context.Background(), 999, "Linux", model.KindRouter); !errors.Is(err, model.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
+// feedOf returns the summaries of the changes of the last completed scan.
+func feedOf(t *testing.T, s *Store) []string {
+	t.Helper()
+	_, changes, ok, err := s.LatestChanges(context.Background())
+	if err != nil || !ok {
+		t.Fatalf("latest changes: ok=%v err=%v", ok, err)
+	}
+	var out []string
+	for _, c := range changes {
+		out = append(out, c.Summary)
+	}
+	return out
+}
+
+func TestApplyIdentityWritesTheChangeToTheFeedOfTheLastScan(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: twoDevices()}) // the baseline writes no changes
+	if got := feedOf(t, s); len(got) != 0 {
+		t.Fatalf("feed = %v, want it empty after the first scan", got)
+	}
+	d := byMAC(t, s, keyA.MAC)
+
+	if _, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindRouter); err != nil {
+		t.Fatal(err)
+	}
+	feed := feedOf(t, s)
+	if len(feed) != 1 || !strings.HasPrefix(feed[0], "Nmap: ") ||
+		!strings.Contains(feed[0], "kind unknown -> router") || !strings.Contains(feed[0], "system - -> Linux 5.4") {
+		t.Fatalf("feed = %v, want one Nmap entry with the new kind and system", feed)
+	}
+
+	// The same answer again changes nothing, so it adds nothing to the feed.
+	if _, err := s.ApplyIdentity(context.Background(), d.ID, "Linux 5.4", model.KindRouter); err != nil {
+		t.Fatal(err)
+	}
+	if got := feedOf(t, s); len(got) != 1 {
+		t.Errorf("feed = %v, an answer that changes nothing must not be written", got)
+	}
+}
+
+func TestApplyIdentityOnlyWritesWhatChanged(t *testing.T) {
+	s := newTestStore(t)
+	typed := dev(keyA.MAC, keyA.IP)
+	typed.Kind = model.KindSwitch
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{typed, dev(keyB.MAC, keyB.IP)}})
+	a := byMAC(t, s, keyA.MAC)
+
+	// The kind is known, so only the system changes.
+	if _, err := s.ApplyIdentity(context.Background(), a.ID, "Cisco IOS", model.KindRouter); err != nil {
+		t.Fatal(err)
+	}
+	feed := feedOf(t, s)
+	if len(feed) != 1 || strings.Contains(feed[0], "kind") || !strings.Contains(feed[0], "system - -> Cisco IOS") {
+		t.Errorf("feed = %v, want a change of the system only", feed)
+	}
+}
+
+func TestApplyIdentityWithNoCompletedScanWritesNoFeed(t *testing.T) {
+	s := newTestStore(t)
+	d, err := s.CreateDevice(context.Background(), model.ManualDevice{IP: "192.168.1.50"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ApplyIdentity(context.Background(), d.ID, "Linux", model.KindRouter)
+	if err != nil {
+		t.Fatalf("err = %v, want the identity stored without a feed", err)
+	}
+	if got.OSGuess != "Linux" {
+		t.Errorf("device = %+v, want the guess stored", got)
+	}
+	changes, err := s.ListChanges(context.Background(), 10)
+	if err != nil || len(changes) != 0 {
+		t.Errorf("changes = %v, err = %v, want none", changes, err)
+	}
+}
+
+func TestAScanReportsAChangedSystemInTheFeed(t *testing.T) {
+	s := newTestStore(t)
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{dev(keyA.MAC, keyA.IP)}})
+	scanResult(t, s, collector.Result{Devices: []model.DeviceInput{
+		dev(keyA.MAC, keyA.IP), {Key: keyA, OSGuess: "Linux 5.4", Source: "nmap"},
+	}})
+	feed := feedOf(t, s)
+	if len(feed) != 1 || !strings.Contains(feed[0], "system - -> Linux 5.4") || strings.HasPrefix(feed[0], "Nmap: ") {
+		t.Errorf("feed = %v, want the scan to report the new system", feed)
 	}
 }

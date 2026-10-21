@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react"
-import { Pencil } from "lucide-react"
+import { Pencil, ScanSearch } from "lucide-react"
 import {
+  ApiError,
   deleteDevice,
   getDeviceDetail,
+  getNmap,
+  identifyDevice,
   updateDevice,
   type Device,
   type DeviceDetail,
 } from "@/api/client"
+import { openEvents } from "@/api/events"
 import { DeleteDeviceButton } from "@/components/DeleteDeviceButton"
 import { DeviceForm } from "@/components/DeviceForm"
 import { InterfacesTable } from "@/components/InterfacesTable"
@@ -26,11 +30,19 @@ interface DevicePanelProps {
   canEdit?: boolean
   /** Called after a device was changed or deleted, so the canvas can load the new state. */
   onChanged?: () => void
+  /** The user may run scans, which includes asking nmap about one device. */
+  canIdentify?: boolean
 }
 
 type State = { status: "loading" } | { status: "failed" } | ({ status: "ready" } & DeviceDetail)
 
-export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: DevicePanelProps) {
+export function DevicePanel({
+  deviceId,
+  onClose,
+  canEdit = false,
+  onChanged,
+  canIdentify = false,
+}: DevicePanelProps) {
   // The state remembers which device it belongs to, so a new deviceId shows the loading
   // state straight away without resetting state from inside the effect.
   const [loaded, setLoaded] = useState<{ id: number; state: State } | null>(null)
@@ -95,6 +107,9 @@ export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: D
         ) : (
           <>
             <Body state={state} />
+            {canIdentify && state.status === "ready" && state.device.ip ? (
+              <IdentifyButton deviceId={deviceId} onDone={() => setReloads((n) => n + 1)} />
+            ) : null}
             {canEdit && state.status === "ready" ? (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
@@ -115,6 +130,72 @@ export function DevicePanel({ deviceId, onClose, canEdit = false, onChanged }: D
         )}
       </SheetContent>
     </Sheet>
+  )
+}
+
+/** How long the panel waits for nmap before it lets the person try again. */
+const identifyWaitMs = 120_000
+
+/**
+ * Asks nmap about the device. The button shows only when the server found nmap. The answer
+ * arrives as a topology change, then the panel loads the device again.
+ */
+function IdentifyButton({ deviceId, onDone }: { deviceId: number; onDone: () => void }) {
+  const [available, setAvailable] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let cancelled = false
+    getNmap()
+      .then((s) => !cancelled && setAvailable(s.available))
+      .catch(() => !cancelled && setAvailable(false))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!running) return
+    const timer = setTimeout(() => setRunning(false), identifyWaitMs)
+    const close = openEvents({
+      "topology.changed": () => {
+        setRunning(false)
+        onDone()
+      },
+    })
+    return () => {
+      clearTimeout(timer)
+      close()
+    }
+  }, [running, onDone])
+
+  if (!available) return null
+
+  async function start() {
+    setError("")
+    try {
+      await identifyDevice(deviceId)
+      setRunning(true)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        setError("A scan or another identification is running.")
+      } else if (e instanceof ApiError && e.status === 400) {
+        setError("Nmap is not available.")
+      } else {
+        setError("Could not start Nmap.")
+      }
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Button variant="outline" size="sm" disabled={running} onClick={() => void start()}>
+        <ScanSearch className="size-4" aria-hidden="true" />
+        {running ? "Asking Nmap…" : "Identify with Nmap"}
+      </Button>
+      {error ? <Alert variant="destructive">{error}</Alert> : null}
+    </div>
   )
 }
 
@@ -181,6 +262,12 @@ function Details({ device: d }: { device: Device }) {
         <div className="contents">
           <dt className="text-muted-foreground">Description</dt>
           <dd className="break-words">{d.description}</dd>
+        </div>
+      ) : null}
+      {d.osGuess ? (
+        <div className="contents">
+          <dt className="text-muted-foreground">System (Nmap)</dt>
+          <dd className="break-words">{d.osGuess}</dd>
         </div>
       ) : null}
     </dl>

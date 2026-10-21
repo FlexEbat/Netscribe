@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/store"
 )
@@ -201,4 +202,30 @@ func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string][]model.Device{"devices": devices})
+}
+
+// identifyDevice answers POST /api/devices/{id}/identify with 202 and runs nmap for that
+// device in the background. The result shows up when the topology changes.
+func (s *server) identifyDevice(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id < 1 {
+		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	err = s.identifier.Identify(id)
+	switch {
+	case err == nil:
+		s.record(r, "device_identify", "ok", "device "+strconv.FormatInt(id, 10))
+		w.WriteHeader(http.StatusAccepted)
+	case errors.Is(err, model.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not found")
+	case errors.Is(err, collector.ErrBusy):
+		writeError(w, http.StatusConflict, "a scan or another identification is running")
+	case errors.Is(err, collector.ErrNmapUnavailable):
+		writeError(w, http.StatusBadRequest, "nmap is not available")
+	case errors.Is(err, collector.ErrNoAddress):
+		writeError(w, http.StatusBadRequest, "the device has no IPv4 address")
+	default:
+		s.internalError(w, "identify device", err)
+	}
 }

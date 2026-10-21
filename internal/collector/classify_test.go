@@ -134,3 +134,55 @@ func TestDefaultRules(t *testing.T) {
 		t.Errorf("ssh and http prove nothing, got %q", got)
 	}
 }
+
+const sourceRules = `# rules for what a device says over HTTP, mDNS and SSDP
+http,Hikvision,camera
+http,cups,printer
+mdns,_ipp._tcp,printer
+mdns,_airplay._tcp,iot
+ssdp,InternetGatewayDevice,router
+descr,Gadget OS,iot
+port,22,server
+`
+
+func TestClassifierRulesForHTTPMDNSAndSSDP(t *testing.T) {
+	c := mustClassifier(t, sourceRules)
+	cases := []struct {
+		name  string
+		descr string
+		facts Facts
+		want  model.DeviceKind
+	}{
+		{"http text, any case", "", Facts{Services: -1, HTTP: "Server: HIKVISION-Webs"}, model.KindCamera},
+		{"mdns type", "", Facts{Services: -1, MDNS: []string{"_ssh._tcp", "_ipp._tcp"}}, model.KindPrinter},
+		{"mdns type must match whole", "", Facts{Services: -1, MDNS: []string{"_ipp._tcp.extra"}}, model.KindUnknown},
+		{"ssdp text", "", Facts{Services: -1, SSDP: []string{"urn:schemas-upnp-org:device:internetgatewaydevice:1"}}, model.KindRouter},
+		{"sysDescr beats http", "Gadget OS", Facts{Services: -1, HTTP: "cups"}, model.KindIoT},
+		{"http beats mdns", "", Facts{Services: -1, HTTP: "cups", MDNS: []string{"_airplay._tcp"}}, model.KindPrinter},
+		{"mdns beats a port", "", Facts{Services: -1, Ports: []int{22}, MDNS: []string{"_airplay._tcp"}}, model.KindIoT},
+		{"nothing matches", "", Facts{Services: -1, HTTP: "nginx"}, model.KindUnknown},
+	}
+	for _, tc := range cases {
+		if got := c.Kind(tc.descr, "", tc.facts); got != tc.want {
+			t.Errorf("%s: kind = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestClassifierRefusesABadMDNSRule(t *testing.T) {
+	for _, line := range []string{"mdns,ipp,printer", "mdns,_ipp _tcp,printer", "http,,printer", "ssdp,,router"} {
+		if _, err := NewClassifier(strings.NewReader(line + "\n")); err == nil {
+			t.Errorf("%q was accepted", line)
+		}
+	}
+}
+
+func TestDefaultRulesKnowThePrinterServices(t *testing.T) {
+	c, err := DefaultClassifier()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Kind("", "", Facts{Services: -1, MDNS: []string{"_ipp._tcp"}}); got != model.KindPrinter {
+		t.Errorf("kind = %q, want printer from _ipp._tcp", got)
+	}
+}

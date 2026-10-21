@@ -22,6 +22,20 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/netscribe ./cmd/ne
 # volume copies its owner from this directory on first use.
 RUN mkdir /out/data
 
+# The variant with nmap, for discovery.nmap. Build it with --target nmap, or with
+# deploy/compose.nmap.yaml. It is not the default: the default image is the last stage.
+# nmap gets file capabilities so that the unprivileged user can open raw sockets.
+FROM alpine:3.22 AS nmap
+RUN apk add --no-cache nmap libcap-utils \
+ && setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip /usr/bin/nmap \
+ && addgroup -g 65532 nonroot && adduser -D -u 65532 -G nonroot -h /data nonroot
+COPY --from=build /out/netscribe /usr/local/bin/netscribe
+COPY --from=build --chown=nonroot:nonroot /out/data /data
+WORKDIR /data
+USER nonroot:nonroot
+ENTRYPOINT ["netscribe"]
+CMD ["serve"]
+
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/netscribe /usr/local/bin/netscribe
 COPY --from=build --chown=nonroot:nonroot /out/data /data

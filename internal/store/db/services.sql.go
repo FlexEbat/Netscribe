@@ -24,7 +24,7 @@ func (q *Queries) DeleteDeviceServicesBefore(ctx context.Context, arg DeleteDevi
 }
 
 const getServiceByKey = `-- name: GetServiceByKey :one
-SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at FROM services WHERE device_id = ? AND port = ? AND proto = ?
+SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at, banner FROM services WHERE device_id = ? AND port = ? AND proto = ?
 `
 
 type GetServiceByKeyParams struct {
@@ -44,13 +44,14 @@ func (q *Queries) GetServiceByKey(ctx context.Context, arg GetServiceByKeyParams
 		&i.Name,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
+		&i.Banner,
 	)
 	return i, err
 }
 
 const insertService = `-- name: InsertService :exec
-INSERT INTO services (device_id, port, proto, name, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO services (device_id, port, proto, name, banner, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertServiceParams struct {
@@ -58,6 +59,7 @@ type InsertServiceParams struct {
 	Port        int64
 	Proto       string
 	Name        string
+	Banner      string
 	FirstSeenAt string
 	LastSeenAt  string
 }
@@ -68,6 +70,7 @@ func (q *Queries) InsertService(ctx context.Context, arg InsertServiceParams) er
 		arg.Port,
 		arg.Proto,
 		arg.Name,
+		arg.Banner,
 		arg.FirstSeenAt,
 		arg.LastSeenAt,
 	)
@@ -75,7 +78,7 @@ func (q *Queries) InsertService(ctx context.Context, arg InsertServiceParams) er
 }
 
 const listServices = `-- name: ListServices :many
-SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at FROM services ORDER BY device_id, port, proto
+SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at, banner FROM services ORDER BY device_id, port, proto
 `
 
 func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
@@ -95,6 +98,7 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 			&i.Name,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.Banner,
 		); err != nil {
 			return nil, err
 		}
@@ -110,7 +114,7 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 }
 
 const listServicesByDevice = `-- name: ListServicesByDevice :many
-SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at FROM services WHERE device_id = ? ORDER BY port, proto
+SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at, banner FROM services WHERE device_id = ? ORDER BY port, proto
 `
 
 func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]Service, error) {
@@ -130,6 +134,7 @@ func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]S
 			&i.Name,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.Banner,
 		); err != nil {
 			return nil, err
 		}
@@ -145,16 +150,22 @@ func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]S
 }
 
 const touchService = `-- name: TouchService :exec
-UPDATE services SET name = ?, last_seen_at = ? WHERE id = ?
+UPDATE services SET name = ?, banner = ?, last_seen_at = ? WHERE id = ?
 `
 
 type TouchServiceParams struct {
 	Name       string
+	Banner     string
 	LastSeenAt string
 	ID         int64
 }
 
 func (q *Queries) TouchService(ctx context.Context, arg TouchServiceParams) error {
-	_, err := q.db.ExecContext(ctx, touchService, arg.Name, arg.LastSeenAt, arg.ID)
+	_, err := q.db.ExecContext(ctx, touchService,
+		arg.Name,
+		arg.Banner,
+		arg.LastSeenAt,
+		arg.ID,
+	)
 	return err
 }

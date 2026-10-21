@@ -2,7 +2,7 @@ module github.com/FlexEbat/Netscribe
 
 go 1.26.0
 
-toolchain go1.26.9
+toolchain go1.26.10
 
 require (
 	github.com/chromedp/chromedp v0.21.0

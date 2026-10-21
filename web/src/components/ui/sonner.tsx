@@ -1,10 +1,13 @@
 import { Toaster as Sonner, type ToasterProps } from "sonner"
+import "sonner/dist/styles.css"
+import { useTheme } from "@/lib/theme"
 
-/** The app's toast stack. It follows the system light or dark setting. */
+/** The app's toast stack. It follows the theme the user chose. */
 function Toaster(props: ToasterProps) {
+  const { resolved } = useTheme()
   return (
     <Sonner
-      theme="system"
+      theme={resolved}
       className="toaster group"
       style={
         {
