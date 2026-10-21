@@ -13,7 +13,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -200,7 +199,7 @@ func networkText(s string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if model.UnsafeRune(r) {
 			return -1
 		}
 		return r

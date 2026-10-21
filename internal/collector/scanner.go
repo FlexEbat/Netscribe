@@ -11,7 +11,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/config"
@@ -588,7 +587,7 @@ func cleanHostname(name string) string {
 		}
 	}
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if model.UnsafeRune(r) {
 			return -1 // names come from the network and end up in logs and terminals
 		}
 		return r
