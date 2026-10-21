@@ -17,20 +17,24 @@ var defaultRules string
 
 // Facts are the things a rule can look at besides the device itself.
 type Facts struct {
-	Services int   // sysServices, -1 when unknown
-	Ports    []int // open TCP ports
+	Services int      // sysServices, -1 when unknown
+	Ports    []int    // open TCP ports
+	HTTP     string   // the HTTP banners of the device, one per line, lower case
+	MDNS     []string // the mDNS service types it announced, such as _ipp._tcp
+	SSDP     []string // the SERVER and ST values of its SSDP answers, lower case
+	Nmap     []string // what nmap guessed: "type=router", "os=linux 5.x", lower case
 }
 
 type rule struct {
-	field string // descr, services, port, vendor
+	field string // descr, http, mdns, ssdp, nmap, services, port, vendor
 	match string // lower case text, "bridge", "router", or the port number
 	port  int
 	kind  model.DeviceKind
 }
 
 // ruleOrder is the order in which the fields are tried (section 5.2 of the spec: SNMP
-// text and services, then ports, then vendor).
-var ruleOrder = []string{"descr", "services", "port", "vendor"}
+// text, then what the device says over HTTP, mDNS and SSDP, then services, ports, vendor).
+var ruleOrder = []string{"descr", "http", "mdns", "ssdp", "nmap", "services", "port", "vendor"}
 
 // Classifier sets the kind of devices by rules that live in data, not in code.
 type Classifier struct {
@@ -64,9 +68,13 @@ func NewClassifier(r io.Reader) (*Classifier, error) {
 		}
 		ru := rule{field: field, match: strings.ToLower(match), kind: kind}
 		switch field {
-		case "descr", "vendor":
+		case "descr", "http", "ssdp", "nmap", "vendor":
 			if match == "" {
 				return nil, fmt.Errorf("classify rules line %d: empty match", n)
+			}
+		case "mdns":
+			if !strings.HasPrefix(ru.match, "_") || strings.ContainsAny(ru.match, " ,") {
+				return nil, fmt.Errorf("classify rules line %d: mdns match must be a service type such as _ipp._tcp", n)
 			}
 		case "services":
 			if ru.match != "bridge" && ru.match != "router" {
@@ -106,6 +114,7 @@ func DefaultClassifier() (*Classifier, error) {
 // Kind returns the kind the rules give to a device, or unknown.
 func (c *Classifier) Kind(description, vendor string, f Facts) model.DeviceKind {
 	description, vendor = strings.ToLower(description), strings.ToLower(vendor)
+	ssdp, nmap := strings.Join(f.SSDP, "\n"), strings.Join(f.Nmap, "\n")
 	for _, field := range ruleOrder {
 		for _, r := range c.byField[field] {
 			var hit bool
@@ -114,6 +123,18 @@ func (c *Classifier) Kind(description, vendor string, f Facts) model.DeviceKind 
 				hit = strings.Contains(description, r.match)
 			case "vendor":
 				hit = strings.Contains(vendor, r.match)
+			case "http":
+				hit = strings.Contains(strings.ToLower(f.HTTP), r.match)
+			case "mdns":
+				for _, t := range f.MDNS {
+					if strings.EqualFold(t, r.match) {
+						hit = true
+					}
+				}
+			case "ssdp":
+				hit = strings.Contains(strings.ToLower(ssdp), r.match)
+			case "nmap":
+				hit = strings.Contains(strings.ToLower(nmap), r.match)
 			case "services":
 				switch r.match {
 				case "bridge":
@@ -134,6 +155,31 @@ func (c *Classifier) Kind(description, vendor string, f Facts) model.DeviceKind 
 		}
 	}
 	return model.KindUnknown
+}
+
+// Untyped returns the devices that have no kind yet and that the rules cannot type from
+// what is known now. It makes no network requests.
+func (c *Classifier) Untyped(devs []model.DeviceInput, facts func(model.DeviceKey) Facts) []model.DeviceKey {
+	copied := append([]model.DeviceInput(nil), devs...)
+	c.Apply(copied, facts)
+	typed := map[model.DeviceKey]bool{}
+	var order []model.DeviceKey
+	for _, d := range copied {
+		if _, seen := typed[d.Key]; !seen {
+			typed[d.Key] = false
+			order = append(order, d.Key)
+		}
+		if d.Kind != "" && d.Kind != model.KindUnknown {
+			typed[d.Key] = true
+		}
+	}
+	var out []model.DeviceKey
+	for _, k := range order {
+		if !typed[k] {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // Apply sets Kind on the devices whose kind nothing has said yet. It looks at all inputs

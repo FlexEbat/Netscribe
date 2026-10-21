@@ -11,13 +11,13 @@ SELECT * FROM devices WHERE mac = '' AND ip = ?;
 SELECT * FROM devices WHERE ip = ? ORDER BY online DESC, last_seen_at DESC, id DESC LIMIT 1;
 
 -- name: InsertDevice :one
-INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+INSERT INTO devices (mac, ip, hostname, vendor, kind, description, os_guess, source, online, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
 RETURNING id;
 
 -- name: UpdateDeviceFromScan :exec
 UPDATE devices
-SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, online = 1, last_seen_at = ?
+SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, os_guess = ?, online = 1, last_seen_at = ?
 WHERE id = ?;
 
 -- name: ListDevices :many
@@ -44,3 +44,13 @@ WHERE id = ? AND version = ?;
 
 -- name: DeleteDevice :execrows
 DELETE FROM devices WHERE id = ?;
+
+-- name: ApplyDeviceIdentity :execrows
+-- An OS guess replaces the old one when it is not empty. The kind changes only while it
+-- is unknown and was not set by hand.
+UPDATE devices SET
+  os_guess = CASE WHEN sqlc.arg(os_guess) <> '' THEN sqlc.arg(os_guess) ELSE os_guess END,
+  kind = CASE
+    WHEN kind = 'unknown' AND kind_locked = 0 AND sqlc.arg(kind) <> '' AND sqlc.arg(kind) <> 'unknown'
+    THEN sqlc.arg(kind) ELSE kind END
+WHERE id = sqlc.arg(id);

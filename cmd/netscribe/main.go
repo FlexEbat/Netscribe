@@ -52,10 +52,13 @@ type streams struct {
 	err io.Writer
 	// prompt asks for a secret on the terminal without echo.
 	prompt func(label string) (string, error)
+	// interactive is true when standard input is a terminal, so the server may ask
+	// questions such as which port to use.
+	interactive bool
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], streams{in: os.Stdin, out: os.Stdout, err: os.Stderr, prompt: terminalPrompt}))
+	os.Exit(run(os.Args[1:], streams{in: os.Stdin, out: os.Stdout, err: os.Stderr, prompt: terminalPrompt, interactive: term.IsTerminal(int(os.Stdin.Fd()))}))
 }
 
 func run(args []string, e streams) int {
@@ -123,10 +126,34 @@ func (c *commonFlags) load(args []string, stderr io.Writer) (config.Config, *slo
 
 func serve(args []string, e streams) error {
 	flags := newCommonFlags("serve", e.err)
+	listenFlag := flags.fs.String("listen", "", "address to listen on, instead of listen from the config")
+	autoPort := flags.fs.Bool("auto-port", false, "use the next free port when the port is already in use")
 	cfg, logger, err := flags.load(args, e.err)
 	if err != nil {
 		return err
 	}
+	fileCfg := cfg // the reload watcher compares against what the file says, not the flag
+	if *listenFlag != "" {
+		if err := config.ValidateListen(*listenFlag); err != nil {
+			return fmt.Errorf("--listen %q: %w", *listenFlag, err)
+		}
+		cfg.Listen = *listenFlag
+	}
+	if cfg.TLS.CertFile != "" {
+		// A bad certificate would otherwise show only after the workers have started.
+		if _, err := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile); err != nil {
+			return fmt.Errorf("load tls certificate: %w", err)
+		}
+	}
+
+	// The port is taken before anything else starts: a busy port ends the command here,
+	// with no scan or watcher running behind a server that never came up.
+	ln, err := bindListener(cfg.Listen, bindOptions{auto: *autoPort, ask: lineAsker(e), warn: logger.Warn})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = ln.Close() }() // Shutdown closes it first, a second close only reports that
+	cfg.Listen = ln.Addr().String()
 	if insecureListen(cfg) {
 		logger.Warn("listening beyond loopback without TLS or a trusted proxy: traffic is not encrypted", "listen", cfg.Listen)
 	}
@@ -140,6 +167,13 @@ func serve(args []string, e streams) error {
 			logger.Error("close database", "err", err)
 		}
 	}()
+	closed, err := db.FailRunningScans(context.Background(), "interrupted: the server stopped before the scan ended")
+	if err != nil {
+		return err
+	}
+	if closed > 0 {
+		logger.Warn("closed scans that an earlier run left unfinished", "count", closed)
+	}
 
 	static, err := web.Dist()
 	if err != nil {
@@ -165,13 +199,14 @@ func serve(args []string, e streams) error {
 	if err != nil {
 		return err
 	}
-	live := config.NewWatcher(*flags.configPath, *flags.allowLoose, cfg, logger)
+	live := config.NewWatcher(*flags.configPath, *flags.allowLoose, fileCfg, logger)
 	hub := events.NewHub()
 	scanner := collector.NewScanner(db, cfg, logger)
 	scanner.SetEvents(hub)
 	router := api.NewRouter(api.Options{
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
-		Containers: db, Docker: scanner.Docker(),
+		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
+		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},
 		ExportOptions:  func() render.Options { return render.Options{ChromePath: live.Current().Export.ChromePath} },
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, config: live.Current},
 		TrustedProxies: proxies, Logger: logger,
@@ -191,10 +226,10 @@ func serve(args []string, e streams) error {
 	go func() {
 		logger.Info("listening", "addr", cfg.Listen, "tls", cfg.TLS.CertFile != "")
 		if cfg.TLS.CertFile != "" {
-			errc <- srv.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+			errc <- srv.ServeTLS(ln, cfg.TLS.CertFile, cfg.TLS.KeyFile)
 			return
 		}
-		errc <- srv.ListenAndServe()
+		errc <- srv.Serve(ln)
 	}()
 
 	select {
@@ -206,6 +241,23 @@ func serve(args []string, e streams) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// lineAsker returns a function that asks one question on the terminal, or nil when
+// standard input is not a terminal and nobody can answer.
+func lineAsker(e streams) func(string) (string, error) {
+	if !e.interactive {
+		return nil
+	}
+	r := bufio.NewReader(e.in)
+	return func(prompt string) (string, error) {
+		_, _ = fmt.Fprint(e.err, prompt)
+		line, err := r.ReadString('\n')
+		if err != nil && line == "" {
+			return "", err
+		}
+		return line, nil
+	}
 }
 
 // scanStarter runs scans for the API over the targets of the config in force. A scan
@@ -222,6 +274,58 @@ func (s scanStarter) Start() (model.Scan, error) {
 		return model.Scan{}, err
 	}
 	return s.scanner.Start(s.ctx, targets)
+}
+
+// StartWithNmap is Start with nmap switched on for this scan.
+func (s scanStarter) StartWithNmap() (model.Scan, error) {
+	targets, err := configuredTargets(s.config())
+	if err != nil {
+		return model.Scan{}, err
+	}
+	return s.scanner.StartWithNmap(s.ctx, targets)
+}
+
+// deviceIdentifier runs nmap for one device on behalf of the API. The work goes on after
+// the request ended, for as long as the server lives.
+type deviceIdentifier struct {
+	scanner identifyStarter
+	repo    identityStore
+	hub     *events.Hub
+	ctx     context.Context
+	log     *slog.Logger
+}
+
+// identifyStarter starts the nmap run. *collector.Scanner satisfies it.
+type identifyStarter interface {
+	StartIdentify(ctx context.Context, ip string, done func(collector.IdentifyResult, error)) error
+}
+
+// identityStore is the part of the store the identification needs.
+type identityStore interface {
+	GetDevice(ctx context.Context, id int64) (model.Device, error)
+	ApplyIdentity(ctx context.Context, id int64, osGuess string, kind model.DeviceKind) (model.Device, error)
+}
+
+func (d deviceIdentifier) Identify(id int64) error {
+	dev, err := d.repo.GetDevice(d.ctx, id)
+	if err != nil {
+		return err
+	}
+	return d.scanner.StartIdentify(d.ctx, dev.IP, func(res collector.IdentifyResult, err error) {
+		if err != nil {
+			if d.ctx.Err() == nil {
+				d.log.Warn("identify device", "device", id, "err", err)
+			}
+			return
+		}
+		if _, err := d.repo.ApplyIdentity(d.ctx, id, res.OS, res.Kind); err != nil {
+			if !errors.Is(err, model.ErrNotFound) {
+				d.log.Error("store identity", "device", id, "err", err)
+			}
+			return
+		}
+		d.hub.Publish("topology.changed", struct{}{})
+	})
 }
 
 // configApplier takes a reloaded config. *collector.Scanner satisfies it.
@@ -331,9 +435,13 @@ func newLogger(w io.Writer) *slog.Logger {
 // Both go through the same checks, so an argument cannot reach beyond the allowed ranges.
 func scan(args []string, e streams) error {
 	flags := newCommonFlags("scan", e.err)
+	useNmap := flags.fs.Bool("nmap", false, "ask nmap about devices nothing else could type, for this scan only")
 	cfg, logger, err := flags.load(args, e.err)
 	if err != nil {
 		return err
+	}
+	if *useNmap {
+		cfg.Discovery.Nmap = true
 	}
 	targets, err := scanTargets(flags.args, cfg)
 	if err != nil {

@@ -10,6 +10,23 @@ import (
 	"database/sql"
 )
 
+const failRunningScans = `-- name: FailRunningScans :execrows
+UPDATE scans SET status = 'failed', finished_at = ?, error = ? WHERE status = 'running'
+`
+
+type FailRunningScansParams struct {
+	FinishedAt sql.NullString
+	Error      string
+}
+
+func (q *Queries) FailRunningScans(ctx context.Context, arg FailRunningScansParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, failRunningScans, arg.FinishedAt, arg.Error)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const finishScan = `-- name: FinishScan :execrows
 UPDATE scans SET status = ?, finished_at = ?, error = ? WHERE id = ? AND status = 'running'
 `

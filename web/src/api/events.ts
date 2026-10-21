@@ -1,4 +1,4 @@
-import type { Scan } from "./client"
+import { api, type Scan } from "./client"
 
 export interface ScanProgress {
   scanId: number
@@ -38,6 +38,15 @@ export function openEvents(handlers: EventHandlers): () => void {
         // A message that is not valid JSON is ignored; the next one is unaffected.
       }
     })
+  }
+  source.onerror = () => {
+    // The browser retries a dropped connection by itself but gives up on a refused one,
+    // which is what happens after the server ended the stream because the session was
+    // revoked. Ask which it was: a 401 reaches the unauthorized handler and signs the
+    // interface out, any other answer changes nothing.
+    if (source.readyState === EventSource.CLOSED) {
+      api("GET", "/api/auth/me").catch(() => {})
+    }
   }
   return () => source.close()
 }

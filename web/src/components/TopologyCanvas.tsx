@@ -15,6 +15,7 @@ import type { Topology } from "@/api/client"
 import { ContainerNode } from "@/components/ContainerNode"
 import { DeviceNode } from "@/components/DeviceNode"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { useTheme } from "@/lib/theme"
 import {
   buildNodes,
   followHost,
@@ -49,6 +50,7 @@ export function TopologyCanvas({
   onSelectLink,
   readOnly = false,
 }: TopologyCanvasProps) {
+  const { resolved } = useTheme()
   const edgesOf = (t: Topology) => [...toEdges(t.links), ...toContainerEdges(t.containers)]
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(buildNodes(topology) as Node[])
   const [edges, setEdges] = useEdgesState<Edge>(edgesOf(topology) as Edge[])
@@ -65,6 +67,7 @@ export function TopologyCanvas({
         data-testid="topology-canvas"
       >
         <ReactFlow
+          colorMode={resolved}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}

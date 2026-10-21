@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, waitFor, within } from "@testing-library/
 import userEvent from "@testing-library/user-event"
 import { createMemoryRouter, RouterProvider } from "react-router-dom"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { setCsrfToken, type Device, type Scan } from "@/api/client"
+import { setCsrfToken, type Device, type NmapState, type Scan } from "@/api/client"
 import type { Role } from "@/lib/permissions"
 import { SessionProvider } from "@/api/session"
 import { routes } from "@/App"
@@ -27,6 +27,7 @@ function device(overrides: Partial<Device>): Device {
     manual: false,
     label: "",
     notes: "",
+    osGuess: "",
     kindLocked: false,
     version: 1,
     firstSeenAt: "2026-10-09T12:00:00.000Z",
@@ -76,6 +77,7 @@ interface OpenOptions {
   role?: Role
   scans?: Scan[]
   startResponse?: () => Response
+  nmap?: NmapState
 }
 
 function open(devices: (path: string) => Response, options: OpenOptions = {}) {
@@ -85,6 +87,8 @@ function open(devices: (path: string) => Response, options: OpenOptions = {}) {
     "GET /api/auth/me": () => json(200, meBody(makeUser({ role: options.role ?? "admin" }))),
     "GET /api/scans": () => json(200, { scans: options.scans ?? [] }),
     "POST /api/scans": options.startResponse ?? (() => json(202, scan({ status: "running" }))),
+    "GET /api/nmap": () =>
+      options.nmap ? json(200, options.nmap) : json(404, { error: "not found" }),
   })
   const base = globalThis.fetch as unknown as (
     i: RequestInfo | URL,
@@ -208,5 +212,77 @@ describe("Inventory", () => {
     expect(source.closed).toBe(false)
     cleanup()
     expect(source.closed).toBe(true)
+  })
+})
+
+describe("Inventory keyboard and layout", () => {
+  it("focuses the search field when / is pressed", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    await userEvent.keyboard("/")
+    expect(screen.getByRole("searchbox", { name: "Search devices" })).toHaveFocus()
+  })
+
+  it("types / into the search field instead of refocusing it", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    const field = screen.getByRole("searchbox", { name: "Search devices" })
+    await userEvent.click(field)
+    await userEvent.keyboard("a/b")
+    expect(field).toHaveValue("a/b")
+  })
+
+  it("does not steal / from the status filter", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    const filter = screen.getByRole("combobox", { name: "Filter by status" })
+    filter.focus()
+    await userEvent.keyboard("/")
+    expect(filter).toHaveFocus()
+  })
+
+  it("opens the navigation in a sheet behind the menu button", async () => {
+    open(() => json(200, { devices: [device({})] }))
+    await screen.findByText("gateway")
+    await userEvent.click(screen.getByRole("button", { name: "Open navigation" }))
+    const sheet = await screen.findByRole("dialog", { name: "Navigation" })
+    expect(within(sheet).getByRole("link", { name: "Services" })).toBeInTheDocument()
+  })
+})
+
+describe("Inventory nmap option", () => {
+  const nmap = { available: true, enabled: false, reason: "" }
+  const startCalls = (mock: ReturnType<typeof open>) =>
+    mock.calls.filter((c) => c.method === "POST" && c.path === "/api/scans")
+
+  it("starts a plain scan unless the box is ticked", async () => {
+    const mock = open(() => json(200, { devices: [] }), { nmap })
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Run scan" }))
+    await screen.findByText("Scan in progress")
+    expect(startCalls(mock)).toHaveLength(1)
+    expect(startCalls(mock)[0]!.init.body).toBeUndefined()
+  })
+
+  it("asks for nmap when the box is ticked", async () => {
+    const mock = open(() => json(200, { devices: [] }), { nmap })
+    const user = userEvent.setup()
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Identify unknown devices with Nmap" }),
+    )
+    await user.click(screen.getByRole("button", { name: "Run scan" }))
+    await screen.findByText("Scan in progress")
+    expect(JSON.parse(String(startCalls(mock)[0]!.init.body))).toEqual({ nmap: true })
+  })
+
+  it("shows no box when the server has no nmap", async () => {
+    open(() => json(200, { devices: [] }), { nmap: { ...nmap, available: false } })
+    await screen.findByRole("button", { name: "Run scan" })
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
+  })
+
+  it("does not ask for nmap state when the person cannot run scans", async () => {
+    const mock = open(() => json(200, { devices: [device({})] }), { nmap, role: "viewer" })
+    await screen.findByRole("table")
+    expect(mock.calls.some((c) => c.path === "/api/nmap")).toBe(false)
   })
 })

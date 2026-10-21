@@ -2,11 +2,33 @@ import { describe, expect, it } from "vitest"
 import { filterServices, serviceLabel } from "@/lib/services"
 
 const services = [
-  { name: "ssh", port: 22 },
-  { name: "https", port: 443 },
-  { name: "http-alt", port: 8080 },
-  { name: "", port: 4444 },
+  { name: "ssh", banner: "", port: 22 },
+  { name: "https", banner: "", port: 443 },
+  { name: "http-alt", banner: "", port: 8080 },
+  { name: "", banner: "", port: 4444 },
 ]
+
+describe("filterServices by banner", () => {
+  const withBanners = [
+    { name: "http", banner: "nginx/1.25.3", port: 80 },
+    { name: "https", banner: "MikroTik; CN: router.lan", port: 443 },
+    { name: "ssh", banner: "", port: 22 },
+  ]
+
+  it("finds a service by text in its banner, in any case", () => {
+    expect(filterServices(withBanners, "NGINX").map((s) => s.port)).toEqual([80])
+    expect(filterServices(withBanners, "router.lan").map((s) => s.port)).toEqual([443])
+  })
+
+  it("still finds by name and by port", () => {
+    expect(filterServices(withBanners, "ssh").map((s) => s.port)).toEqual([22])
+    expect(filterServices(withBanners, "443").map((s) => s.port)).toEqual([443])
+  })
+
+  it("does not match a service without a banner on an unrelated word", () => {
+    expect(filterServices(withBanners, "apache")).toEqual([])
+  })
+})
 
 describe("filterServices", () => {
   it("returns everything for an empty or blank query", () => {

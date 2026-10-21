@@ -21,6 +21,7 @@ function device(id: number, ip: string, hostname: string): Device {
     manual: false,
     label: "",
     notes: "",
+    osGuess: "",
     kindLocked: false,
     version: 1,
     firstSeenAt: "2026-10-09T12:00:00.000Z",
@@ -37,6 +38,7 @@ function service(id: number, deviceId: number, port: number, name: string): Serv
     port,
     proto: "tcp",
     name,
+    banner: "",
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
   }
@@ -74,7 +76,7 @@ describe("Services page", () => {
     )
     const user = userEvent.setup()
     await screen.findByRole("table")
-    await user.type(screen.getByLabelText("Filter by service name"), "http")
+    await user.type(screen.getByLabelText("Filter by service name or banner"), "http")
     const rows = within(screen.getByRole("table")).getAllByRole("row")
     expect(rows).toHaveLength(3) // the header, https and http-alt
     expect(screen.queryByText("ssh")).not.toBeInTheDocument()
@@ -84,7 +86,7 @@ describe("Services page", () => {
     setup([service(1, 1, 22, "ssh")], [device(1, "192.168.1.1", "gateway")])
     const user = userEvent.setup()
     await screen.findByRole("table")
-    await user.type(screen.getByLabelText("Filter by service name"), "smtp")
+    await user.type(screen.getByLabelText("Filter by service name or banner"), "smtp")
     expect(screen.getByText("No service matches the filter.")).toBeInTheDocument()
   })
 
@@ -100,5 +102,17 @@ describe("Services page", () => {
     })
     render(<Services />)
     expect(await screen.findByText(/could not be loaded/)).toBeInTheDocument()
+  })
+})
+
+describe("Services banner", () => {
+  it("shows the banner of a service and filters by it", async () => {
+    const withBanner = { ...service(1, 1, 80, "http"), banner: "nginx/1.25.3" }
+    setup([withBanner, service(2, 1, 22, "ssh")], [device(1, "192.168.1.1", "gateway")])
+    expect(await screen.findByText("nginx/1.25.3")).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText("Filter by service name or banner"), "nginx")
+    expect(screen.getByText("nginx/1.25.3")).toBeInTheDocument()
+    expect(screen.queryByText("ssh")).not.toBeInTheDocument()
   })
 })

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import type { Scan } from "@/api/client"
+import type { NmapState, Scan } from "@/api/client"
 import type { ScanProgress } from "@/api/events"
 
 interface ScanBarProps {
@@ -9,9 +9,23 @@ interface ScanBarProps {
   starting: boolean
   error: string
   onStart: () => void
+  /** What the server said about nmap, or null while it is unknown. */
+  nmap?: NmapState | null
+  useNmap?: boolean
+  onUseNmapChange?: (on: boolean) => void
 }
 
-export function ScanBar({ scan, progress, canRun, starting, error, onStart }: ScanBarProps) {
+export function ScanBar({
+  scan,
+  progress,
+  canRun,
+  starting,
+  error,
+  onStart,
+  nmap = null,
+  useNmap = false,
+  onUseNmapChange,
+}: ScanBarProps) {
   const running = starting || scan?.status === "running"
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm">
@@ -38,6 +52,17 @@ export function ScanBar({ scan, progress, canRun, starting, error, onStart }: Sc
           </span>
         ) : null}
       </div>
+      {canRun && nmap?.available ? (
+        <label className="flex items-center gap-2 text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={nmap.enabled || useNmap}
+            disabled={nmap.enabled || running}
+            onChange={(e) => onUseNmapChange?.(e.target.checked)}
+          />
+          {nmap.enabled ? "Nmap (on in the config)" : "Identify unknown devices with Nmap"}
+        </label>
+      ) : null}
       {canRun ? (
         <Button size="sm" onClick={onStart} disabled={running}>
           {running ? "Scanning…" : "Run scan"}

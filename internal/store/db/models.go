@@ -76,6 +76,7 @@ type Device struct {
 	KindLocked  int64
 	Version     int64
 	UpdatedBy   sql.NullInt64
+	OsGuess     string
 }
 
 type Interface struct {
@@ -117,6 +118,7 @@ type Service struct {
 	Name        string
 	FirstSeenAt string
 	LastSeenAt  string
+	Banner      string
 }
 
 type Session struct {

@@ -59,8 +59,11 @@ export async function api<T = void>(
   if (!response.ok) {
     throw new ApiError(response.status, await errorMessage(response), retryAfter(response))
   }
+  // A 204, or a 202 that carries no body, has nothing to parse.
   if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+  const text = await response.text()
+  if (text === "") return undefined as T
+  return JSON.parse(text) as T
 }
 
 async function errorMessage(response: Response): Promise<string> {
@@ -106,6 +109,8 @@ export interface Device {
   vendor: string
   kind: DeviceKind
   description: string
+  /** The system nmap guessed, such as "Linux 5.3 - 5.4". Empty when nmap never ran. */
+  osGuess: string
   source: string
   online: boolean
   manual: boolean
@@ -151,8 +156,26 @@ export async function listScans(): Promise<Scan[]> {
   return body.scans
 }
 
-export function startScan(): Promise<Scan> {
-  return api<Scan>("POST", "/api/scans")
+/** Starts a scan. With nmap true the scan runs nmap for devices nothing else could type. */
+export function startScan(nmap = false): Promise<Scan> {
+  return api<Scan>("POST", "/api/scans", nmap ? { body: { nmap: true } } : {})
+}
+
+export interface NmapState {
+  /** The program was found. */
+  available: boolean
+  /** discovery.nmap is on, so every scan runs nmap. */
+  enabled: boolean
+  reason: string
+}
+
+/** Asks nmap about one device in the background. The new data shows when the topology changes. */
+export function identifyDevice(id: number): Promise<void> {
+  return api<void>("POST", `/api/devices/${id}/identify`)
+}
+
+export function getNmap(): Promise<NmapState> {
+  return api<NmapState>("GET", "/api/nmap")
 }
 
 export interface Link {
@@ -280,6 +303,8 @@ export interface Service {
   port: number
   proto: string
   name: string
+  /** What the service said about itself, such as the HTTP Server header. May be empty. */
+  banner: string
   firstSeenAt: string
   lastSeenAt: string
 }

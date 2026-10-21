@@ -10,6 +10,31 @@ import (
 	"database/sql"
 )
 
+const applyDeviceIdentity = `-- name: ApplyDeviceIdentity :execrows
+UPDATE devices SET
+  os_guess = CASE WHEN ?1 <> '' THEN ?1 ELSE os_guess END,
+  kind = CASE
+    WHEN kind = 'unknown' AND kind_locked = 0 AND ?2 <> '' AND ?2 <> 'unknown'
+    THEN ?2 ELSE kind END
+WHERE id = ?3
+`
+
+type ApplyDeviceIdentityParams struct {
+	OsGuess interface{}
+	Kind    interface{}
+	ID      int64
+}
+
+// An OS guess replaces the old one when it is not empty. The kind changes only while it
+// is unknown and was not set by hand.
+func (q *Queries) ApplyDeviceIdentity(ctx context.Context, arg ApplyDeviceIdentityParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, applyDeviceIdentity, arg.OsGuess, arg.Kind, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteDevice = `-- name: DeleteDevice :execrows
 DELETE FROM devices WHERE id = ?
 `
@@ -23,7 +48,7 @@ func (q *Queries) DeleteDevice(ctx context.Context, id int64) (int64, error) {
 }
 
 const getDeviceByID = `-- name: GetDeviceByID :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by FROM devices WHERE id = ?
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess FROM devices WHERE id = ?
 `
 
 func (q *Queries) GetDeviceByID(ctx context.Context, id int64) (Device, error) {
@@ -49,12 +74,13 @@ func (q *Queries) GetDeviceByID(ctx context.Context, id int64) (Device, error) {
 		&i.KindLocked,
 		&i.Version,
 		&i.UpdatedBy,
+		&i.OsGuess,
 	)
 	return i, err
 }
 
 const getDeviceByIP = `-- name: GetDeviceByIP :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by FROM devices WHERE ip = ? ORDER BY online DESC, last_seen_at DESC, id DESC LIMIT 1
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess FROM devices WHERE ip = ? ORDER BY online DESC, last_seen_at DESC, id DESC LIMIT 1
 `
 
 func (q *Queries) GetDeviceByIP(ctx context.Context, ip string) (Device, error) {
@@ -80,12 +106,13 @@ func (q *Queries) GetDeviceByIP(ctx context.Context, ip string) (Device, error) 
 		&i.KindLocked,
 		&i.Version,
 		&i.UpdatedBy,
+		&i.OsGuess,
 	)
 	return i, err
 }
 
 const getDeviceByIPWithoutMAC = `-- name: GetDeviceByIPWithoutMAC :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by FROM devices WHERE mac = '' AND ip = ?
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess FROM devices WHERE mac = '' AND ip = ?
 `
 
 func (q *Queries) GetDeviceByIPWithoutMAC(ctx context.Context, ip string) (Device, error) {
@@ -111,12 +138,13 @@ func (q *Queries) GetDeviceByIPWithoutMAC(ctx context.Context, ip string) (Devic
 		&i.KindLocked,
 		&i.Version,
 		&i.UpdatedBy,
+		&i.OsGuess,
 	)
 	return i, err
 }
 
 const getDeviceByMAC = `-- name: GetDeviceByMAC :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by FROM devices WHERE mac = ?
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess FROM devices WHERE mac = ?
 `
 
 func (q *Queries) GetDeviceByMAC(ctx context.Context, mac string) (Device, error) {
@@ -142,13 +170,14 @@ func (q *Queries) GetDeviceByMAC(ctx context.Context, mac string) (Device, error
 		&i.KindLocked,
 		&i.Version,
 		&i.UpdatedBy,
+		&i.OsGuess,
 	)
 	return i, err
 }
 
 const insertDevice = `-- name: InsertDevice :one
-INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+INSERT INTO devices (mac, ip, hostname, vendor, kind, description, os_guess, source, online, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
 RETURNING id
 `
 
@@ -159,6 +188,7 @@ type InsertDeviceParams struct {
 	Vendor      string
 	Kind        string
 	Description string
+	OsGuess     string
 	Source      string
 	FirstSeenAt string
 	LastSeenAt  string
@@ -172,6 +202,7 @@ func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) (int
 		arg.Vendor,
 		arg.Kind,
 		arg.Description,
+		arg.OsGuess,
 		arg.Source,
 		arg.FirstSeenAt,
 		arg.LastSeenAt,
@@ -184,7 +215,7 @@ func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) (int
 const insertManualDevice = `-- name: InsertManualDevice :one
 INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, manual, label, notes, kind_locked, updated_by, first_seen_at, last_seen_at)
 VALUES (?, ?, ?, '', ?, '', 'manual', 1, 1, ?, ?, ?, ?, ?, ?)
-RETURNING id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by
+RETURNING id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess
 `
 
 type InsertManualDeviceParams struct {
@@ -234,12 +265,13 @@ func (q *Queries) InsertManualDevice(ctx context.Context, arg InsertManualDevice
 		&i.KindLocked,
 		&i.Version,
 		&i.UpdatedBy,
+		&i.OsGuess,
 	)
 	return i, err
 }
 
 const listDevices = `-- name: ListDevices :many
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by FROM devices
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess FROM devices
 `
 
 func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
@@ -271,6 +303,7 @@ func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
 			&i.KindLocked,
 			&i.Version,
 			&i.UpdatedBy,
+			&i.OsGuess,
 		); err != nil {
 			return nil, err
 		}
@@ -378,7 +411,7 @@ func (q *Queries) UpdateDeviceEdit(ctx context.Context, arg UpdateDeviceEditPara
 
 const updateDeviceFromScan = `-- name: UpdateDeviceFromScan :exec
 UPDATE devices
-SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, online = 1, last_seen_at = ?
+SET mac = ?, ip = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, os_guess = ?, online = 1, last_seen_at = ?
 WHERE id = ?
 `
 
@@ -390,6 +423,7 @@ type UpdateDeviceFromScanParams struct {
 	Kind        string
 	Source      string
 	Description string
+	OsGuess     string
 	LastSeenAt  string
 	ID          int64
 }
@@ -403,6 +437,7 @@ func (q *Queries) UpdateDeviceFromScan(ctx context.Context, arg UpdateDeviceFrom
 		arg.Kind,
 		arg.Source,
 		arg.Description,
+		arg.OsGuess,
 		arg.LastSeenAt,
 		arg.ID,
 	)
