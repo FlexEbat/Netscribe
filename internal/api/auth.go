@@ -129,7 +129,8 @@ func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, auth.ErrWrongPassword),
 		errors.Is(err, auth.ErrPasswordShort),
 		errors.Is(err, auth.ErrPasswordLong),
-		errors.Is(err, auth.ErrPasswordIsUsername):
+		errors.Is(err, auth.ErrPasswordIsUsername),
+		errors.Is(err, auth.ErrPasswordUnchanged):
 		s.record(r, "password_change", "denied", err.Error())
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

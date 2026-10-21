@@ -34,6 +34,7 @@ var (
 	ErrPasswordShort      = errors.New("password is shorter than the minimum")
 	ErrPasswordLong       = errors.New("password is longer than 128 characters")
 	ErrPasswordIsUsername = errors.New("password equals username")
+	ErrPasswordUnchanged  = errors.New("the new password must differ from the current one")
 	errMalformedHash      = errors.New("malformed password hash")
 )
 
