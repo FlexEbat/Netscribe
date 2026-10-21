@@ -585,7 +585,18 @@ func TestMaintainPrunesAtStartAndOnEveryTick(t *testing.T) {
 		maintain(ctx, p, 365, func() int { return 200 }, 20*time.Millisecond, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		close(done)
 	}()
-	time.Sleep(110 * time.Millisecond)
+	// Wait for the start run plus two ticks instead of sleeping a fixed time: a loaded
+	// runner can stall the ticker and a sleep would then see too few runs.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		p.mu.Lock()
+		enough := p.sessions >= 3 && p.audits >= 3 && p.scans >= 3
+		p.mu.Unlock()
+		if enough || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	cancel()
 	select {
 	case <-done:
