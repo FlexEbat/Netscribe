@@ -273,6 +273,17 @@ func (s *Service) openSession(ctx context.Context, userID int64, ip, userAgent s
 // Authenticate resolves a cookie value to its principal. A session that is unknown,
 // expired (absolute or idle) or owned by a disabled account is ErrUnauthenticated.
 func (s *Service) Authenticate(ctx context.Context, rawID string) (Principal, error) {
+	return s.resolve(ctx, rawID, true)
+}
+
+// Recheck is Authenticate for a request that is still open, such as an event stream. It
+// does not refresh the idle timer: an open tab must not keep a session alive that no
+// request has used.
+func (s *Service) Recheck(ctx context.Context, rawID string) (Principal, error) {
+	return s.resolve(ctx, rawID, false)
+}
+
+func (s *Service) resolve(ctx context.Context, rawID string, touch bool) (Principal, error) {
 	if rawID == "" || len(rawID) > maxIDLength {
 		return Principal{}, ErrUnauthenticated
 	}
@@ -292,7 +303,7 @@ func (s *Service) Authenticate(ctx context.Context, rawID string) (Principal, er
 	if user.Disabled {
 		return Principal{}, ErrUnauthenticated
 	}
-	if now.Sub(rec.LastSeenAt) >= touchInterval {
+	if touch && now.Sub(rec.LastSeenAt) >= touchInterval {
 		_ = s.repo.TouchSession(ctx, hash, now) // losing one idle refresh is harmless
 	}
 	return Principal{User: user, CSRFToken: rec.CSRFToken}, nil

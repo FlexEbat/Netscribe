@@ -2,16 +2,20 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/FlexEbat/Netscribe/internal/auth"
 )
 
-const (
-	maxStreamsPerUser = 5 // section 9.5 of the spec
-	heartbeat         = 25 * time.Second
-)
+const maxStreamsPerUser = 5 // section 9.5 of the spec
+
+// heartbeat is the time between keep-alive comments. Each one also checks again that the
+// credential behind the stream is valid. It is a variable so that a test can shorten it.
+var heartbeat = 25 * time.Second
 
 // streamCounter limits the open event streams of each user.
 type streamCounter struct {
@@ -73,6 +77,18 @@ func (s *server) streamEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-tick.C:
+			// A stream outlives the request that opened it, so a session that was closed,
+			// a disabled account or a revoked token must end it, and a changed role must
+			// apply to what it carries.
+			next, err := s.reauthenticate(r)
+			switch {
+			case errors.Is(err, auth.ErrUnauthenticated):
+				return
+			case err != nil:
+				s.log.Warn("recheck event stream", "err", err) // the store may recover, keep the stream
+			default:
+				p = next
+			}
 			if _, err := fmt.Fprint(w, ": keep-alive\n\n"); err != nil {
 				return
 			}
