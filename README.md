@@ -10,6 +10,19 @@ no outbound connections except to the targets you configure, and it sends no tel
 
 ## Install
 
+### Install script
+
+On any Linux distribution, the script installs the release binary, a service user, a config
+in `/etc/netscribe` and, with systemd, a service unit:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/FlexEbat/Netscribe/main/scripts/install.sh -o install.sh
+sudo sh install.sh
+```
+
+[docs/installation.md](docs/installation.md) lists the options, the optional packages for
+each distribution and the steps for hosts without systemd.
+
 ### Binary
 
 Download the archive for your platform (linux/amd64 or linux/arm64) from the
@@ -28,7 +41,8 @@ Edit `scan.targets` in `netscribe.yaml`, then start the panel:
 ./netscribe serve
 ```
 
-To build from source you need Go 1.26 and Node 22: run `make build`.
+To build from source you need Go 1.26 and Node 22: run `make build`. On a host that has
+neither, `sh scripts/install-build-deps.sh` installs them together with `git` and `make`.
 
 ### Docker
 
@@ -40,7 +54,9 @@ docker compose -f deploy/compose.yaml up --build -d
 curl http://127.0.0.1:8080/healthz
 ```
 
-The service listens on `127.0.0.1:8080` of the host. Every other route answers `503` until
+The service listens on `127.0.0.1:8080` of the host. When another program holds the port,
+the server warns and asks for another one on a terminal. Pass `--auto-port` to take the next
+free port, or `--listen ADDRESS` to choose one, see [Troubleshooting](docs/troubleshooting.md#the-port-is-already-in-use). Every other route answers `503` until
 you create the first user.
 
 The container runs as user `65532` with all capabilities dropped, a read-only root
@@ -245,7 +261,17 @@ docker compose -f deploy/compose.yaml exec netscribe netscribe export --format m
 docker compose -f deploy/compose.yaml cp netscribe:/data/network.md .
 ```
 
+## Documentation
+
+- [Installation](docs/installation.md): every install method, optional packages, systemd.
+- [Architecture](docs/architecture.md): packages, the scan stages, the request path.
+- [Troubleshooting](docs/troubleshooting.md): startup errors, ports, missing data.
+- [SECURITY.md](SECURITY.md): how to report a vulnerability and what Netscribe protects.
+
 ## Develop
+
+[CONTRIBUTING.md](CONTRIBUTING.md) explains the setup, the checks and the pull request
+process. Coding agents also read [AGENTS.md](AGENTS.md).
 
 ```sh
 make dev     # Go backend with reload and the Vite dev server
