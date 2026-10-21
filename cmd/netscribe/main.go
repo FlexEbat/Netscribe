@@ -52,10 +52,13 @@ type streams struct {
 	err io.Writer
 	// prompt asks for a secret on the terminal without echo.
 	prompt func(label string) (string, error)
+	// interactive is true when standard input is a terminal, so the server may ask
+	// questions such as which port to use.
+	interactive bool
 }
 
 func main() {
-	os.Exit(run(os.Args[1:], streams{in: os.Stdin, out: os.Stdout, err: os.Stderr, prompt: terminalPrompt}))
+	os.Exit(run(os.Args[1:], streams{in: os.Stdin, out: os.Stdout, err: os.Stderr, prompt: terminalPrompt, interactive: term.IsTerminal(int(os.Stdin.Fd()))}))
 }
 
 func run(args []string, e streams) int {
@@ -123,10 +126,34 @@ func (c *commonFlags) load(args []string, stderr io.Writer) (config.Config, *slo
 
 func serve(args []string, e streams) error {
 	flags := newCommonFlags("serve", e.err)
+	listenFlag := flags.fs.String("listen", "", "address to listen on, instead of listen from the config")
+	autoPort := flags.fs.Bool("auto-port", false, "use the next free port when the port is already in use")
 	cfg, logger, err := flags.load(args, e.err)
 	if err != nil {
 		return err
 	}
+	fileCfg := cfg // the reload watcher compares against what the file says, not the flag
+	if *listenFlag != "" {
+		if err := config.ValidateListen(*listenFlag); err != nil {
+			return fmt.Errorf("--listen %q: %w", *listenFlag, err)
+		}
+		cfg.Listen = *listenFlag
+	}
+	if cfg.TLS.CertFile != "" {
+		// A bad certificate would otherwise show only after the workers have started.
+		if _, err := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile); err != nil {
+			return fmt.Errorf("load tls certificate: %w", err)
+		}
+	}
+
+	// The port is taken before anything else starts: a busy port ends the command here,
+	// with no scan or watcher running behind a server that never came up.
+	ln, err := bindListener(cfg.Listen, bindOptions{auto: *autoPort, ask: lineAsker(e), warn: logger.Warn})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = ln.Close() }() // Shutdown closes it first, a second close only reports that
+	cfg.Listen = ln.Addr().String()
 	if insecureListen(cfg) {
 		logger.Warn("listening beyond loopback without TLS or a trusted proxy: traffic is not encrypted", "listen", cfg.Listen)
 	}
@@ -140,6 +167,13 @@ func serve(args []string, e streams) error {
 			logger.Error("close database", "err", err)
 		}
 	}()
+	closed, err := db.FailRunningScans(context.Background(), "interrupted: the server stopped before the scan ended")
+	if err != nil {
+		return err
+	}
+	if closed > 0 {
+		logger.Warn("closed scans that an earlier run left unfinished", "count", closed)
+	}
 
 	static, err := web.Dist()
 	if err != nil {
@@ -165,7 +199,7 @@ func serve(args []string, e streams) error {
 	if err != nil {
 		return err
 	}
-	live := config.NewWatcher(*flags.configPath, *flags.allowLoose, cfg, logger)
+	live := config.NewWatcher(*flags.configPath, *flags.allowLoose, fileCfg, logger)
 	hub := events.NewHub()
 	scanner := collector.NewScanner(db, cfg, logger)
 	scanner.SetEvents(hub)
@@ -192,10 +226,10 @@ func serve(args []string, e streams) error {
 	go func() {
 		logger.Info("listening", "addr", cfg.Listen, "tls", cfg.TLS.CertFile != "")
 		if cfg.TLS.CertFile != "" {
-			errc <- srv.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+			errc <- srv.ServeTLS(ln, cfg.TLS.CertFile, cfg.TLS.KeyFile)
 			return
 		}
-		errc <- srv.ListenAndServe()
+		errc <- srv.Serve(ln)
 	}()
 
 	select {
@@ -207,6 +241,23 @@ func serve(args []string, e streams) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return srv.Shutdown(shutdownCtx)
+}
+
+// lineAsker returns a function that asks one question on the terminal, or nil when
+// standard input is not a terminal and nobody can answer.
+func lineAsker(e streams) func(string) (string, error) {
+	if !e.interactive {
+		return nil
+	}
+	r := bufio.NewReader(e.in)
+	return func(prompt string) (string, error) {
+		_, _ = fmt.Fprint(e.err, prompt)
+		line, err := r.ReadString('\n')
+		if err != nil && line == "" {
+			return "", err
+		}
+		return line, nil
+	}
 }
 
 // scanStarter runs scans for the API over the targets of the config in force. A scan
