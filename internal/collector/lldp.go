@@ -434,7 +434,7 @@ func printable(b []byte) string {
 	}
 	s := strings.TrimSpace(string(b))
 	for _, r := range s {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || model.IsBidiControl(r) {
 			return ""
 		}
 	}
