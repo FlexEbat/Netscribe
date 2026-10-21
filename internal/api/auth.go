@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -43,7 +44,7 @@ func decode(r *http.Request, v any) bool {
 
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	ip := s.clientIP(r)
-	if ok, retry := s.limiter.Allow(ip); !ok {
+	if ok, retry := s.limiter.Allow(limitKey(ip)); !ok {
 		w.Header().Set("Retry-After", strconv.Itoa(max(1, int(math.Ceil(retry.Seconds())))))
 		writeError(w, http.StatusTooManyRequests, "too many attempts")
 		return
@@ -76,6 +77,21 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	s.setSessionCookie(w, r, sess)
 	s.write(r.Context(), model.AuditEntry{Action: "login", Result: "ok", IP: ip, UserID: &user.ID, Username: user.Username})
 	writeJSON(w, http.StatusOK, newMe(auth.Principal{User: user, CSRFToken: sess.CSRFToken}))
+}
+
+// limitKey is the key under which sign-in attempts are counted. A client that owns an IPv6
+// block can pick any address in it, so the attempts of one /64 count together: otherwise
+// one client could fill the limiter with keys and slow every later request down.
+func limitKey(ip string) string {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is6() || addr.Is4In6() {
+		return ip
+	}
+	prefix, err := addr.Prefix(64)
+	if err != nil {
+		return ip
+	}
+	return prefix.String()
 }
 
 func (s *server) logout(w http.ResponseWriter, r *http.Request) {
