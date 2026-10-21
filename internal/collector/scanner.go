@@ -438,8 +438,15 @@ func (s *Scanner) StartIdentify(ctx context.Context, ip string, done func(Identi
 	if s.nmap == nil || !s.nmap.State(s.config().Discovery).Available {
 		return ErrNmapUnavailable
 	}
-	if addr, err := netip.ParseAddr(ip); err != nil || !addr.Is4() {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is4() {
 		return ErrNoAddress
+	}
+	// A manual device can carry any address, so the same limit as for a scan applies here:
+	// without it a person who may add devices could aim nmap at loopback, a link-local
+	// service or a host on the Internet.
+	if !inScanTargets(s.config(), addr) {
+		return ErrOutOfScope
 	}
 	if !s.busy.CompareAndSwap(false, true) {
 		return ErrBusy
@@ -454,6 +461,17 @@ func (s *Scanner) StartIdentify(ctx context.Context, ip string, done func(Identi
 		done(res, err)
 	}()
 	return nil
+}
+
+// inScanTargets reports whether addr lies inside one of the scan targets of cfg.
+func inScanTargets(cfg config.Config, addr netip.Addr) bool {
+	for _, t := range cfg.Scan.Targets {
+		p, err := config.ParseTarget(t, cfg.AllowPublicTargets)
+		if err == nil && p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 // NmapState tells whether nmap is switched on and can be found.
@@ -588,7 +606,7 @@ func cleanHostname(name string) string {
 		}
 	}
 	return strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || model.IsBidiControl(r) {
 			return -1 // names come from the network and end up in logs and terminals
 		}
 		return r

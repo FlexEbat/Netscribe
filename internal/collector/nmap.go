@@ -63,6 +63,8 @@ var (
 	ErrNmapUnavailable = errors.New("nmap is not available")
 	// ErrNoAddress is returned for a device that has no IPv4 address nmap could be asked about.
 	ErrNoAddress = errors.New("the device has no IPv4 address")
+	// ErrOutOfScope means the address lies outside the scan targets.
+	ErrOutOfScope = errors.New("the device is outside the scan targets")
 )
 
 // resolve returns the program to run: discovery.nmapPath, or nmap from PATH.
