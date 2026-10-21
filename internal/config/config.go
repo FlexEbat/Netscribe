@@ -8,10 +8,12 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -233,6 +235,7 @@ var (
 	errMinPassword = errors.New("min password length is below 12")
 	errMaxFailed   = errors.New("max failed logins is out of range")
 	errProxyCIDR   = errors.New("trusted proxy is not a valid CIDR")
+	errListen      = errors.New("listen must be host:port with a port from 1 to 65535")
 )
 
 var rfc1918 = []netip.Prefix{
@@ -246,6 +249,10 @@ func (c Config) Validate() error {
 	var errs []error
 	fail := func(where string, err error) {
 		errs = append(errs, fmt.Errorf("%s: %w", where, err))
+	}
+
+	if err := ValidateListen(c.Listen); err != nil {
+		fail("listen", err)
 	}
 
 	for i, t := range c.Scan.Targets {
@@ -294,6 +301,20 @@ func (c Config) Validate() error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// ValidateListen checks a listen address before the server binds it, so a typo such as
+// "8080" without a colon is reported at load time and not after the workers started.
+func ValidateListen(addr string) error {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return errListen
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil || n < 1 || n > 65535 {
+		return errListen
+	}
+	return nil
 }
 
 // ParseTarget parses and checks one scan target, from the config or from a CLI argument.
