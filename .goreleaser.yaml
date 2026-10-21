@@ -24,6 +24,8 @@ archives:
       - LICENSE
       - README.md
       - netscribe.example.yaml
+      - src: deploy/netscribe.service
+        strip_parent: true
 
 checksum:
   name_template: checksums.txt
