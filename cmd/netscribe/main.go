@@ -42,6 +42,7 @@ commands:
   devices   print the devices found so far
   export    write the network documentation: --format md|html|pdf|drawio --out <file>
   user      manage accounts: add, list, disable, passwd
+  version   print the version of this build
 
 run "netscribe <command> -h" for the flags of a command`
 
@@ -86,6 +87,13 @@ func run(args []string, e streams) int {
 	switch args[0] {
 	case "-h", "--help", "help":
 		_, _ = fmt.Fprintln(e.err, usage)
+		return 0
+	case "version", "--version":
+		if len(args) > 1 {
+			_, _ = fmt.Fprintln(e.err, "usage: netscribe version")
+			return 2
+		}
+		_, _ = fmt.Fprintln(e.out, versionLine())
 		return 0
 	default:
 		_, _ = fmt.Fprintf(e.err, "netscribe: unknown command %q\n\n%s\n", args[0], usage)
