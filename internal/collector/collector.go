@@ -4,6 +4,7 @@ package collector
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 
 	"github.com/FlexEbat/Netscribe/internal/config"
@@ -42,4 +43,16 @@ type Result struct {
 type Collector interface {
 	Name() string
 	Collect(ctx context.Context, in Input) (Result, error)
+}
+
+// safeCollect runs a collector and turns a panic into an error. A collector parses bytes
+// that devices on the network send, and a bug in one parser must cost one source of
+// facts and not the process.
+func safeCollect(ctx context.Context, c Collector, in Input) (res Result, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			res, err = Result{}, fmt.Errorf("%s collector panicked: %v", c.Name(), r)
+		}
+	}()
+	return c.Collect(ctx, in)
 }

@@ -17,7 +17,8 @@ COPY internal ./internal
 COPY web/embed.go ./web/embed.go
 COPY --from=web /src/web/dist ./web/dist
 # CGO is off because the SQLite driver is pure Go, so the binary needs no libc.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/netscribe ./cmd/netscribe
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/netscribe ./cmd/netscribe
 # The data directory is created here because the final image has no shell. A named
 # volume copies its owner from this directory on first use.
 RUN mkdir /out/data
