@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -434,7 +433,7 @@ func printable(b []byte) string {
 	}
 	s := strings.TrimSpace(string(b))
 	for _, r := range s {
-		if unicode.IsControl(r) || model.IsBidiControl(r) {
+		if model.UnsafeRune(r) {
 			return ""
 		}
 	}

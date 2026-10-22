@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/netip"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -64,7 +63,7 @@ func normalizeMAC(s string) (string, error) {
 // cleanLabel removes control characters, which have no place in a name, and trims it.
 func cleanLabel(s string) string {
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || model.IsBidiControl(r) {
+		if model.UnsafeRune(r) {
 			return -1
 		}
 		return r
@@ -74,7 +73,7 @@ func cleanLabel(s string) string {
 // cleanNotes keeps line breaks and tabs and removes the other control characters.
 func cleanNotes(s string) string {
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
-		if (unicode.IsControl(r) && r != '\n' && r != '\t') || model.IsBidiControl(r) {
+		if model.UnsafeRune(r) && r != '\n' && r != '\t' {
 			return -1
 		}
 		return r

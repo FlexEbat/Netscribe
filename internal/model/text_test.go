@@ -2,15 +2,17 @@ package model
 
 import "testing"
 
-func TestIsBidiControl(t *testing.T) {
-	for _, r := range []rune{0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069} {
-		if !IsBidiControl(r) {
-			t.Errorf("U+%04X is not reported as a bidi control", r)
+func TestUnsafeRune(t *testing.T) {
+	unsafe := []rune{0, '\n', '\t', 0x7f, 0x85, '\u061C', '\u200E', '\u200F', '\u202A', '\u202B', '\u202C', '\u202D', '\u202E', '\u2066', '\u2067', '\u2068', '\u2069'}
+	for _, r := range unsafe {
+		if !UnsafeRune(r) {
+			t.Errorf("U+%04X is safe, want unsafe", r)
 		}
 	}
-	for _, r := range []rune{'a', ' ', 0x200E, 0x200F, 0x0627, 0x2029, 0x202F, 0x206A, 0x1F600} {
-		if IsBidiControl(r) {
-			t.Errorf("U+%04X is reported as a bidi control", r)
+	safe := []rune{'a', ' ', 'я', '漢', '😀', '\u200D', '\u2029', 'é', '-'}
+	for _, r := range safe {
+		if UnsafeRune(r) {
+			t.Errorf("U+%04X is unsafe, want safe", r)
 		}
 	}
 }

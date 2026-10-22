@@ -16,7 +16,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -246,7 +245,7 @@ func firstLine(s string) string {
 // Everything a host prints is untrusted.
 func cleanLine(s string) string {
 	s = strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) || model.IsBidiControl(r) {
+		if model.UnsafeRune(r) {
 			return -1
 		}
 		return r
