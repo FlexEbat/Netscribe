@@ -91,7 +91,15 @@ jobs:
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
       - name: Audit
-        run: make audit
+        # The advisory databases are fetched over the network. A failed fetch is tried
+        # again, a real finding fails every attempt.
+        run: |
+          for attempt in 1 2 3; do
+            make audit && exit 0
+            echo "audit attempt $attempt failed"
+            sleep 20
+          done
+          exit 1
 
   secrets:
     # leaked credentials anywhere in the history
