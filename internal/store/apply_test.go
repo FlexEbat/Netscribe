@@ -501,3 +501,9 @@ func TestFailRunningScansClosesOnlyTheRunningOnes(t *testing.T) {
 		t.Errorf("second call closed %d scans, %v, want 0", n, err)
 	}
 }
+
+func TestCleanTextDropsBidiOverrides(t *testing.T) {
+	if got := cleanText("  ab\u202ec\u2067d  "); got != "abcd" {
+		t.Errorf("cleanText = %q, want %q", got, "abcd")
+	}
+}

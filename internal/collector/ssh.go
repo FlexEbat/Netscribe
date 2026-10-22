@@ -246,7 +246,7 @@ func firstLine(s string) string {
 // Everything a host prints is untrusted.
 func cleanLine(s string) string {
 	s = strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || model.IsBidiControl(r) {
 			return -1
 		}
 		return r

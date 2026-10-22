@@ -58,6 +58,7 @@ func TestIdentifyDeviceMapsEachFailureToAStatus(t *testing.T) {
 		{collector.ErrBusy, http.StatusConflict},
 		{collector.ErrNmapUnavailable, http.StatusBadRequest},
 		{collector.ErrNoAddress, http.StatusBadRequest},
+		{collector.ErrOutOfScope, http.StatusBadRequest},
 		{errors.New("disk on fire"), http.StatusInternalServerError},
 	} {
 		e, s := identifyEnv(t, &fakeIdentifier{err: tc.err})

@@ -200,7 +200,7 @@ func networkText(s string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || model.IsBidiControl(r) {
 			return -1
 		}
 		return r
