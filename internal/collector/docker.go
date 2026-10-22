@@ -445,6 +445,9 @@ type socketAPI struct {
 
 func newSocketAPI(socket string) *socketAPI {
 	tr := &http.Transport{
+		// A client lives for one scan and is never closed, so an idle connection would
+		// stay open until the process ends.
+		DisableKeepAlives: true,
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", socket)
