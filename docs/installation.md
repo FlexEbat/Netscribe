@@ -132,6 +132,20 @@ Netscribe logs that ICMP is off and probes with TCP only. ARP discovery reads
 When the port is taken, the server warns and asks for another one on a terminal. See
 [Troubleshooting](troubleshooting.md#the-port-is-already-in-use).
 
+## Backup
+
+Everything Netscribe keeps is in the SQLite file named in `database` (devices, links,
+accounts, audit log), next to the config. SQLite runs in WAL mode, so a copy of the main
+file alone can miss the latest writes. Stop the service and copy the file with its `-wal`
+and `-shm` neighbors, or make a consistent copy while the service runs, with the `sqlite3`
+program:
+
+```sh
+sqlite3 /var/lib/netscribe/netscribe.db ".backup /var/backups/netscribe.db"
+```
+
+The file holds password hashes and session records: give the copy the mode `0600`.
+
 ## Upgrade and uninstall
 
 Run the install script again to upgrade. The config and the database stay. Back up the file
