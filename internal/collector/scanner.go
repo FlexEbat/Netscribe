@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -239,6 +240,14 @@ func (s *Scanner) start(ctx context.Context, targets []netip.Prefix, withNmap bo
 	}
 	go func() {
 		defer s.busy.Store(false)
+		defer func() {
+			// Collectors are guarded one by one, this catches the rest of a scan. Without
+			// it a bug would end the process and leave the scan row running.
+			if r := recover(); r != nil {
+				s.log.Error("scan panicked", "scan", scan.ID, "panic", r, "stack", string(debug.Stack()))
+				_, _ = s.fail(ctx, scan.ID, fmt.Errorf("internal error: %v", r))
+			}
+		}()
 		// execute records its own failure in the log and in the scan row.
 		_, _ = s.execute(ctx, scan, targets)
 	}()
@@ -294,7 +303,7 @@ func (s *Scanner) scheduled(ctx context.Context, targets func(config.Config) ([]
 }
 
 func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.Prefix) (model.Scan, error) {
-	res, err := s.discovery.Collect(ctx, Input{Targets: targets, Config: s.scanCfg})
+	res, err := safeCollect(ctx, s.discovery, Input{Targets: targets, Config: s.scanCfg})
 	if err != nil {
 		return s.fail(ctx, scan.ID, fmt.Errorf("%s: %w", s.discovery.Name(), err))
 	}
@@ -358,7 +367,7 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 				return false
 			}
 			// Devices found by an earlier collector are asked by the later ones.
-			out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.scanCfg})
+			out, err := safeCollect(ctx, c, Input{Targets: targets, Devices: devices, Config: s.scanCfg})
 			if err != nil {
 				if ctx.Err() == nil {
 					s.log.Warn("collector failed", "collector", c.Name(), "err", err)
@@ -415,7 +424,7 @@ func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices [
 	if len(ask) == 0 {
 		return nil
 	}
-	out, err := s.nmap.Collect(ctx, Input{Targets: targets, Devices: ask, Config: s.scanCfg})
+	out, err := safeCollect(ctx, s.nmap, Input{Targets: targets, Devices: ask, Config: s.scanCfg})
 	if err != nil {
 		if ctx.Err() == nil {
 			s.log.Warn("collector failed", "collector", s.nmap.Name(), "err", err)
@@ -453,6 +462,12 @@ func (s *Scanner) StartIdentify(ctx context.Context, ip string, done func(Identi
 	}
 	go func() {
 		defer s.busy.Store(false)
+		defer func() {
+			if r := recover(); r != nil {
+				s.log.Error("identify panicked", "panic", r, "stack", string(debug.Stack()))
+				done(IdentifyResult{Kind: model.KindUnknown}, fmt.Errorf("internal error: %v", r))
+			}
+		}()
 		id, err := s.nmap.Identify(ctx, s.config().Discovery, ip)
 		res := IdentifyResult{OS: id.OS, Kind: model.KindUnknown}
 		if err == nil && s.classifier != nil {
