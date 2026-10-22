@@ -58,6 +58,18 @@ The unit runs the service with `NoNewPrivileges`, a read-only file system outsid
 `/var/lib/netscribe` and a restricted set of address families. To read Docker data, name
 the group that owns the socket in `SupplementaryGroups=` of the unit.
 
+## Verify a download
+
+`checksums.txt` shows that a download is complete. Each release also carries a signed
+statement of where its archives were built: the repository, the commit and the workflow.
+Check an archive against it with the GitHub CLI:
+
+```sh
+gh attestation verify netscribe_0.1.2_linux_amd64.tar.gz --repo FlexEbat/Netscribe
+```
+
+A release published before this statement existed has none, and the command says so.
+
 ## Release binary by hand
 
 ```sh

@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write # publish the release and its checksums.txt
+  id-token: write # sign the provenance of the archives
+  attestations: write # store the provenance with the repository
 
 jobs:
   release:
@@ -37,3 +39,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # checksums.txt lists every archive, so one attestation covers them all. Anyone can
+      # check a download against it: see "Verify a download" in docs/installation.md.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt
