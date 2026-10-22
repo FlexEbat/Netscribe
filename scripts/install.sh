@@ -14,6 +14,7 @@ set -eu
 REPO="FlexEbat/Netscribe"
 BASE_URL="${NETSCRIBE_BASE_URL:-https://github.com/$REPO/releases/download}"
 API_URL="${NETSCRIBE_API_URL:-https://api.github.com/repos/$REPO/releases/latest}"
+LATEST_URL="${NETSCRIBE_LATEST_URL:-https://github.com/$REPO/releases/latest}"
 ETC_DIR="${NETSCRIBE_ETC_DIR:-/etc/netscribe}"
 STATE_DIR="${NETSCRIBE_STATE_DIR:-/var/lib/netscribe}"
 UNIT_DIR="${NETSCRIBE_UNIT_DIR:-/etc/systemd/system}"
@@ -150,10 +151,29 @@ fetch() {
 	fi
 }
 
+# redirect_tag reads the tag from the redirect of the "latest release" page. Unlike the
+# API it has no rate limit for anonymous clients, which matters behind a shared address.
+redirect_tag() {
+	if command -v curl >/dev/null 2>&1; then
+		url="$(curl -fsSL -o /dev/null -w '%{url_effective}' "$LATEST_URL" 2>/dev/null)" || return 0
+	else
+		url="$(wget -S --spider --max-redirect=0 "$LATEST_URL" 2>&1 | sed -n 's/^ *[Ll]ocation: *//p' | head -n 1 | tr -d '\r')" || true
+	fi
+	found="${url##*/}"
+	case "$found" in
+	v[0-9]*) printf '%s' "$found" ;;
+	esac
+}
+
 latest_tag() {
-	fetch "$API_URL" "$WORK/latest.json" || die "cannot read the latest release from $API_URL: pass --version TAG, or build from source"
-	tag="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$WORK/latest.json" | head -n 1)"
-	[ -n "$tag" ] || die "no release found: pass --version TAG, or build from source"
+	tag=""
+	if fetch "$API_URL" "$WORK/latest.json" 2>/dev/null; then
+		tag="$(sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$WORK/latest.json" | head -n 1)"
+	fi
+	if [ -z "$tag" ]; then
+		tag="$(redirect_tag)"
+	fi
+	[ -n "$tag" ] || die "no release found at $API_URL or $LATEST_URL: pass --version TAG, or build from source"
 	printf '%s' "$tag"
 }
 
