@@ -547,6 +547,25 @@ func TestChangePasswordClearsMustChange(t *testing.T) {
 	}
 }
 
+func TestChangePasswordRefusesTheSamePassword(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	if _, err := svc.CreateUser(context.Background(), NewUser{Username: "alice", Role: model.RoleViewer, Password: goodPassword, MustChangePassword: true}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	sess, _, _ := svc.Login(ctx, "alice", goodPassword, "", "")
+	p, _ := svc.Authenticate(ctx, sess.ID)
+	if err := svc.ChangePassword(ctx, p, goodPassword, goodPassword); !errors.Is(err, ErrPasswordUnchanged) {
+		t.Fatalf("same password = %v, want ErrPasswordUnchanged", err)
+	}
+	if !repo.users["alice"].MustChangePassword {
+		t.Error("a refused change cleared must_change_password")
+	}
+	if _, err := svc.Authenticate(ctx, sess.ID); err != nil {
+		t.Errorf("a refused change ended the session: %v", err)
+	}
+}
+
 func TestChangePasswordRefusedWhileLocked(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	addUser(t, svc, "alice", model.RoleViewer)
