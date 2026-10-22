@@ -470,11 +470,13 @@ func TestIdentifyAsksOneDeviceWhateverTheSwitchSays(t *testing.T) {
 
 func identifyScanner(t *testing.T, f *fakeNmap, found string) *Scanner {
 	t.Helper()
+	cfg := nmapInput(false, "").Config
+	cfg.Scan.Targets = []string{"192.168.1.0/24"}
 	return &Scanner{
 		log:        quietLogger(),
 		classifier: mustClassifier(t, "nmap,type=router,router\n"),
 		nmap:       newFakeNmapCollector(f, found),
-		cfg:        nmapInput(false, "").Config,
+		cfg:        cfg,
 	}
 }
 
@@ -582,5 +584,36 @@ func TestAnAppleIOSDeviceIsAHostAndACiscoIOSDeviceIsNot(t *testing.T) {
 	}
 	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"family=ios", "type=switch"}}); got != model.KindSwitch {
 		t.Errorf("cisco switch: kind = %q, want switch", got)
+	}
+}
+
+func TestStartIdentifyRefusesAddressesOutsideTheScanTargets(t *testing.T) {
+	f := &fakeNmap{}
+	s := identifyScanner(t, f, "/usr/bin/nmap")
+	noop := func(IdentifyResult, error) {}
+	// Private, loopback, link-local, cloud metadata and public addresses that no target covers.
+	for _, ip := range []string{"10.0.0.5", "127.0.0.1", "169.254.169.254", "8.8.8.8", "192.168.2.1"} {
+		if err := s.StartIdentify(context.Background(), ip, noop); !errors.Is(err, ErrOutOfScope) {
+			t.Errorf("%s: err = %v, want ErrOutOfScope", ip, err)
+		}
+	}
+	if f.count() != 0 {
+		t.Errorf("nmap ran %d times for refused addresses", f.count())
+	}
+	if s.busy.Load() {
+		t.Error("a refused address took the scan slot")
+	}
+}
+
+func TestStartIdentifyStaysInsideTargetsEvenWhenPublicOnesAreAllowed(t *testing.T) {
+	s := identifyScanner(t, &fakeNmap{}, "/usr/bin/nmap")
+	s.cfg.AllowPublicTargets = true
+	s.cfg.Scan.Targets = []string{"203.0.113.0/24"}
+	noop := func(IdentifyResult, error) {}
+	if err := s.StartIdentify(context.Background(), "8.8.8.8", noop); !errors.Is(err, ErrOutOfScope) {
+		t.Errorf("8.8.8.8: err = %v, want ErrOutOfScope", err)
+	}
+	if err := s.StartIdentify(context.Background(), "203.0.113.7", noop); err != nil {
+		t.Errorf("203.0.113.7: err = %v, want it accepted as a target", err)
 	}
 }

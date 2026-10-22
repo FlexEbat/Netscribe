@@ -53,6 +53,23 @@ jobs:
           make build
           ./netscribe help
 
+  docker:
+    # the images are built here and nowhere else, so a broken Dockerfile would show only
+    # when somebody tries to run it
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the default image
+        run: docker build -f deploy/Dockerfile -t netscribe:ci .
+      - name: Build the image with nmap
+        run: docker build -f deploy/Dockerfile --target nmap -t netscribe:ci-nmap .
+      - name: The image runs
+        run: docker run --rm netscribe:ci version
+
   audit:
     # known vulnerabilities in dependencies, needs the network
     runs-on: ubuntu-latest

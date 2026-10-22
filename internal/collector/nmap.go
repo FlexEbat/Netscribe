@@ -63,6 +63,8 @@ var (
 	ErrNmapUnavailable = errors.New("nmap is not available")
 	// ErrNoAddress is returned for a device that has no IPv4 address nmap could be asked about.
 	ErrNoAddress = errors.New("the device has no IPv4 address")
+	// ErrOutOfScope means the address lies outside the scan targets.
+	ErrOutOfScope = errors.New("the device is outside the scan targets")
 )
 
 // resolve returns the program to run: discovery.nmapPath, or nmap from PATH.
@@ -341,6 +343,9 @@ func runNmap(ctx context.Context, path string, args []string) ([]byte, error) {
 	var stdout, stderr capped
 	stdout.max, stderr.max = nmapMaxOutput, 512
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	// Killing nmap on a timeout does not close the pipes of a process it started. Without
+	// a delay, Run would wait for them and the scan would hang with it.
+	cmd.WaitDelay = 5 * time.Second
 	// A minimal environment: nothing of the server's variables is passed on.
 	cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "LC_ALL=C"}
 	if err := cmd.Run(); err != nil {

@@ -79,8 +79,8 @@ type NmapScanner interface {
 
 // DeviceIdentifier asks nmap about one device in the background. Identify returns at once:
 // model.ErrNotFound for an unknown device, collector.ErrBusy while a scan or another
-// identification runs, collector.ErrNmapUnavailable or collector.ErrNoAddress when it
-// cannot start. *deviceIdentifier in cmd/netscribe implements it.
+// identification runs, collector.ErrNmapUnavailable, collector.ErrNoAddress or collector.ErrOutOfScope
+// when it cannot start. *deviceIdentifier in cmd/netscribe implements it.
 type DeviceIdentifier interface {
 	Identify(id int64) error
 }

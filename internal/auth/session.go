@@ -342,6 +342,11 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 	if err := ValidatePassword(next, rec.Username, s.cfg.MinPasswordLength); err != nil {
 		return err
 	}
+	// An administrator set the password that a forced change replaces, so keeping it
+	// would leave a secret that somebody else knows.
+	if next == current {
+		return ErrPasswordUnchanged
+	}
 	hash, err := Hash(next, s.params)
 	if err != nil {
 		return err

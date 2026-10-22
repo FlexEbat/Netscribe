@@ -225,6 +225,8 @@ func (s *server) identifyDevice(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "nmap is not available")
 	case errors.Is(err, collector.ErrNoAddress):
 		writeError(w, http.StatusBadRequest, "the device has no IPv4 address")
+	case errors.Is(err, collector.ErrOutOfScope):
+		writeError(w, http.StatusBadRequest, "the device is outside the scan targets")
 	default:
 		s.internalError(w, "identify device", err)
 	}

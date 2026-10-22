@@ -14,7 +14,7 @@ builds:
     goos: [linux]
     goarch: [amd64, arm64]
     flags: [-trimpath]
-    ldflags: ["-s -w"]
+    ldflags: ["-s -w -X main.version={{ .Version }} -X main.commit={{ .FullCommit }}"]
 
 archives:
   - id: netscribe

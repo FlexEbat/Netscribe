@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/netip"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
@@ -242,7 +241,7 @@ const maxTextRunes = 255
 // cleanText removes control characters, trims the ends and cuts s to maxTextRunes characters.
 func cleanText(s string) string {
 	s = strings.TrimSpace(strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
+		if model.UnsafeRune(r) {
 			return -1
 		}
 		return r

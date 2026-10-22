@@ -5,7 +5,7 @@ how a pull request gets merged. Coding agents follow [AGENTS.md](AGENTS.md) in a
 
 ## Report a problem or an idea
 
-Open an issue. For a bug, give the version or commit, your distribution, what you did, what
+Open an issue. For a bug, give the output of `netscribe version`, your distribution, what you did, what
 happened and what you expected, and paste the log lines around the failure. The log masks
 secrets, but read it before you post it: it can hold host names and addresses of your network.
 

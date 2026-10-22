@@ -589,3 +589,9 @@ func TestMergeServicesKeepsTheNameAndTheBannerOfOneService(t *testing.T) {
 		t.Errorf("port 8080 = %+v", got[2])
 	}
 }
+
+func TestCleanHostnameDropsBidiOverrides(t *testing.T) {
+	if got := cleanHostname("print\u202eer.lan."); got != "printer.lan" {
+		t.Errorf("cleanHostname = %q, want the override gone", got)
+	}
+}

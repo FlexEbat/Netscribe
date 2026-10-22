@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -238,6 +239,14 @@ func (s *Scanner) start(ctx context.Context, targets []netip.Prefix, withNmap bo
 	}
 	go func() {
 		defer s.busy.Store(false)
+		defer func() {
+			// Collectors are guarded one by one, this catches the rest of a scan. Without
+			// it a bug would end the process and leave the scan row running.
+			if r := recover(); r != nil {
+				s.log.Error("scan panicked", "scan", scan.ID, "panic", r, "stack", string(debug.Stack()))
+				_, _ = s.fail(ctx, scan.ID, fmt.Errorf("internal error: %v", r))
+			}
+		}()
 		// execute records its own failure in the log and in the scan row.
 		_, _ = s.execute(ctx, scan, targets)
 	}()
@@ -293,7 +302,7 @@ func (s *Scanner) scheduled(ctx context.Context, targets func(config.Config) ([]
 }
 
 func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.Prefix) (model.Scan, error) {
-	res, err := s.discovery.Collect(ctx, Input{Targets: targets, Config: s.scanCfg})
+	res, err := safeCollect(ctx, s.discovery, Input{Targets: targets, Config: s.scanCfg})
 	if err != nil {
 		return s.fail(ctx, scan.ID, fmt.Errorf("%s: %w", s.discovery.Name(), err))
 	}
@@ -357,7 +366,7 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 				return false
 			}
 			// Devices found by an earlier collector are asked by the later ones.
-			out, err := c.Collect(ctx, Input{Targets: targets, Devices: devices, Config: s.scanCfg})
+			out, err := safeCollect(ctx, c, Input{Targets: targets, Devices: devices, Config: s.scanCfg})
 			if err != nil {
 				if ctx.Err() == nil {
 					s.log.Warn("collector failed", "collector", c.Name(), "err", err)
@@ -414,7 +423,7 @@ func (s *Scanner) askNmap(ctx context.Context, targets []netip.Prefix, devices [
 	if len(ask) == 0 {
 		return nil
 	}
-	out, err := s.nmap.Collect(ctx, Input{Targets: targets, Devices: ask, Config: s.scanCfg})
+	out, err := safeCollect(ctx, s.nmap, Input{Targets: targets, Devices: ask, Config: s.scanCfg})
 	if err != nil {
 		if ctx.Err() == nil {
 			s.log.Warn("collector failed", "collector", s.nmap.Name(), "err", err)
@@ -437,14 +446,27 @@ func (s *Scanner) StartIdentify(ctx context.Context, ip string, done func(Identi
 	if s.nmap == nil || !s.nmap.State(s.config().Discovery).Available {
 		return ErrNmapUnavailable
 	}
-	if addr, err := netip.ParseAddr(ip); err != nil || !addr.Is4() {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil || !addr.Is4() {
 		return ErrNoAddress
+	}
+	// A manual device can carry any address, so the same limit as for a scan applies here:
+	// without it a person who may add devices could aim nmap at loopback, a link-local
+	// service or a host on the Internet.
+	if !inScanTargets(s.config(), addr) {
+		return ErrOutOfScope
 	}
 	if !s.busy.CompareAndSwap(false, true) {
 		return ErrBusy
 	}
 	go func() {
 		defer s.busy.Store(false)
+		defer func() {
+			if r := recover(); r != nil {
+				s.log.Error("identify panicked", "panic", r, "stack", string(debug.Stack()))
+				done(IdentifyResult{Kind: model.KindUnknown}, fmt.Errorf("internal error: %v", r))
+			}
+		}()
 		id, err := s.nmap.Identify(ctx, s.config().Discovery, ip)
 		res := IdentifyResult{OS: id.OS, Kind: model.KindUnknown}
 		if err == nil && s.classifier != nil {
@@ -453,6 +475,17 @@ func (s *Scanner) StartIdentify(ctx context.Context, ip string, done func(Identi
 		done(res, err)
 	}()
 	return nil
+}
+
+// inScanTargets reports whether addr lies inside one of the scan targets of cfg.
+func inScanTargets(cfg config.Config, addr netip.Addr) bool {
+	for _, t := range cfg.Scan.Targets {
+		p, err := config.ParseTarget(t, cfg.AllowPublicTargets)
+		if err == nil && p.Contains(addr) {
+			return true
+		}
+	}
+	return false
 }
 
 // NmapState tells whether nmap is switched on and can be found.

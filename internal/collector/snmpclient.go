@@ -67,14 +67,34 @@ func (c *gosnmpClient) Get(ctx context.Context, oids []string) ([]snmpPDU, error
 
 func (c *gosnmpClient) Walk(ctx context.Context, root string) ([]snmpPDU, error) {
 	c.g.Context = ctx
-	rows, err := c.g.BulkWalkAll(root)
-	if err != nil {
+	rows := &rowCap{limit: maxWalkRows}
+	// BulkWalk hands rows over one by one, so a device that never stops answering is
+	// cut off at the limit and not after it has filled the memory. BulkWalkAll would
+	// hold the whole table before the limit could apply.
+	if err := c.g.BulkWalk(root, rows.add); err != nil && !rows.capped {
 		return nil, redact(err)
 	}
-	if len(rows) > maxWalkRows {
-		rows = rows[:maxWalkRows]
+	return convertPDUs(rows.pdus), nil
+}
+
+// rowCap collects the rows of a walk up to a limit.
+type rowCap struct {
+	limit  int
+	pdus   []gosnmp.SnmpPDU
+	capped bool
+}
+
+var errRowCap = errors.New("the walk reached its row limit")
+
+// add stores one row. At the limit it stops the walk, and capped tells the caller that
+// the error is this stop and not a failure.
+func (r *rowCap) add(p gosnmp.SnmpPDU) error {
+	if len(r.pdus) >= r.limit {
+		r.capped = true
+		return errRowCap
 	}
-	return convertPDUs(rows), nil
+	r.pdus = append(r.pdus, p)
+	return nil
 }
 
 func (c *gosnmpClient) Close() error {
