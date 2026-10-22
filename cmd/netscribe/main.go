@@ -203,8 +203,7 @@ func serve(args []string, e streams) error {
 	signal.Notify(hup, syscall.SIGHUP)
 	defer signal.Stop(hup)
 
-	targets, err := configuredTargets(cfg)
-	if err != nil {
+	if _, err := configuredTargets(cfg); err != nil {
 		return err
 	}
 	live := config.NewWatcher(*flags.configPath, *flags.allowLoose, fileCfg, logger)
@@ -221,7 +220,16 @@ func serve(args []string, e streams) error {
 	})
 	srv := newServer(cfg, router)
 	go maintain(ctx, db, cfg.Audit.KeepDays, func() int { return live.Current().History.KeepScans }, time.Hour, logger)
-	go scanner.Docker().Watch(ctx, db, targets, func() { hub.Publish("topology.changed", struct{}{}) })
+	// The watcher asks for the targets at every connect, so a reload that changes
+	// scan.targets reaches it through Docker().Retarget, which SetConfig calls.
+	liveTargets := func() []netip.Prefix {
+		list, err := configuredTargets(live.Current())
+		if err != nil {
+			return nil // a reloaded config is validated, so this is not expected
+		}
+		return list
+	}
+	go scanner.Docker().Watch(ctx, db, liveTargets, func() { hub.Publish("topology.changed", struct{}{}) })
 	go scanner.Schedule(ctx, configuredTargets)
 	reloaded, failed := configHooks(scanner, hub, db, logger)
 	go func() {

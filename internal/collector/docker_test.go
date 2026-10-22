@@ -345,7 +345,7 @@ func TestDockerWatchFollowsEventsWithoutAScan(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		d.Watch(ctx, sink, []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, func() { mu.Lock(); changed++; mu.Unlock() })
+		d.Watch(ctx, sink, fixedTargets("192.168.1.0/24"), func() { mu.Lock(); changed++; mu.Unlock() })
 		close(done)
 	}()
 
@@ -391,7 +391,7 @@ func TestDockerWatchReconnectsAndListsAgain(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go d.Watch(ctx, sink, []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, func() {})
+	go d.Watch(ctx, sink, fixedTargets("192.168.1.0/24"), func() {})
 
 	waitDocker(t, "the first list", func() bool { sink.mu.Lock(); defer sink.mu.Unlock(); return len(sink.replaced) == 1 })
 	// The daemon restarts: the stream ends, the watcher lists again.
@@ -496,7 +496,7 @@ func TestDockerReconfigureReconnectsTheWatchAndStopsItWhenDisabled(t *testing.T)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go d.Watch(ctx, &fakeSink{}, []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, func() {})
+	go d.Watch(ctx, &fakeSink{}, fixedTargets("192.168.1.0/24"), func() {})
 	waitDocker(t, "the first connection", func() bool { return len(connections()) == 1 })
 
 	d.Reconfigure(config.DockerConfig{Enabled: true, Socket: "/run/other.sock"})
@@ -525,7 +525,7 @@ func TestDockerReconfigureWithTheSameSettingsKeepsTheConnection(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go d.Watch(ctx, &fakeSink{}, []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}, func() {})
+	go d.Watch(ctx, &fakeSink{}, fixedTargets("192.168.1.0/24"), func() {})
 	waitDocker(t, "the first connection", func() bool { mu.Lock(); defer mu.Unlock(); return n == 1 })
 
 	d.Reconfigure(config.DockerConfig{Enabled: true, Socket: "/run/docker.sock"})

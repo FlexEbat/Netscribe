@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -163,10 +164,14 @@ func (s *Scanner) config() config.Config {
 func (s *Scanner) SetConfig(cfg config.Config) {
 	s.cfgMu.Lock()
 	intervalChanged := s.cfg.Scan.Interval != cfg.Scan.Interval
+	targetsChanged := !slices.Equal(s.cfg.Scan.Targets, cfg.Scan.Targets) || s.cfg.AllowPublicTargets != cfg.AllowPublicTargets
 	s.cfg = cfg
 	s.cfgMu.Unlock()
 	if s.docker != nil {
 		s.docker.Reconfigure(cfg.Docker)
+		if targetsChanged {
+			s.docker.Retarget()
+		}
 	}
 	if intervalChanged {
 		select {

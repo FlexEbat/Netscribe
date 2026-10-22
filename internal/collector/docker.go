@@ -296,11 +296,26 @@ func localAddrs() []netip.Addr {
 	return out
 }
 
+// Retarget makes Watch choose its host again. Call it when the scan targets changed: the
+// host is the local address that lies inside them, and a reload may have moved it.
+func (d *Docker) Retarget() {
+	d.mu.Lock()
+	stop := d.stopWatch
+	d.mu.Unlock()
+	if stop != nil {
+		stop()
+	}
+	select {
+	case d.wake <- struct{}{}:
+	default: // a wake-up is already waiting
+	}
+}
+
 // Watch keeps the stored containers equal to the daemon between scans: it lists them,
-// then follows the event stream and re-reads the container each event names. changed is
-// called after every change. Watch returns when ctx is canceled, a lost connection is
-// retried.
-func (d *Docker) Watch(ctx context.Context, sink ContainerSink, targets []netip.Prefix, changed func()) {
+// then follows the event stream and re-reads the container each event names. targets
+// returns the scan targets in force and is asked at every connect. changed is called
+// after every change. Watch returns when ctx is canceled, a lost connection is retried.
+func (d *Docker) Watch(ctx context.Context, sink ContainerSink, targets func() []netip.Prefix, changed func()) {
 	for ctx.Err() == nil {
 		cfg := d.config()
 		if cfg.Enabled {
@@ -310,7 +325,7 @@ func (d *Docker) Watch(ctx context.Context, sink ContainerSink, targets []netip.
 			d.mu.Unlock()
 			// Reconfigure may have run before stop was registered, so look again.
 			if d.config() == cfg {
-				if err := d.watchOnce(wctx, sink, cfg, targets, changed); err != nil && wctx.Err() == nil {
+				if err := d.watchOnce(wctx, sink, cfg, targets(), changed); err != nil && wctx.Err() == nil {
 					d.fail(dockerReason(err))
 				}
 			}
