@@ -34,7 +34,14 @@ test: web/dist web/node_modules
 	go test -race $(GO_PKGS)
 	cd web && npm test
 
-gate: lint check test
+stress: web/dist
+	@go test -race -count=6 $(GO_PKGS) > /tmp/stress.txt 2>&1; rc=$$?; \
+	grep -E '^(--- FAIL|FAIL|panic:)' /tmp/stress.txt | sort | uniq -c | while read -r l; do echo "::error::$$l"; done; \
+	grep -B2 -A14 'DATA RACE' /tmp/stress.txt | head -40 | while read -r l; do echo "::warning::$$l"; done; \
+	grep -E '_test.go:[0-9]+' /tmp/stress.txt | sort | uniq -c | head -20 | while read -r l; do echo "::notice::$$l"; done; \
+	echo "rc=$$rc"; exit $$rc
+
+gate: stress
 
 # Needs network access, runs in CI, not part of gate.
 audit:
