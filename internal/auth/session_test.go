@@ -594,6 +594,7 @@ func TestCreateUserValidatesAndNormalizes(t *testing.T) {
 		{"empty role", NewUser{Username: "bob", Password: goodPassword}, ErrRoleUnknown},
 		{"short password", NewUser{Username: "bob", Role: model.RoleViewer, Password: "short"}, ErrPasswordShort},
 		{"password equals username", NewUser{Username: "administrator", Role: model.RoleViewer, Password: "administrator"}, ErrPasswordIsUsername},
+		{"common password", NewUser{Username: "newbie", Role: model.RoleViewer, Password: "passwordpassword"}, ErrPasswordCommon},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

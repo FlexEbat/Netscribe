@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { listAudit, type AuditEntry, type AuditQuery } from "@/api/client"
 import { EmptyState } from "@/components/EmptyState"
 import { Alert } from "@/components/ui/alert"
@@ -72,8 +72,12 @@ export function Audit() {
   const [applied, setApplied] = useState<Filters>(noFilters)
   const [state, setState] = useState<State>({ status: "loading" })
   const [moreFailed, setMoreFailed] = useState(false)
+  // Counts the filter sets applied so far. A "Load more" answer that arrives after the
+  // filters changed belongs to the old filters and must not be appended to the new list.
+  const filterRound = useRef(0)
 
   useEffect(() => {
+    filterRound.current += 1
     let cancelled = false
     listAudit(toQuery(applied))
       .then((entries) => {
@@ -100,10 +104,11 @@ export function Audit() {
     if (!last) return
     setMoreFailed(false)
     setState({ ...state, loadingMore: true })
+    const round = filterRound.current
     listAudit(toQuery(applied, last.id))
       .then((next) =>
         setState((s) =>
-          s.status === "ready"
+          s.status === "ready" && round === filterRound.current
             ? {
                 status: "ready",
                 entries: [...s.entries, ...next],
@@ -114,6 +119,7 @@ export function Audit() {
         ),
       )
       .catch(() => {
+        if (round !== filterRound.current) return
         setMoreFailed(true)
         setState((s) => (s.status === "ready" ? { ...s, loadingMore: false } : s))
       })

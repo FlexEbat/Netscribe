@@ -5,12 +5,14 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/subtle"
+	_ "embed" // commonPasswordList
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
@@ -34,6 +36,7 @@ var (
 	ErrPasswordShort      = errors.New("password is shorter than the minimum")
 	ErrPasswordLong       = errors.New("password is longer than 128 characters")
 	ErrPasswordIsUsername = errors.New("password equals username")
+	ErrPasswordCommon     = errors.New("password is too common")
 	ErrPasswordUnchanged  = errors.New("the new password must differ from the current one")
 	errMalformedHash      = errors.New("malformed password hash")
 )
@@ -58,8 +61,37 @@ func ValidateUsername(name string) error {
 	return nil
 }
 
-// ValidatePassword checks the length (in characters, not bytes) and that the
-// password differs from the username. There are no composition rules.
+// commonPasswordList holds passwords of 12 or more characters that appear in public
+// leaks, one per line in lower case (see the header of the file for the source). The
+// shortest password the service accepts is 12 characters, so shorter entries would never
+// match.
+//
+//go:embed common_passwords.txt
+var commonPasswordList string
+
+// commonPasswords is the set built from commonPasswordList on first use.
+var commonPasswords = sync.OnceValue(func() map[string]struct{} {
+	set := make(map[string]struct{}, strings.Count(commonPasswordList, "\n"))
+	for _, line := range strings.Split(commonPasswordList, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		set[line] = struct{}{}
+	}
+	return set
+})
+
+// IsCommonPassword reports whether the password is on the list of leaked passwords.
+// The comparison ignores case, so "Qwerty123456" matches "qwerty123456".
+func IsCommonPassword(password string) bool {
+	_, found := commonPasswords()[strings.ToLower(password)]
+	return found
+}
+
+// ValidatePassword checks the length (in characters, not bytes), that the password
+// differs from the username and that it is not a commonly leaked password. There are no
+// composition rules.
 func ValidatePassword(password, username string, minLen int) error {
 	n := utf8.RuneCountInString(password)
 	switch {
@@ -69,6 +101,8 @@ func ValidatePassword(password, username string, minLen int) error {
 		return ErrPasswordLong
 	case strings.EqualFold(password, username):
 		return ErrPasswordIsUsername
+	case IsCommonPassword(password):
+		return ErrPasswordCommon
 	}
 	return nil
 }

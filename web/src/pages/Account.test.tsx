@@ -100,6 +100,17 @@ describe("Account", () => {
     expect(screen.getByRole("button", { name: "Change password" })).toBeEnabled()
   })
 
+  it("shows why a leaked password is refused and explains the rule beforehand", async () => {
+    const { user } = await openAccount({
+      "PUT /api/auth/password": () => json(400, { error: "password is too common" }),
+    })
+    expect(screen.getByLabelText("New password")).toHaveAccessibleDescription(
+      /Passwords that appear in public leaks are refused/,
+    )
+    await fillPasswords(user, "correct horse battery", "passwordpassword", "passwordpassword")
+    expect(await screen.findByRole("alert")).toHaveTextContent("password is too common")
+  })
+
   it("hides unexpected server errors behind a generic message", async () => {
     const { user } = await openAccount({
       "PUT /api/auth/password": () => json(500, { error: "sql: no such table" }),
