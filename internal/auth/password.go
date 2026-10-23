@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
@@ -82,12 +83,24 @@ var commonPasswords = sync.OnceValue(func() map[string]struct{} {
 	return set
 })
 
-// IsCommonPassword reports whether the password is on the list of leaked passwords.
+// IsCommonPassword reports whether the password is on the list of leaked passwords, or
+// is the name of this service with digits and punctuation around it ("Netscribe-2026!").
 // The comparison ignores case, so "Qwerty123456" matches "qwerty123456".
 func IsCommonPassword(password string) bool {
-	_, found := commonPasswords()[strings.ToLower(password)]
-	return found
+	if _, found := commonPasswords()[strings.ToLower(password)]; found {
+		return true
+	}
+	letters := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) {
+			return unicode.ToLower(r)
+		}
+		return -1
+	}, password)
+	return letters == serviceName
 }
+
+// serviceName is what an attacker tries first against this service.
+const serviceName = "netscribe"
 
 // ValidatePassword checks the length (in characters, not bytes), that the password
 // differs from the username and that it is not a commonly leaked password. There are no
