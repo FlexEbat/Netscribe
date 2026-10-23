@@ -141,7 +141,7 @@ func TestValidatePassword(t *testing.T) {
 		{"no composition rules", "ppppppppppppp", "bob", 12, nil},
 		{"equals the username", "administrator", "administrator", 12, ErrPasswordIsUsername},
 		{"equals the username in another case", "ADMINISTRATOR", "administrator", 12, ErrPasswordIsUsername},
-		{"contains the username", "administrator1", "administrator", 12, nil},
+		{"contains the username", "my-administrator-box", "administrator", 12, nil},
 		{"a leaked password", "passwordpassword", "bob", 12, ErrPasswordCommon},
 		{"a leaked password in another case", "PasswordPassword", "bob", 12, ErrPasswordCommon},
 		{"the service name with digits and punctuation", "Netscribe-2026!", "bob", 12, ErrPasswordCommon},
