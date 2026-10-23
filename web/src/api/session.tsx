@@ -60,8 +60,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then((me) => {
         if (!cancelled) setState({ status: "signedIn", session: toSession(me) })
       })
-      .catch(() => {
-        if (!cancelled) setState({ status: "anonymous" })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        // 401 only means nobody is signed in. Any other failure (no network, a proxy
+        // error, the server still starting) must not look like a signed-out visitor,
+        // or the sign-in form that follows fails with no hint why.
+        const signedOut = err instanceof ApiError && err.status === 401
+        setState({
+          status: "anonymous",
+          notice: signedOut
+            ? undefined
+            : "The server did not answer. Reload the page to try again.",
+        })
       })
     return () => {
       cancelled = true

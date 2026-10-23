@@ -42,6 +42,12 @@ describe("routing", () => {
     await waitFor(() => expect(router.state.location.pathname).toBe("/account"))
   })
 
+  it("says so when the server cannot be reached, instead of acting signed out", async () => {
+    mockFetch({ "GET /api/auth/me": () => json(502, { error: "bad gateway" }) })
+    renderApp("/")
+    expect(await screen.findByText(/The server did not answer/)).toBeInTheDocument()
+  })
+
   it("shows the topology page and the user menu to a signed-in user", async () => {
     mockFetch({
       "GET /api/auth/me": () => json(200, meBody(makeUser({ role: "operator" }))),
