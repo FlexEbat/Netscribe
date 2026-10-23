@@ -144,6 +144,8 @@ func TestValidatePassword(t *testing.T) {
 		{"contains the username", "administrator1", "administrator", 12, nil},
 		{"a leaked password", "passwordpassword", "bob", 12, ErrPasswordCommon},
 		{"a leaked password in another case", "PasswordPassword", "bob", 12, ErrPasswordCommon},
+		{"the service name with digits and punctuation", "Netscribe-2026!", "bob", 12, ErrPasswordCommon},
+		{"the service name inside a longer phrase", "netscribe is a nice tool", "bob", 12, nil},
 		{"a leaked password with a character added", "qwerty1234567x", "bob", 12, nil},
 		{"a short leaked password is reported as short", "password1", "bob", 12, ErrPasswordShort},
 		{"the username check comes before the list", "administrator", "ADMINISTRATOR", 12, ErrPasswordIsUsername},
