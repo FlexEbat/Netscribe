@@ -16,7 +16,7 @@ import (
 func userError(err error) (string, bool) {
 	for _, known := range []error{
 		auth.ErrUsernameInvalid, auth.ErrRoleUnknown, auth.ErrPasswordShort,
-		auth.ErrPasswordLong, auth.ErrPasswordIsUsername,
+		auth.ErrPasswordLong, auth.ErrPasswordIsUsername, auth.ErrPasswordCommon,
 	} {
 		if errors.Is(err, known) {
 			return known.Error(), true

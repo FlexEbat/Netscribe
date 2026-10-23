@@ -13,7 +13,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-function open(role: Role, entry: string, handlers: Record<string, () => Response> = {}) {
+function open(
+  role: Role,
+  entry: string,
+  handlers: Record<string, () => Response | Promise<Response>> = {},
+) {
   vi.stubGlobal("EventSource", undefined)
   const mock = mockFetch({
     "GET /api/auth/me": () => json(200, meBody(makeUser({ role }))),
@@ -193,6 +197,31 @@ describe("Audit page", () => {
     expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument()
   })
 
+  it("drops a late page of the old filters instead of mixing it into the new list", async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const page = Array.from({ length: 50 }, (_, i) => entry(100 - i, "login"))
+    open("admin", "/audit", {
+      "GET /api/audit?limit=50": () => json(200, { entries: page }),
+      "GET /api/audit?limit=50&before=51": async () => {
+        await gate
+        return json(200, { entries: [entry(50, "logout")] })
+      },
+      "GET /api/audit?limit=50&user=alice": () => json(200, { entries: [entry(1, "login")] }),
+    })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole("button", { name: "Load more" }))
+    await user.type(screen.getByLabelText("User"), "alice")
+    await user.click(screen.getByRole("button", { name: "Apply" }))
+    await screen.findByText("detail 1")
+
+    release()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(screen.queryByText("detail 50")).not.toBeInTheDocument()
+    expect(screen.getByText("detail 1")).toBeInTheDocument()
+    expect(screen.queryByText("detail 100")).not.toBeInTheDocument()
+  })
+
   it("has no way to change an entry", async () => {
     open("admin", "/audit", {
       "GET /api/audit?limit=50": () => json(200, { entries: [entry(1, "login")] }),
@@ -256,6 +285,48 @@ describe("Access tokens on the account page", () => {
     await waitFor(() =>
       expect(screen.queryByText("ndt_SECRETSECRETSECRET")).not.toBeInTheDocument(),
     )
+  })
+
+  describe("copying a new token", () => {
+    async function showNewToken() {
+      open("operator", "/account", {
+        "GET /api/tokens": () => json(200, { tokens: [] }),
+        "POST /api/tokens": () => json(201, { value: "ndt_SECRETSECRETSECRET", token: token() }),
+      })
+      const user = userEvent.setup()
+      await user.type(await screen.findByLabelText("Token name"), "script")
+      await user.click(screen.getByRole("button", { name: "Create token" }))
+      await screen.findByText("ndt_SECRETSECRETSECRET")
+      return { user, dialog: within(screen.getByRole("dialog")) }
+    }
+    // userEvent installs its own clipboard, so the stub goes in after setup().
+    const useClipboard = (clipboard: unknown) =>
+      Object.defineProperty(navigator, "clipboard", { value: clipboard, configurable: true })
+
+    it("copies the token and says so", async () => {
+      const { user, dialog } = await showNewToken()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      useClipboard({ writeText })
+      await user.click(dialog.getByRole("button", { name: "Copy" }))
+      expect(writeText).toHaveBeenCalledWith("ndt_SECRETSECRETSECRET")
+      expect(await dialog.findByRole("button", { name: "Copied" })).toBeInTheDocument()
+      expect(dialog.queryByRole("alert")).not.toBeInTheDocument()
+    })
+
+    it("tells the user to copy by hand when the browser refuses", async () => {
+      const { user, dialog } = await showNewToken()
+      useClipboard({ writeText: vi.fn().mockRejectedValue(new DOMException("denied")) })
+      await user.click(dialog.getByRole("button", { name: "Copy" }))
+      expect(await dialog.findByRole("alert")).toHaveTextContent("copy it by hand")
+      expect(dialog.getByRole("button", { name: "Copy" })).toBeInTheDocument()
+    })
+
+    it("tells the user the same on plain HTTP, where there is no clipboard at all", async () => {
+      const { user, dialog } = await showNewToken()
+      useClipboard(undefined)
+      await user.click(dialog.getByRole("button", { name: "Copy" }))
+      expect(await dialog.findByRole("alert")).toHaveTextContent("copy it by hand")
+    })
   })
 
   it("offers a viewer no write scope", async () => {

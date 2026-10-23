@@ -50,6 +50,24 @@ func (l *Limiter) Allow(key string) (bool, time.Duration) {
 	return true, 0
 }
 
+// Refund takes back the newest event recorded for key, so an attempt that turned out
+// to be legitimate does not count against the limit. Call it only after a successful
+// Allow for the same key. Which event is removed does not matter for the count: the
+// window holds the same number of events either way.
+func (l *Limiter) Refund(key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	times := l.hits[key]
+	switch len(times) {
+	case 0:
+	case 1:
+		delete(l.hits, key)
+	default:
+		l.hits[key] = times[:len(times)-1]
+	}
+}
+
 // evict frees room for a new key: expired keys first, then an arbitrary one.
 func (l *Limiter) evict(cutoff time.Time) {
 	for k, times := range l.hits {

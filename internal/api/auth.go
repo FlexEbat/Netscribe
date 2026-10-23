@@ -74,6 +74,11 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The address was counted before the password was checked, so a burst of parallel
+	// guesses cannot slip past the limit. A correct password is not a guess: give the
+	// attempt back, so the limit counts failed attempts only and people who sign in
+	// correctly are never refused because of how many of them share one address.
+	s.limiter.Refund(limitKey(ip))
 	s.setSessionCookie(w, r, sess)
 	s.write(r.Context(), model.AuditEntry{Action: "login", Result: "ok", IP: ip, UserID: &user.ID, Username: user.Username})
 	writeJSON(w, http.StatusOK, newMe(auth.Principal{User: user, CSRFToken: sess.CSRFToken}))
@@ -130,6 +135,7 @@ func (s *server) changePassword(w http.ResponseWriter, r *http.Request) {
 		errors.Is(err, auth.ErrPasswordShort),
 		errors.Is(err, auth.ErrPasswordLong),
 		errors.Is(err, auth.ErrPasswordIsUsername),
+		errors.Is(err, auth.ErrPasswordCommon),
 		errors.Is(err, auth.ErrPasswordUnchanged):
 		s.record(r, "password_change", "denied", err.Error())
 		writeError(w, http.StatusBadRequest, err.Error())

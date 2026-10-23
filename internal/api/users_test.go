@@ -83,6 +83,7 @@ func TestCreateUserValidationAndConflict(t *testing.T) {
 		"no role":          {`{"username":"newbie","password":"` + goodPassword + `"}`, 400, "role is unknown"},
 		"short password":   {`{"username":"newbie","role":"viewer","password":"short"}`, 400, "password is shorter than the minimum"},
 		"password is name": {`{"username":"newbie-user","role":"viewer","password":"newbie-user"}`, 400, "password is shorter than the minimum"},
+		"common password":  {`{"username":"newbie","role":"viewer","password":"PasswordPassword"}`, 400, "password is too common"},
 		"duplicate":        {`{"username":"TAKEN","role":"viewer","password":"` + goodPassword + `"}`, 409, "a user with this name already exists"},
 		"unknown field":    {`{"username":"newbie","role":"viewer","password":"` + goodPassword + `","mustChangePassword":false}`, 400, "invalid request body"},
 		"not json":         {`x`, 400, "invalid request body"},

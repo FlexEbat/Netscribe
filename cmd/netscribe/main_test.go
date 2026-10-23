@@ -330,6 +330,7 @@ func TestUserAddRefusals(t *testing.T) {
 		{"bad name", cliPassword + "\n", []string{"user", "add", "a", "--role", "admin", "--password-stdin"}, "username is invalid"},
 		{"short password", "short\n", []string{"user", "add", "alice", "--role", "admin", "--password-stdin"}, "password is shorter than the minimum"},
 		{"password equals the name", "administrator\n", []string{"user", "add", "administrator", "--role", "admin", "--password-stdin"}, "password equals username"},
+		{"common password", "passwordpassword\n", []string{"user", "add", "alice", "--role", "admin", "--password-stdin"}, "password is too common"},
 		{"empty stdin", "", []string{"user", "add", "alice", "--role", "admin", "--password-stdin"}, "no password on standard input"},
 		{"empty line", "\n", []string{"user", "add", "alice", "--role", "admin", "--password-stdin"}, "the password is empty"},
 		{"no name", cliPassword + "\n", []string{"user", "add", "--role", "admin", "--password-stdin"}, "exactly one user name"},

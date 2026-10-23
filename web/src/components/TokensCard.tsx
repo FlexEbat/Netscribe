@@ -31,6 +31,7 @@ export function TokensCard({ role }: TokensCardProps) {
   const [busy, setBusy] = useState(false)
   const [shown, setShown] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
 
   const load = useCallback(() => {
     listTokens()
@@ -50,6 +51,7 @@ export function TokensCard({ role }: TokensCardProps) {
       const { value } = await createToken({ name: name.trim(), scope, days: Number(days) })
       setShown(value)
       setCopied(false)
+      setCopyFailed(false)
       setName("")
       load()
     } catch (e) {
@@ -164,12 +166,33 @@ export function TokensCard({ role }: TokensCardProps) {
             <DialogDescription className="text-sm text-muted-foreground">
               Copy it now. It is shown only once and cannot be recovered.
             </DialogDescription>
-            <code className="rounded-md border bg-muted px-3 py-2 text-sm break-all">{shown}</code>
+            <code className="rounded-md border bg-muted px-3 py-2 text-sm break-all select-all">
+              {shown}
+            </code>
+            {copyFailed ? (
+              <Alert variant="destructive">
+                The browser did not allow copying. Select the token above and copy it by hand.
+              </Alert>
+            ) : null}
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
-                  void navigator.clipboard?.writeText(shown).then(() => setCopied(true))
+                  // navigator.clipboard exists only on HTTPS and localhost, and a LAN
+                  // panel is often served over plain HTTP. The token is shown once, so a
+                  // silent failure here would cost the user the token.
+                  const write = navigator.clipboard?.writeText(shown)
+                  if (!write) {
+                    setCopyFailed(true)
+                    return
+                  }
+                  write.then(
+                    () => {
+                      setCopied(true)
+                      setCopyFailed(false)
+                    },
+                    () => setCopyFailed(true),
+                  )
                 }}
               >
                 {copied ? "Copied" : "Copy"}

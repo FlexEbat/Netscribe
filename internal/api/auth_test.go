@@ -201,6 +201,46 @@ func TestMoreThanTenAttemptsPerMinutePerIPGive429(t *testing.T) {
 	}
 }
 
+func TestSuccessfulLoginsDoNotUseUpTheIPLimit(t *testing.T) {
+	e := newEnv(t)
+	ip := from("198.51.100.7:4000") // an office behind one address
+	for i := 1; i <= 25; i++ {
+		if _, rec := e.login("admin", goodPassword, ip); rec.Code != http.StatusOK {
+			t.Fatalf("sign-in %d = %d, want 200: correct passwords must not count towards the limit", i, rec.Code)
+		}
+	}
+	// 25 sign-ins did not eat the budget of failed attempts either.
+	for i := 1; i <= 10; i++ {
+		if _, rec := e.login("nobody", "whatever password", ip); rec.Code != http.StatusUnauthorized {
+			t.Fatalf("failed attempt %d = %d, want 401", i, rec.Code)
+		}
+	}
+	if _, rec := e.login("nobody", "whatever password", ip); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("the 11th failed attempt = %d, want 429", rec.Code)
+	}
+}
+
+func TestSuccessfulLoginDoesNotClearFailedAttempts(t *testing.T) {
+	e := newEnv(t)
+	ip := from("198.51.100.7:4000")
+	for i := 1; i <= 9; i++ {
+		e.login("nobody", "whatever password", ip)
+	}
+	// Whoever owns one valid account must not be able to reset the counter with it
+	// while guessing other passwords from the same address.
+	for range 5 {
+		if _, rec := e.login("admin", goodPassword, ip); rec.Code != http.StatusOK {
+			t.Fatalf("sign-in below the limit = %d", rec.Code)
+		}
+	}
+	if _, rec := e.login("nobody", "whatever password", ip); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("the 10th failed attempt = %d, want 401", rec.Code)
+	}
+	if _, rec := e.login("nobody", "whatever password", ip); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("the 11th failed attempt = %d, want 429: successful sign-ins gave back more than their own attempt", rec.Code)
+	}
+}
+
 func TestRateLimitCannotBeEvadedWithForwardedHeaders(t *testing.T) {
 	e := newEnv(t) // no trusted proxies: X-Forwarded-For must be ignored
 	for i := 1; i <= 10; i++ {
@@ -425,6 +465,7 @@ func TestPasswordChange(t *testing.T) {
 	}{
 		"wrong current password": {`{"currentPassword":"wrong wrong wrong","newPassword":"` + next + `"}`, "current password is incorrect"},
 		"short new password":     {`{"currentPassword":"` + goodPassword + `","newPassword":"short"}`, "password is shorter than the minimum"},
+		"common new password":    {`{"currentPassword":"` + goodPassword + `","newPassword":"passwordpassword"}`, "password is too common"},
 		"long new password":      {`{"currentPassword":"` + goodPassword + `","newPassword":"` + strings.Repeat("a", 129) + `"}`, "password is longer than 128 characters"},
 		"missing field":          {`{"currentPassword":"` + goodPassword + `"}`, "invalid request"},
 		"unknown field":          {`{"currentPassword":"x","newPassword":"y","role":"admin"}`, "invalid request"},

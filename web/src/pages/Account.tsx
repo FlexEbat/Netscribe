@@ -93,8 +93,13 @@ export function Account() {
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
                 autoComplete="new-password"
+                aria-describedby="new-password-hint"
                 required
               />
+              <p id="new-password-hint" className="text-sm text-muted-foreground">
+                A long phrase works better than a short word with digits. Passwords that appear in
+                public leaks are refused.
+              </p>
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="repeat-password">Repeat the new password</Label>

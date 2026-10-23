@@ -1,8 +1,9 @@
 # tech.md: генератор сетевой документации (Netscribe)
 
-**Версия: v0 (черновик)** (2026-10-18)
+**Версия: v0 (черновик)** (2026-10-23)
 
 Changelog:
+- v0 (правка 27) - закрыты два пункта по входу. Пароль не должен входить во встроенный список частых паролей (`internal/auth/common_passwords.txt`, около 20 тысяч записей длиной от 12 символов из публичных утечек, SecLists, MIT), сравнение без учёта регистра, ошибка `password is too common` (400). Вопрос 8 раздела 18 закрыт. Лимит входа по IP считает только неудачные попытки: сервер учитывает попытку до проверки пароля (параллельный перебор не обходит лимит) и возвращает её, если пароль верный (`Limiter.Refund`). Верные входы лимит не расходуют и не сбрасывают счётчик неудач, поэтому честные пользователи за одним адресом не получают 429 друг из-за друга. Пока с адреса накоплено 10 неудач за минуту, 429 получают все попытки с него, в том числе с верным паролем.
 - v0 (правка 26) - `Docker.Watch` принимает `targets func() []netip.Prefix` вместо среза и спрашивает цели при каждом подключении, добавлен `Docker.Retarget()`, `Scanner.SetConfig` вызывает его при смене `scan.targets` или `allowPublicTargets`. Хост контейнеров после перезагрузки конфига больше не остаётся прежним.
 - v0 (правка 25) - добавлен слайс 21: проверка кода, порт и установка. Флаги `serve --listen` и `serve --auto-port`, проверка `listen` в `Validate`, метод `Store.FailRunningScans`, `Service.Recheck` для проверки открытого потока событий, скрипты `scripts/install.sh` и `scripts/install-build-deps.sh`, юнит `deploy/netscribe.service`, файлы `AGENTS.md`, `CONTRIBUTING.md` и `docs/`.
 - v0 (правка 24) - уточнены два решения правки 23. Apple iOS отличается от Cisco IOS по атрибуту `vendor` класса ОС: факт `family=apple ios` даёт вид `host`, Cisco остаётся `family=ios` и вида не получает. Определение одного устройства теперь пишет изменение в ленту: запись `device_changed` вида `Nmap: <устройство> changed: kind unknown -> router; system - -> Linux 5.4` относится к последнему завершённому скану, потому что лента хранится по сканам (`changes.scan_id`). Без завершённого скана запись не делается. Если ответ ничего не меняет, запись не создаётся. Лента сканов теперь тоже сообщает о смене строки ОС (`system`).
@@ -104,6 +105,7 @@ internal/
     watch.go                  fsnotify и SIGHUP, атомарная подмена конфига
   auth/
     password.go               argon2id: хеш, проверка, правила пароля
+    common_passwords.txt      список частых паролей для отказа (go:embed)
     session.go                сессии и токены доступа: выпуск, проверка, отзыв
     rbac.go                   роли, права, таблица «роль - права»
     ratelimit.go              ограничение попыток входа
@@ -919,12 +921,12 @@ type Collector interface {
 - `limit` - целое от 1 до 500, по умолчанию 50.
 - Неизвестный `format` экспорта - 404.
 - Имя пользователя `^[a-z0-9._-]{3,32}$`, роль из набора `viewer`, `operator`, `admin`.
-- Пароль от `auth.minPasswordLength` до 128 символов и не равен имени пользователя.
+- Пароль от `auth.minPasswordLength` до 128 символов, не равен имени пользователя и не входит в список частых паролей.
 - Ручное устройство: `ip` пустой или корректный адрес, `mac` пустой или корректный (приводится к нижнему регистру с двоеточиями), хотя бы одно из полей `ip`, `mac`, `label` не пусто, `label` до 100 символов, `notes` до 2000, `hostname` до 255 символов (необязательное), `kind` из набора `DeviceKind`.
 - Связь: оба устройства существуют и различны, порт до 64 символов.
 - Токен: имя от 1 до 64 символов, область `read` или `write`, срок от 1 до 365 дней.
 
-Сообщения об ошибках на английском, по одной строке: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `port is longer than 64 characters`, `hostname is longer than 255 characters`, `token name is invalid`, `scope is unknown`, `scope is above your role`, `token lifetime is out of range`, `too many active tokens`, `before is not valid`, `result is unknown`, `from is not a date`, `to is not a date`, `filter is too long`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
+Сообщения об ошибках на английском, по одной строке: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `password is too common`, `port is longer than 64 characters`, `hostname is longer than 255 characters`, `token name is invalid`, `scope is unknown`, `scope is above your role`, `token lifetime is out of range`, `too many active tokens`, `before is not valid`, `result is unknown`, `from is not a date`, `to is not a date`, `filter is too long`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
 
 ---
 
@@ -970,12 +972,12 @@ type Collector interface {
 | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | хеш пароля                | argon2id, память 64 MiB, 3 прохода, параллелизм 2, соль 16 байт, ключ 32 байта, формат PHC. Нижняя граница (OWASP): 19 MiB, 2 прохода, параллелизм 1 |
 | перехеширование           | при успешном входе, если параметры в хеше слабее текущих                                                       |
-| длина пароля              | от 12 до 128 символов, любые символы Unicode, без правил состава, не равен имени пользователя                 |
+| длина пароля              | от 12 до 128 символов, любые символы Unicode, без правил состава, не равен имени пользователя, нет в списке частых паролей (без учёта регистра) |
 | имя пользователя          | `^[a-z0-9._-]{3,32}$`, регистр не различается                                                                  |
 | ответ на ошибку входа     | всегда 401 и текст `invalid username or password`: неверный пароль, неизвестный пользователь, заблокированная или отключённая учётка |
 | выравнивание времени      | для неизвестного пользователя выполняется проверка по фиктивному хешу                                          |
 | блокировка учётки         | 5 неудачных входов подряд, блокировка на 15 минут, успешный вход сбрасывает счётчик                            |
-| лимит по IP               | 10 попыток входа в минуту с одного IP, ответ 429 с заголовком `Retry-After`                                    |
+| лимит по IP               | 10 неудачных попыток входа в минуту с одного IP (верный пароль лимит не расходует), ответ 429 с заголовком `Retry-After` |
 | идентификатор сессии      | 32 случайных байта из `crypto/rand`, base64url, в базе только SHA-256                                          |
 | cookie сессии             | `netscribe_session`, `HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure` при HTTPS                                  |
 | срок сессии               | 8 часов без активности, 7 дней абсолютно, новый идентификатор при каждом входе                                 |
@@ -1291,7 +1293,7 @@ CONTRACT GAP
 1. Пока пользователей нет, все маршруты кроме `/healthz` отвечают 503 с текстом `no users: run "netscribe user add"`.
 2. `netscribe user add` создаёт пользователя. Пароль не принимается аргументом командной строки. В базе лежит хеш argon2id в формате PHC.
 3. Вход с верными данными отвечает 200 и ставит cookie `netscribe_session` с `HttpOnly` и `SameSite=Strict`. Неверный пароль, неизвестный пользователь и заблокированная учётка дают одинаковый ответ 401 `invalid username or password`.
-4. Пятая неудачная попытка подряд блокирует учётку на 15 минут (вход с верным паролем в это время тоже даёт 401), успешный вход сбрасывает счётчик. Больше 10 попыток в минуту с одного IP дают 429 с `Retry-After`.
+4. Пятая неудачная попытка подряд блокирует учётку на 15 минут (вход с верным паролем в это время тоже даёт 401), успешный вход сбрасывает счётчик. Больше 10 неудачных попыток в минуту с одного IP дают 429 с `Retry-After`, даже если следующий пароль верный. Верные входы лимит не расходуют: любое число успешных входов с одного адреса подряд не даёт 429 и не сбрасывает счётчик неудач.
 5. Запрос без сессии к защищённому маршруту даёт 401, с неверным или истёкшим идентификатором тоже.
 6. Небезопасный метод с сессией и без верного `X-CSRF-Token` даёт 403.
 7. Сессия истекает через 8 часов без активности и через 7 дней абсолютно. Выход и смена пароля отзывают сессии пользователя.
@@ -1767,7 +1769,7 @@ CONTRACT GAP
 5. **Лицензия.** MIT, Apache-2.0 или AGPL. Влияет на репозиторий и README.
 6. **SNMP v3.** В черновике только v2c, community идёт открытым текстом (раздел 9.6). SNMP v3 добавляет аутентификацию и шифрование, но усложняет конфиг и хранение секретов. Для чувствительных сетей v3 стоит включить в v1.
 7. **Внешняя аутентификация и второй фактор.** В черновике только локальные пользователи с паролем. Варианты: OIDC (единый вход), LDAP, TOTP как второй фактор.
-8. **Проверка паролей.** Сейчас только длина и запрет совпадения с именем. Вариант: встроенный список частых паролей для отказа.
+8. ~~Проверка паролей~~ Закрыт: длина, запрет совпадения с именем и встроенный список частых паролей (правка 27).
 9. **Шифрование данных в покое.** База и секреты конфига не шифруются, защита файловыми правами. Варианты: SQLCipher, шифрование секретов мастер-ключом.
 10. **Объектные права.** Все пользователи видят всю сеть. Вариант: доступ по сегментам или группам устройств.
 11. **Источники обнаружения.** Не вошли: DHCP-аренды (зависят от модели роутера), пассивное прослушивание (в слайсе 18 только один активный запрос mDNS и SSDP за скан), NetBIOS, импорт устройств из CSV.

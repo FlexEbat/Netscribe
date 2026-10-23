@@ -121,3 +121,42 @@ func TestNewLimiterDefaultsToRealTime(t *testing.T) {
 		t.Error("first attempt refused")
 	}
 }
+
+func TestLimiterRefundGivesBackOneEvent(t *testing.T) {
+	l := NewLimiter(2, time.Minute, newClock().now)
+	l.Allow("k")
+	l.Allow("k")
+	if ok, _ := l.Allow("k"); ok {
+		t.Fatal("limit not enforced")
+	}
+	l.Refund("k")
+	if ok, _ := l.Allow("k"); !ok {
+		t.Error("a refunded event still counted")
+	}
+	if ok, _ := l.Allow("k"); ok {
+		t.Error("one refund freed more than one event")
+	}
+}
+
+func TestLimiterRefundWithNothingRecordedChangesNothing(t *testing.T) {
+	l := NewLimiter(1, time.Minute, newClock().now)
+	l.Refund("unknown")
+	l.Allow("k")
+	l.Refund("k")
+	l.Refund("k") // nothing left to give back
+	if ok, _ := l.Allow("k"); !ok {
+		t.Fatal("the first event after refunds was refused")
+	}
+	if ok, _ := l.Allow("k"); ok {
+		t.Error("refunds on an empty key made room for a second event")
+	}
+}
+
+func TestLimiterRefundIsPerKey(t *testing.T) {
+	l := NewLimiter(1, time.Minute, newClock().now)
+	l.Allow("a")
+	l.Refund("b")
+	if ok, _ := l.Allow("a"); ok {
+		t.Error("a refund for another key freed an event of a")
+	}
+}
