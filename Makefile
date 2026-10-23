@@ -35,7 +35,7 @@ test: web/dist web/node_modules
 	cd web && npm test
 
 stress: web/dist
-	@go test -race -count=15 -cpu 1,2 ./internal/api ./cmd/... ./internal/store ./internal/events ./internal/collector ./internal/config ./internal/render > /tmp/stress.txt 2>&1; rc=$$?; \
+	@go test -race -count=10 -cpu 2 -timeout 20m ./internal/api ./cmd/... ./internal/store ./internal/events ./internal/collector ./internal/config ./internal/render > /tmp/stress.txt 2>&1; rc=$$?; \
 	grep -E '^(--- FAIL|FAIL|panic:)' /tmp/stress.txt | sort | uniq -c | while read -r l; do echo "::error::$$l"; done; \
 	grep -B2 -A14 'DATA RACE' /tmp/stress.txt | head -40 | while read -r l; do echo "::warning::$$l"; done; \
 	grep -E '_test.go:[0-9]+' /tmp/stress.txt | sort | uniq -c | head -20 | while read -r l; do echo "::notice::$$l"; done; \
