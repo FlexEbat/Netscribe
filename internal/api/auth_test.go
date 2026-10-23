@@ -119,7 +119,11 @@ func TestFailedLoginsGiveOneIdenticalAnswer(t *testing.T) {
 		"disabled, right pass": {"dora", goodPassword},
 		"locked, right pass":   {"lena", goodPassword},
 	} {
-		_, rec := e.login(c[0], c[1], from("198.51.100."+strconv.Itoa(10+len(name))+":1"))
+		addr := "198.51.100." + strconv.Itoa(10+len(name)) + ":1"
+		if name == "locked, right pass" {
+			addr = "198.51.100.1:1" // the lock covers the address that failed
+		}
+		_, rec := e.login(c[0], c[1], from(addr))
 		got := struct {
 			code int
 			body string
@@ -138,37 +142,61 @@ func TestFailedLoginsGiveOneIdenticalAnswer(t *testing.T) {
 	}
 }
 
-func TestFifthFailureLocksTheAccountAndSuccessResets(t *testing.T) {
+func TestFifthFailureLocksTheAddressAndUsernameAndSuccessResets(t *testing.T) {
 	e := newEnv(t)
 	e.addUser("alice", model.RoleViewer)
+	ip := from("198.51.100.1:1")
+	// The per-address limit counts failures in a minute, so each round starts a new one.
+	nextRound := func() { e.clk.advance(61 * time.Second) }
 
-	for i := 1; i <= 4; i++ {
-		e.login("alice", "wrong wrong wrong", from("198.51.100."+strconv.Itoa(i)+":1"))
+	for range 4 {
+		e.login("alice", "wrong wrong wrong", ip)
 	}
-	if _, rec := e.login("alice", goodPassword, from("198.51.100.50:1")); rec.Code != http.StatusOK {
+	if _, rec := e.login("alice", goodPassword, ip); rec.Code != http.StatusOK {
 		t.Fatalf("a correct password after four failures = %d", rec.Code)
 	}
-	// The success cleared the counter: four more failures must not lock the account.
-	for i := 1; i <= 4; i++ {
-		e.login("alice", "wrong wrong wrong", from("198.51.100."+strconv.Itoa(60+i)+":1"))
+	// The success cleared the counter: four more failures must not lock the pair.
+	nextRound()
+	for range 4 {
+		e.login("alice", "wrong wrong wrong", ip)
 	}
-	if _, rec := e.login("alice", goodPassword, from("198.51.100.70:1")); rec.Code != http.StatusOK {
+	if _, rec := e.login("alice", goodPassword, ip); rec.Code != http.StatusOK {
 		t.Fatalf("the counter was not reset by the success: %d", rec.Code)
 	}
 
-	for i := 1; i <= 5; i++ {
-		e.login("alice", "wrong wrong wrong", from("198.51.100."+strconv.Itoa(100+i)+":1"))
+	nextRound()
+	for range 5 {
+		e.login("alice", "wrong wrong wrong", ip)
 	}
-	if _, rec := e.login("alice", goodPassword, from("198.51.100.120:1")); rec.Code != http.StatusUnauthorized {
+	if _, rec := e.login("alice", goodPassword, ip); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("a correct password right after the fifth failure = %d, want 401", rec.Code)
 	}
 	e.clk.advance(14*time.Minute + 59*time.Second)
-	if _, rec := e.login("alice", goodPassword, from("198.51.100.121:1")); rec.Code != http.StatusUnauthorized {
+	if _, rec := e.login("alice", goodPassword, ip); rec.Code != http.StatusUnauthorized {
 		t.Fatal("the lock ended early")
 	}
 	e.clk.advance(2 * time.Second)
-	if _, rec := e.login("alice", goodPassword, from("198.51.100.122:1")); rec.Code != http.StatusOK {
+	if _, rec := e.login("alice", goodPassword, ip); rec.Code != http.StatusOK {
 		t.Errorf("login after 15 minutes = %d", rec.Code)
+	}
+}
+
+func TestSomeoneElsesFailuresDoNotLockTheOwnerOut(t *testing.T) {
+	e := newEnv(t)
+	e.addUser("alice", model.RoleViewer)
+	e.addUser("bob", model.RoleViewer)
+	attacker := from("203.0.113.9:1")
+	for range 6 {
+		e.login("alice", "wrong wrong wrong", attacker)
+	}
+	if _, rec := e.login("alice", goodPassword, attacker); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("the attacker's own pair is not locked: %d", rec.Code)
+	}
+	if _, rec := e.login("alice", goodPassword, from("198.51.100.1:1")); rec.Code != http.StatusOK {
+		t.Errorf("the owner, from her own address, was locked out: %d", rec.Code)
+	}
+	if _, rec := e.login("bob", goodPassword, attacker); rec.Code != http.StatusOK {
+		t.Errorf("another user from the attacker's address was locked: %d", rec.Code)
 	}
 }
 
