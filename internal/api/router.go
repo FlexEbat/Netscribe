@@ -125,6 +125,10 @@ type Options struct {
 	Logger *slog.Logger
 	// Now is the clock. Nil means time.Now.
 	Now func() time.Time
+
+	// heartbeat is the keep-alive interval of the event streams. Zero means defaultHeartbeat.
+	// Only tests set it.
+	heartbeat time.Duration
 }
 
 type server struct {
@@ -143,6 +147,7 @@ type server struct {
 	streams    *streamCounter
 	trusted    []netip.Prefix
 	log        *slog.Logger
+	heartbeat  time.Duration // time between keep-alive comments on an event stream
 	limiter    *auth.Limiter // sign-in attempts per client address
 }
 
@@ -225,6 +230,10 @@ func newServer(opts Options) *server {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
+	heartbeat := opts.heartbeat
+	if heartbeat <= 0 {
+		heartbeat = defaultHeartbeat
+	}
 	return &server{
 		auth:       opts.Auth,
 		audit:      opts.Audit,
@@ -241,6 +250,7 @@ func newServer(opts Options) *server {
 		streams:    newStreamCounter(),
 		trusted:    opts.TrustedProxies,
 		log:        log,
+		heartbeat:  heartbeat,
 		limiter:    auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
 	}
 }

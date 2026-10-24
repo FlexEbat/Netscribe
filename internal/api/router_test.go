@@ -89,6 +89,9 @@ type envOptions struct {
 	export  render.Options
 	// wrapRepo lets a test replace behaviour of the repository the API talks to.
 	wrapRepo func(store.Repo) store.Repo
+
+	// heartbeat shortens the keep-alive interval of the event streams. Zero keeps the default.
+	heartbeat time.Duration
 }
 
 func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
@@ -124,7 +127,7 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 		repo = o.wrapRepo(st)
 	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now,
+		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}
