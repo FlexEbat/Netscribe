@@ -42,6 +42,8 @@ commands:
   devices   print the devices found so far
   export    write the network documentation: --format md|html|pdf|drawio --out <file>
   user      manage accounts: add, list, disable, passwd
+  setup     guided install: checks, recommendations, config, service, first account
+  doctor    check an install and say what to fix
   version   print the version of this build
 
 run "netscribe <command> -h" for the flags of a command`
@@ -73,6 +75,8 @@ func run(args []string, e streams) int {
 		"devices": devices,
 		"export":  export,
 		"user":    user,
+		"setup":   runSetup,
+		"doctor":  runDoctor,
 	}
 	if cmd, ok := commands[args[0]]; ok {
 		if err := cmd(args[1:], e); err != nil {

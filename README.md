@@ -10,10 +10,23 @@ no outbound connections except to the targets you configure, and it sends no tel
 
 ## Install
 
+### Guided installer
+
+On any Linux distribution, `get.sh` installs the `netscribe` command and runs
+`netscribe setup`. The setup checks the host, proposes scan targets from your interfaces,
+writes the config, starts the service and creates the first administrator:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/FlexEbat/Netscribe/main/scripts/get.sh -o get.sh
+sudo sh get.sh
+```
+
+`sudo netscribe doctor` checks an install later and says what to fix.
+
 ### Install script
 
-On any Linux distribution, the script installs the release binary, a service user, a config
-in `/etc/netscribe` and, with systemd, a service unit:
+The classic script installs the release binary, a service user, a config in `/etc/netscribe`
+and, with systemd, a service unit. You edit the config and create the account yourself:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/FlexEbat/Netscribe/main/scripts/install.sh -o install.sh

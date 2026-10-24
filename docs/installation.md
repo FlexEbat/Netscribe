@@ -6,10 +6,79 @@ to run. Nmap, Chromium and Docker are optional and each switches on one feature.
 
 | Method | Use it when |
 | --- | --- |
-| [Install script](#install-script) | You want a service user, a config and a systemd unit in one step |
+| [Guided installer](#guided-installer) | You want the checks, the recommendations and the first account in one run (recommended) |
+| [Install script](#install-script) | You want a service user, a config and a systemd unit in one step, and edit the config yourself |
 | [Release binary by hand](#release-binary-by-hand) | You manage users, paths and the init system yourself |
 | [Docker](#docker) | The host runs containers already |
 | [Build from source](#build-from-source) | You develop Netscribe or need an unreleased commit |
+
+## Guided installer
+
+`get.sh` installs the `netscribe` command and runs `netscribe setup`, which does the rest
+and explains each step. Run it on the host that will scan the network, as root:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/FlexEbat/Netscribe/main/scripts/get.sh -o get.sh
+sudo sh get.sh
+```
+
+`--version`, `--prefix` and `--base-url` go to `install.sh`, which `get.sh` uses to download
+the release and check its checksum. Every other option goes to `netscribe setup`. Piped from
+`curl`, the questions are read from the terminal.
+
+The setup walks through nine steps. Each step prints what it found, marks a problem with
+`!` or `✗` and says how to fix it:
+
+| Step | What it checks and does |
+| --- | --- |
+| System | Linux and the architecture, root, systemd, free space for the data |
+| The netscribe command | Copies the binary to `/usr/local/bin/netscribe` when it runs from elsewhere |
+| Service account | Creates the `netscribe` account and the directories `/etc/netscribe` and `/var/lib/netscribe` with mode 0750 |
+| Features | Offers to install Nmap and Chromium with the package manager, and finds the Docker socket |
+| Configuration | Proposes the private networks of the host as scan targets, asks for the listen address and the scan interval, and writes `netscribe.yaml` with mode 0600. An existing config is never overwritten |
+| ICMP probes | Reads `net.ipv4.ping_group_range`. When ICMP echo is off for every group, it writes `/etc/sysctl.d/99-netscribe.conf` for the service group |
+| First administrator | Runs `netscribe user add` as the service account when no account exists, so that the database belongs to the service |
+| Service | Installs the unit, adds a drop-in for the Docker group and for Nmap, starts the service and waits until the panel answers |
+| Result | Runs every check again and lists what is left, with the fix for each |
+
+The setup proposes networks it finds on the interfaces. A network wider than a /24 is narrowed
+to the /24 of the address, and the interfaces of containers and virtual machines are left
+out. It writes only the keys it asked about. Every other key keeps its default, and
+`netscribe.example.yaml` lists them all.
+
+Options of `netscribe setup`:
+
+| Option | Meaning |
+| --- | --- |
+| `--dry-run` | Print the plan and the config that would be written. Change nothing |
+| `--yes` | Take the recommended answer to every question. Needed when no terminal is attached |
+| `--admin NAME` | Create the first administrator with this name. Add `--password-stdin` to read the password from standard input |
+| `--targets LIST` | Scan targets of a new config, CIDRs separated by commas |
+| `--listen ADDR` | Listen address of a new config, default `127.0.0.1:8080` |
+| `--no-service` | Install no unit and start nothing |
+| `--config PATH` | Config file to write or keep, default `/etc/netscribe/netscribe.yaml` |
+
+An unattended install:
+
+```sh
+printf '%s\n' "$ADMIN_PASSWORD" | sudo sh get.sh --yes --admin alice --password-stdin --targets 192.168.1.0/24
+```
+
+### Check an install
+
+`netscribe doctor` runs the same checks without changing anything, prints them by area and
+exits with 1 when a check failed. Run it as root: the config belongs to the service
+account and is private to it.
+
+```sh
+sudo netscribe doctor
+```
+
+It reports a config that does not load, a config the service account cannot read, a port
+that another program holds, a panel that listens on the network without TLS, scan targets
+that match no network of the host, ICMP that the service group may not send, Nmap without
+raw-socket rights, a Docker socket that the service cannot use, a stopped service, a panel
+that does not answer and a database without an account.
 
 ## Install script
 
@@ -160,6 +229,7 @@ The file holds password hashes and session records: give the copy the mode `0600
 
 ## Upgrade and uninstall
 
-Run the install script again to upgrade. The config and the database stay. Back up the file
+Run the install script or the guided installer again to upgrade. The config and the database
+stay, and the setup skips every step that is already done. Back up the file
 named in `database` before a major upgrade. `sudo sh install.sh --uninstall` removes the
 binary and the unit and leaves `/etc/netscribe` and `/var/lib/netscribe` for you to delete.
