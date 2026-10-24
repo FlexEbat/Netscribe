@@ -225,7 +225,12 @@ func TestAPDFWaitingForItsTurnGivesUpWithItsContext(t *testing.T) {
 	old := printer
 	defer func() { printer = old }()
 	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
 	printer = func(context.Context, string, []byte) ([]byte, error) {
+		select {
+		case entered <- struct{}{}:
+		default:
+		}
 		<-release
 		return []byte("%PDF"), nil
 	}
@@ -239,7 +244,7 @@ func TestAPDFWaitingForItsTurnGivesUpWithItsContext(t *testing.T) {
 		_, _ = pdf(context.Background(), nil)
 		close(done)
 	}()
-	time.Sleep(30 * time.Millisecond) // the first render holds the slot
+	<-entered // the first render holds the slot; a fixed sleep could let the second one in first
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
