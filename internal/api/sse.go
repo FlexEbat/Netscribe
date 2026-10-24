@@ -13,9 +13,10 @@ import (
 
 const maxStreamsPerUser = 5 // section 9.5 of the spec
 
-// heartbeat is the time between keep-alive comments. Each one also checks again that the
-// credential behind the stream is valid. It is a variable so that a test can shorten it.
-var heartbeat = 25 * time.Second
+// defaultHeartbeat is the time between keep-alive comments. Each one also checks again that
+// the credential behind the stream is valid. A server holds its own copy (server.heartbeat),
+// so a test can shorten it without writing a variable that open streams are reading.
+const defaultHeartbeat = 25 * time.Second
 
 // streamCounter limits the open event streams of each user.
 type streamCounter struct {
@@ -70,7 +71,7 @@ func (s *server) streamEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tick := time.NewTicker(heartbeat)
+	tick := time.NewTicker(s.heartbeat)
 	defer tick.Stop()
 	for {
 		select {

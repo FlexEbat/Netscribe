@@ -32,10 +32,10 @@ func openStream(t *testing.T, srv *httptest.Server, s session) (*http.Response, 
 	return resp, func() { cancel(); _ = resp.Body.Close() }
 }
 
-func streamEnv(t *testing.T) (*env, *events.Hub, *httptest.Server) {
+func streamEnv(t *testing.T, mods ...func(*envOptions)) (*env, *events.Hub, *httptest.Server) {
 	t.Helper()
 	hub := events.NewHub()
-	e := newEnv(t, func(o *envOptions) { o.hub = hub })
+	e := newEnv(t, append([]func(*envOptions){func(o *envOptions) { o.hub = hub }}, mods...)...)
 	srv := httptest.NewServer(e.handler)
 	t.Cleanup(srv.Close)
 	return e, hub, srv
@@ -229,10 +229,7 @@ func TestConfigEventsReachOnlyThoseWithUsersManage(t *testing.T) {
 }
 
 func TestEventStreamEndsWhenTheAccountIsDisabled(t *testing.T) {
-	old := heartbeat
-	heartbeat = 20 * time.Millisecond
-	t.Cleanup(func() { heartbeat = old })
-	e, _, srv := streamEnv(t)
+	e, _, srv := streamEnv(t, func(o *envOptions) { o.heartbeat = 20 * time.Millisecond })
 	e.addUser("vera", model.RoleViewer)
 	resp, closeStream := openStream(t, srv, e.mustLogin("vera"))
 	defer closeStream()
