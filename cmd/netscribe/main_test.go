@@ -115,6 +115,11 @@ func TestRunExitCodes(t *testing.T) {
 		{"scan with a missing config", []string{"scan", "--config", "/nonexistent/netscribe.yaml"}, 1, "read config"},
 		{"devices with a missing config", []string{"devices", "--config", "/nonexistent/netscribe.yaml"}, 1, "read config"},
 		{"scan help", []string{"scan", "-h"}, 0, "-config"},
+		{"setup help", []string{"setup", "-h"}, 0, "-dry-run"},
+		{"setup with a bad flag", []string{"setup", "--nope"}, 1, "flag provided but not defined"},
+		{"setup with an argument", []string{"setup", "now"}, 1, "takes no arguments"},
+		{"doctor help", []string{"doctor", "-h"}, 0, "-config"},
+		{"doctor with an argument", []string{"doctor", "now"}, 1, "takes no arguments"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -822,5 +827,16 @@ func TestIdentifyStoresNothingWhenNmapFails(t *testing.T) {
 	case e := <-ch:
 		t.Errorf("event %q after a failed run", e.Name)
 	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestDoctorReportsAMissingConfigAndDoesNotFail(t *testing.T) {
+	var out bytes.Buffer
+	code := run([]string{"doctor", "--config", filepath.Join(t.TempDir(), "netscribe.yaml")}, streams{in: strings.NewReader(""), out: &out, err: io.Discard})
+	if code != 0 {
+		t.Errorf("exit code = %d, a missing config is a warning (output: %s)", code, out.String())
+	}
+	if !strings.Contains(out.String(), "No config") {
+		t.Errorf("the report must say that the config is missing: %s", out.String())
 	}
 }
