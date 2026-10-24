@@ -114,6 +114,7 @@ type Service struct {
 	params   Params
 	dummy    string // hash checked for unknown users, so timing does not reveal them
 	hasUsers atomic.Bool
+	locks    *attemptLock // failed logins per address and username
 }
 
 // NewService returns a service. A nil now means time.Now.
@@ -126,7 +127,8 @@ func NewService(repo Repo, cfg config.AuthConfig, now func() time.Time) (*Servic
 	if err != nil {
 		return nil, err
 	}
-	return &Service{repo: repo, cfg: cfg, now: now, params: params, dummy: dummy}, nil
+	locks := newAttemptLock(cfg.MaxFailedLogins, cfg.LockoutDuration.Std())
+	return &Service{repo: repo, cfg: cfg, now: now, params: params, dummy: dummy, locks: locks}, nil
 }
 
 // HasUsers reports whether at least one account exists. Accounts are never all
@@ -204,10 +206,21 @@ func (s *Service) ListUsers(ctx context.Context) ([]model.User, error) {
 }
 
 // Login checks the credentials and opens a session with a fresh identifier.
+//
+// Failed attempts are counted per address and username together. After
+// auth.maxFailedLogins in a row that pair is refused for auth.lockoutDuration, even with
+// the right password, while the same user can still sign in from another address.
+// Unknown usernames are counted too, so a lock does not reveal which accounts exist.
 func (s *Service) Login(ctx context.Context, username, password, ip, userAgent string) (Session, model.User, error) {
 	now := s.now()
+	key := lockKey(ip, username)
+	if s.locks.locked(key, now) {
+		s.spendTime(password)
+		return Session{}, model.User{}, ErrInvalidCredentials
+	}
 	rec, err := s.repo.GetUserByName(ctx, NormalizeUsername(username))
 	if errors.Is(err, model.ErrNotFound) {
+		s.locks.fail(key, now)
 		s.spendTime(password)
 		return Session{}, model.User{}, ErrInvalidCredentials
 	}
@@ -224,11 +237,13 @@ func (s *Service) Login(ctx context.Context, username, password, ip, userAgent s
 		return Session{}, model.User{}, fmt.Errorf("verify password: %w", err)
 	}
 	if !ok {
-		if err := s.repo.RecordLogin(ctx, rec.ID, false, s.cfg.MaxFailedLogins, s.cfg.LockoutDuration.Std()); err != nil {
-			return Session{}, model.User{}, fmt.Errorf("record failed login: %w", err)
-		}
+		// Not recorded on the account: a lock on the account itself would let anyone who
+		// knows the username lock the owner out. ChangePassword still does that, but it
+		// needs a valid session.
+		s.locks.fail(key, now)
 		return Session{}, model.User{}, ErrInvalidCredentials
 	}
+	s.locks.reset(key)
 	if err := s.repo.RecordLogin(ctx, rec.ID, true, s.cfg.MaxFailedLogins, s.cfg.LockoutDuration.Std()); err != nil {
 		return Session{}, model.User{}, fmt.Errorf("record login: %w", err)
 	}

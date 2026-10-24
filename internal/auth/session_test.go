@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -290,20 +291,24 @@ func TestFailedLoginsAreIndistinguishable(t *testing.T) {
 	}
 }
 
-func TestOnlyAWrongPasswordCountsAsAFailure(t *testing.T) {
+func TestAFailedLoginIsNotRecordedOnTheAccount(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	addUser(t, svc, "alice", model.RoleViewer)
-	_, _, _ = svc.Login(context.Background(), "nobody", "whatever password", "", "")
-	if len(repo.recorded) != 0 {
-		t.Fatalf("an unknown user was recorded: %+v", repo.recorded)
+	for range 6 {
+		_, _, _ = svc.Login(context.Background(), "alice", "wrong wrong wrong", "198.51.100.1", "")
 	}
-	_, _, _ = svc.Login(context.Background(), "alice", "wrong wrong wrong", "", "")
-	if len(repo.recorded) != 1 || repo.recorded[0].ok || repo.recorded[0].lockAfter != 5 || repo.recorded[0].lockFor != 15*time.Minute {
-		t.Errorf("recorded = %+v, want one failure with lock after 5 for 15m", repo.recorded)
+	if len(repo.recorded) != 0 {
+		t.Fatalf("a failure was recorded on the account, so anyone could lock it: %+v", repo.recorded)
+	}
+	if repo.users["alice"].LockedUntil != nil {
+		t.Error("the account itself was locked")
+	}
+	if _, _, err := svc.Login(context.Background(), "alice", goodPassword, "198.51.100.2", ""); err != nil {
+		t.Errorf("the owner, from another address, was refused: %v", err)
 	}
 }
 
-func TestFifthFailureLocksTheAccountForFifteenMinutes(t *testing.T) {
+func TestFifthFailureLocksTheAddressAndUsernameForFifteenMinutes(t *testing.T) {
 	svc, _, clk := newTestService(t)
 	addUser(t, svc, "alice", model.RoleViewer)
 	ctx := context.Background()
@@ -341,6 +346,96 @@ func TestSuccessfulLoginResetsTheFailureCounter(t *testing.T) {
 	}
 	if _, _, err := svc.Login(ctx, "alice", goodPassword, "", ""); err != nil {
 		t.Errorf("the counter was not reset by the successful login: %v", err)
+	}
+}
+
+func TestLockCoversOnlyTheAddressAndUsernameThatFailed(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	addUser(t, svc, "alice", model.RoleViewer)
+	addUser(t, svc, "bob", model.RoleViewer)
+	ctx := context.Background()
+	const attacker, office = "203.0.113.9", "198.51.100.1"
+
+	for range 5 {
+		_, _, _ = svc.Login(ctx, "alice", "wrong wrong wrong", attacker, "")
+	}
+	for _, c := range []struct {
+		name, user, ip string
+		wantLocked     bool
+	}{
+		{"the pair that failed", "alice", attacker, true},
+		{"the username in other case", "ALICE", attacker, true},
+		{"the same user from another address", "alice", office, false},
+		{"another user from the same address", "bob", attacker, false},
+	} {
+		_, _, err := svc.Login(ctx, c.user, goodPassword, c.ip, "")
+		if got := err == ErrInvalidCredentials; got != c.wantLocked {
+			t.Errorf("%s: refused = %v (%v), want %v", c.name, got, err, c.wantLocked)
+		}
+	}
+}
+
+func TestSuccessResetsOnlyItsOwnPair(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	addUser(t, svc, "alice", model.RoleViewer)
+	ctx := context.Background()
+	for range 4 {
+		_, _, _ = svc.Login(ctx, "alice", "wrong wrong wrong", "203.0.113.9", "")
+	}
+	if _, _, err := svc.Login(ctx, "alice", goodPassword, "198.51.100.1", ""); err != nil {
+		t.Fatal(err)
+	}
+	// The owner's sign-in from the office must not wipe the attacker's counter.
+	_, _, _ = svc.Login(ctx, "alice", "wrong wrong wrong", "203.0.113.9", "")
+	if _, _, err := svc.Login(ctx, "alice", goodPassword, "203.0.113.9", ""); err != ErrInvalidCredentials {
+		t.Errorf("a success from another address cleared the counter: %v", err)
+	}
+}
+
+func TestUnknownUsernamesAreCountedToo(t *testing.T) {
+	svc, _, _ := newTestService(t)
+	ctx := context.Background()
+	for range 5 {
+		_, _, _ = svc.Login(ctx, "ghost", "wrong wrong wrong", "203.0.113.9", "")
+	}
+	if !svc.locks.locked(lockKey("203.0.113.9", "ghost"), svc.now()) {
+		t.Error("an unknown user was never locked, so a lock would reveal the real accounts")
+	}
+}
+
+func TestLockTableStaysBounded(t *testing.T) {
+	l := newAttemptLock(5, time.Minute)
+	now := newClock().now()
+	for i := range 3 * maxLockEntries {
+		l.fail(lockKey("10.0.0."+strconv.Itoa(i), "user"), now)
+	}
+	if n := len(l.entries); n > maxLockEntries {
+		t.Errorf("%d entries, want at most %d", n, maxLockEntries)
+	}
+}
+
+func TestLockTableEvictsCountersBeforeActiveLocks(t *testing.T) {
+	l := newAttemptLock(5, time.Hour)
+	now := newClock().now()
+	for range 5 {
+		l.fail("victim", now)
+	}
+	for i := range 2 * maxLockEntries {
+		l.fail("noise"+strconv.Itoa(i), now) // one failure each: counters, not locks
+	}
+	if !l.locked("victim", now) {
+		t.Error("an active lock was evicted while only counters needed to go")
+	}
+}
+
+func TestLockTableStaysBoundedEvenWhenEveryEntryIsALock(t *testing.T) {
+	l := newAttemptLock(1, time.Hour)
+	now := newClock().now()
+	for i := range 3 * maxLockEntries {
+		l.fail("k"+strconv.Itoa(i), now)
+	}
+	if n := len(l.entries); n > maxLockEntries {
+		t.Errorf("%d entries, want at most %d", n, maxLockEntries)
 	}
 }
 
