@@ -151,7 +151,7 @@ export function Inventory() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Inventory</h1>
+        <h1 className="text-2xl font-semibold">Inventory</h1>
         {canWrite ? <AddDeviceDialog onCreated={() => setRefresh((n) => n + 1)} /> : null}
       </div>
       <ScanBar
@@ -178,7 +178,7 @@ export function Inventory() {
         />
         <select
           aria-label="Filter by status"
-          className="h-9 rounded-lg border bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           value={filter}
           onChange={(e) => setFilter(e.target.value as Filter)}
         >

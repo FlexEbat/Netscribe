@@ -28,8 +28,8 @@ export function ScanBar({
 }: ScanBarProps) {
   const running = starting || scan?.status === "running"
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm">
-      <div className="flex min-w-0 flex-1 flex-col gap-1" aria-live="polite">
+    <div className="surface flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+      <div className="flex min-w-[min(100%,16rem)] flex-1 flex-col gap-1" aria-live="polite">
         <span>{summary(scan, running)}</span>
         {running && progress ? (
           <div

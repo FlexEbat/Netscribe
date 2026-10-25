@@ -16,7 +16,7 @@ function SheetContent({
     <DialogPrimitive.Portal>
       <DialogPrimitive.Content
         className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col gap-4 border-l bg-background p-6 shadow-lg focus-visible:outline-none",
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col gap-4 border-l bg-popover p-6 shadow-2xl shadow-black/50 focus-visible:outline-none",
           className,
         )}
         {...props}

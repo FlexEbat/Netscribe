@@ -3,58 +3,339 @@
 /* The theme is a class on <html>, set by public/theme-init.js and src/lib/theme.ts. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * The design system. Everything a surface, a text or an accent looks like is a token here,
+ * so a component names a role (bg-card, text-muted-foreground) and never a color.
+ *
+ *   dark   a near-black page, matte cards one step lighter, white lines at 8 percent
+ *   light  a cool off-white page and white cards, the same structure
+ *   brand  one electric blue, used for focus, the active page, the main button and the
+ *          lines of the background. It is never a fill of a large area.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.93 0 0);
-  --accent-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --background: #f5f6f8;
+  --foreground: #101114;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --muted: #eceef2;
+  --muted-foreground: #5a5e69;
+  --accent: #e6e9f0;
+  --accent-foreground: #101114;
+  --primary: #3550e8;
+  --primary-foreground: #ffffff;
+  --brand: #3550e8;
   --destructive: oklch(0.5 0.2 27);
-  --border: oklch(0.922 0 0);
-  --ring: oklch(0.55 0 0);
-  --radius: 0.625rem;
+  --border: rgb(16 17 20 / 0.1);
+  --input: #ffffff;
+  --ring: rgb(53 80 232 / 0.55);
+  --sidebar: #fbfbfc;
+  --glow: rgb(53 80 232 / 0.22);
+  --hairline: rgb(255 255 255 / 0.9);
+  --shadow-surface: 0 1px 2px rgb(16 17 20 / 0.06), 0 18px 36px -26px rgb(16 17 20 / 0.28);
+  --particle: 58 70 140;
+  --radius: 0.75rem;
   color-scheme: light;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --muted: oklch(0.205 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.63 0.21 25);
-  --border: oklch(1 0 0 / 14%);
-  --ring: oklch(0.708 0 0);
+  --background: #060607;
+  --foreground: #f4f4f5;
+  --card: #111113;
+  --popover: #141417;
+  --muted: rgb(255 255 255 / 0.045);
+  --muted-foreground: #8d9098;
+  --accent: rgb(255 255 255 / 0.07);
+  --accent-foreground: #f4f4f5;
+  --primary: #4059f5;
+  --primary-foreground: #ffffff;
+  --brand: #8095ff;
+  --destructive: oklch(0.66 0.2 25);
+  --border: rgb(255 255 255 / 0.08);
+  --input: rgb(255 255 255 / 0.04);
+  --ring: rgb(128 149 255 / 0.6);
+  --sidebar: #09090a;
+  --glow: rgb(64 89 245 / 0.42);
+  --hairline: rgb(255 255 255 / 0.06);
+  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.5), 0 24px 44px -28px rgb(0 0 0 / 0.9);
+  --particle: 176 188 255;
   color-scheme: dark;
 }
 
 @theme inline {
+  --font-mono:
+    "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-sans:
+    "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-popover: var(--popover);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--brand);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
+  --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-glow: var(--glow);
   --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.25rem);
+  --radius-2xl: calc(var(--radius) + 0.5rem);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings:
+      "ss01" 1,
+      "cv11" 1;
+    letter-spacing: -0.006em;
+  }
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 45%, transparent);
+    color: var(--foreground);
+  }
+}
+
+input[type="checkbox"] {
+  accent-color: var(--primary);
+}
+
+/* The canvas of the topology takes the colors of the design system. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-background-color-default: transparent;
+  --xy-background-pattern-dots-color-default: color-mix(
+    in oklab,
+    var(--foreground) 14%,
+    transparent
+  );
+  --xy-edge-stroke-default: color-mix(in oklab, var(--foreground) 28%, transparent);
+  --xy-edge-stroke-selected-default: var(--brand);
+  --xy-handle-background-color-default: color-mix(in oklab, var(--foreground) 55%, var(--card));
+  --xy-handle-border-color-default: var(--card);
+  --xy-minimap-background-color-default: color-mix(in oklab, var(--card) 80%, transparent);
+  --xy-minimap-mask-background-color-default: color-mix(
+    in oklab,
+    var(--background) 70%,
+    transparent
+  );
+  --xy-minimap-node-background-color-default: color-mix(
+    in oklab,
+    var(--foreground) 24%,
+    transparent
+  );
+  --xy-controls-button-background-color-default: var(--popover);
+  --xy-controls-button-background-color-hover-default: var(--accent);
+  --xy-controls-button-color-default: var(--foreground);
+  --xy-controls-button-color-hover-default: var(--foreground);
+  --xy-controls-button-border-color-default: var(--border);
+  --xy-attribution-background-color-default: transparent;
+}
+
+.react-flow__minimap,
+.react-flow__controls {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-surface);
+}
+
+.react-flow__node:hover {
+  z-index: 5;
+}
+
+/* Two soft pools of light behind everything. They drift very slowly and cost no layout. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20vmax;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      48vmax 36vmax at 82% 4%,
+      color-mix(in oklab, var(--primary) 16%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      44vmax 34vmax at 6% 96%,
+      color-mix(in oklab, var(--primary) 9%, transparent),
+      transparent 70%
+    );
+  animation: ambient-drift 48s var(--ease-in-out-quart) infinite alternate;
+}
+
+.dark body::before {
+  opacity: 1;
+}
+
+:root:not(.dark) body::before {
+  opacity: 0.55;
+}
+
+@keyframes ambient-drift {
+  from {
+    transform: translate3d(-1.5%, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2%, -1.5%, 0) scale(1.06);
+  }
+}
+
+/* The cursor position that src/lib/spotlight.ts writes into a surface, as a number. */
+@property --spot {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+/*
+ * A surface is a matte card: a faint top-to-bottom gradient, a hairline at the top edge, a
+ * soft layered shadow and, under the pointer, a spotlight of the brand color. Interactive
+ * surfaces also rise a little.
+ */
+.surface {
+  --mx: 50%;
+  --my: 0%;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background:
+    radial-gradient(
+      28rem circle at var(--mx) var(--my),
+      color-mix(in oklab, var(--primary) calc(var(--spot) * 14%), transparent),
+      transparent 62%
+    ),
+    linear-gradient(180deg, color-mix(in oklab, var(--card) 94%, white 6%) 0%, var(--card) 70%);
+  box-shadow:
+    inset 0 1px 0 var(--hairline),
+    var(--shadow-surface);
+  transition:
+    --spot 0.5s var(--ease-out-quint),
+    transform 0.3s var(--ease-out-quint),
+    border-color 0.3s var(--ease-out-quint),
+    box-shadow 0.3s var(--ease-out-quint);
+}
+
+.surface:hover {
+  --spot: 1;
+  border-color: color-mix(in oklab, var(--border), var(--brand) 22%);
+}
+
+.surface-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* Entrance of a page: the page fades in and its sections rise one after the other. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes beacon {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--brand) 55%, transparent);
+  }
+  60% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.page-enter {
+  animation: fade 0.35s var(--ease-out-quint) backwards;
+}
+
+.page-enter > * > * {
+  animation: rise 0.7s var(--ease-out-quint) backwards;
+}
+
+.page-enter > * > *:nth-child(2) {
+  animation-delay: 70ms;
+}
+.page-enter > * > *:nth-child(3) {
+  animation-delay: 140ms;
+}
+.page-enter > * > *:nth-child(4) {
+  animation-delay: 210ms;
+}
+.page-enter > * > *:nth-child(5) {
+  animation-delay: 280ms;
+}
+.page-enter > * > *:nth-child(n + 6) {
+  animation-delay: 350ms;
+}
+
+/* Menus, tooltips and dialogs come in with a short pop. */
+[data-state="open"][role="menu"],
+[data-state="delayed-open"][role="tooltip"],
+[data-radix-popper-content-wrapper] > [data-state="open"] {
+  animation: pop 0.18s var(--ease-out-quint);
+}
+
+/* The thin scrollbars of tables and panels. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

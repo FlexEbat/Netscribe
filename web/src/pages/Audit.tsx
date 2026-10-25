@@ -129,7 +129,7 @@ export function Audit() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Audit log</h1>
+      <h1 className="text-2xl font-semibold">Audit log</h1>
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
@@ -151,7 +151,7 @@ export function Audit() {
           <Label htmlFor="audit-action">Action</Label>
           <select
             id="audit-action"
-            className="h-9 rounded-lg border bg-background px-3 text-sm"
+            className="h-9 rounded-lg border bg-input px-3 text-sm"
             value={draft.action}
             onChange={(e) => set("action")(e.target.value)}
           >
@@ -167,7 +167,7 @@ export function Audit() {
           <Label htmlFor="audit-result">Result</Label>
           <select
             id="audit-result"
-            className="h-9 rounded-lg border bg-background px-3 text-sm"
+            className="h-9 rounded-lg border bg-input px-3 text-sm"
             value={draft.result}
             onChange={(e) => set("result")(e.target.value)}
           >

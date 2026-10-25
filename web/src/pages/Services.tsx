@@ -43,7 +43,7 @@ export function Services() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Services</h1>
+      <h1 className="text-2xl font-semibold">Services</h1>
       <Input
         type="search"
         aria-label="Filter by service name or banner"

@@ -25,12 +25,25 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-auto w-full justify-between px-2 py-2">
-          <span className="flex min-w-0 flex-col items-start gap-1">
+        <Button
+          variant="ghost"
+          className="h-auto w-full justify-between gap-3 rounded-2xl border bg-muted px-3 py-2.5 hover:bg-accent"
+        >
+          <span
+            aria-hidden="true"
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-primary/15 text-sm font-medium text-brand uppercase"
+          >
+            {user.username.slice(0, 1)}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
             <span className="max-w-full truncate">{user.username}</span>
             <RoleBadge role={user.role} />
           </span>
-          <ChevronsUpDown aria-hidden="true" className="size-4 text-muted-foreground" />
+          <ChevronsUpDown
+            aria-hidden="true"
+            strokeWidth={1.6}
+            className="size-4 shrink-0 text-muted-foreground"
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">

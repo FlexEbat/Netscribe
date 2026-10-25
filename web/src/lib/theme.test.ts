@@ -2,14 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { applyTheme, initTheme, parseChoice, resolveTheme, setTheme, THEME_KEY } from "@/lib/theme"
 
 describe("parseChoice", () => {
-  it("keeps the two explicit choices", () => {
+  it("keeps the three explicit choices", () => {
     expect(parseChoice("light")).toBe("light")
     expect(parseChoice("dark")).toBe("dark")
+    expect(parseChoice("system")).toBe("system")
   })
 
-  it("falls back to the system setting for anything else", () => {
-    for (const raw of [null, undefined, "", "system", "DARK", "blue"]) {
-      expect(parseChoice(raw)).toBe("system")
+  it("falls back to dark for anything else", () => {
+    for (const raw of [null, undefined, "", "DARK", "blue"]) {
+      expect(parseChoice(raw)).toBe("dark")
     }
   })
 })
@@ -74,8 +75,16 @@ describe("the theme store", () => {
     stop()
   })
 
+  it("is dark when nothing is stored, whatever the system says", () => {
+    stubSystem(false)
+    const stop = initTheme()
+    expect(isDark()).toBe(true)
+    stop()
+  })
+
   it("follows the system setting in system mode and reacts when it changes", () => {
     const system = stubSystem(false)
+    localStorage.setItem(THEME_KEY, "system")
     const stop = initTheme()
     expect(isDark()).toBe(false)
     system.change(true)
@@ -88,6 +97,7 @@ describe("the theme store", () => {
 
   it("ignores a system change while a theme is chosen", () => {
     const system = stubSystem(false)
+    localStorage.setItem(THEME_KEY, "system")
     const stop = initTheme()
     setTheme("light")
     system.change(true)
@@ -108,7 +118,7 @@ describe("the theme store", () => {
   })
 
   it("keeps working when storage is blocked", () => {
-    stubSystem(true)
+    stubSystem(false)
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked")
     })

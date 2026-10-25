@@ -49,7 +49,7 @@ export function Containers() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Containers</h1>
+      <h1 className="text-2xl font-semibold">Containers</h1>
       <Input
         type="search"
         aria-label="Filter containers"

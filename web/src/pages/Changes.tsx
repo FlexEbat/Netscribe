@@ -37,7 +37,7 @@ export function Changes() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-lg font-semibold">Changes</h1>
+      <h1 className="text-2xl font-semibold">Changes</h1>
       <Body state={state} />
     </div>
   )

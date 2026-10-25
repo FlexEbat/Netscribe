@@ -8,8 +8,9 @@
   } catch {
     // Storage can be blocked. The system setting decides then.
   }
+  // Dark unless the person chose light, or chose to follow the system and the system is light.
   var dark =
-    choice === "dark" ||
-    (choice !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    choice !== "light" &&
+    (choice !== "system" || window.matchMedia("(prefers-color-scheme: dark)").matches)
   document.documentElement.classList.toggle("dark", dark)
 })()
