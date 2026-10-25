@@ -115,6 +115,20 @@ func TestRunExitCodes(t *testing.T) {
 		{"scan with a missing config", []string{"scan", "--config", "/nonexistent/netscribe.yaml"}, 1, "read config"},
 		{"devices with a missing config", []string{"devices", "--config", "/nonexistent/netscribe.yaml"}, 1, "read config"},
 		{"scan help", []string{"scan", "-h"}, 0, "-config"},
+		{"setup help", []string{"setup", "-h"}, 0, "-dry-run"},
+		{"setup with a bad flag", []string{"setup", "--nope"}, 1, "flag provided but not defined"},
+		{"setup with an argument", []string{"setup", "now"}, 1, "takes no arguments"},
+		{"doctor help", []string{"doctor", "-h"}, 0, "-config"},
+		{"watch help", []string{"watch", "-h"}, 0, "-once"},
+		{"watch with a tiny interval", []string{"watch", "--interval", "1ms"}, 1, "at least 200ms"},
+		{"watch --once with no service", []string{"watch", "--once", "--config", "/nonexistent/netscribe.yaml"}, 1, "not up"},
+		{"console without a terminal", []string{"console"}, 1, "needs a terminal"},
+		{"config help", []string{"config", "-h"}, 0, "-config"},
+		{"config unknown command", []string{"config", "frobnicate", "--config", "/nonexistent/x.yaml"}, 1, "unknown command"},
+		{"config get without a file", []string{"config", "get", "listen", "--config", "/nonexistent/x.yaml"}, 1, "netscribe setup"},
+		{"config set without a value", []string{"config", "set", "scan.interval"}, 1, "usage: netscribe config set"},
+		{"config interactive without a terminal", []string{"config", "--config", "/nonexistent/x.yaml"}, 1, "needs a terminal"},
+		{"doctor with an argument", []string{"doctor", "now"}, 1, "takes no arguments"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -822,5 +836,34 @@ func TestIdentifyStoresNothingWhenNmapFails(t *testing.T) {
 	case e := <-ch:
 		t.Errorf("event %q after a failed run", e.Name)
 	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestDoctorReportsAMissingConfigAndDoesNotFail(t *testing.T) {
+	var out bytes.Buffer
+	code := run([]string{"doctor", "--config", filepath.Join(t.TempDir(), "netscribe.yaml")}, streams{in: strings.NewReader(""), out: &out, err: io.Discard})
+	if code != 0 {
+		t.Errorf("exit code = %d, a missing config is a warning (output: %s)", code, out.String())
+	}
+	if !strings.Contains(out.String(), "No config") {
+		t.Errorf("the report must say that the config is missing: %s", out.String())
+	}
+}
+
+func TestBareNetscribeOpensTheConsoleOnATerminal(t *testing.T) {
+	var out bytes.Buffer
+	code := run(nil, streams{in: strings.NewReader("7\n"), out: &out, err: io.Discard, interactive: true})
+	if code != 0 || !strings.Contains(out.String(), "What do you want to do?") {
+		t.Errorf("exit code %d, output: %s", code, out.String())
+	}
+}
+
+func TestInterspersedFirst(t *testing.T) {
+	got := interspersedFirst([]string{"set", "scan.interval", "1h", "--config", "/x.yaml", "extra"})
+	if strings.Join(got, " ") != "--config /x.yaml set scan.interval 1h extra" {
+		t.Errorf("%v", got)
+	}
+	if got := interspersedFirst([]string{"get", "-config=/y.yaml", "listen"}); strings.Join(got, " ") != "-config=/y.yaml get listen" {
+		t.Errorf("%v", got)
 	}
 }

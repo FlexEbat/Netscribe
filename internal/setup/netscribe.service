@@ -1,0 +1,38 @@
+[Unit]
+Description=Netscribe network documentation panel
+Documentation=https://github.com/FlexEbat/Netscribe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=netscribe
+Group=netscribe
+ExecStart=/usr/local/bin/netscribe serve --config /etc/netscribe/netscribe.yaml
+# SIGHUP reloads the config, see "Configuration" in the README.
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+# The panel needs the network and its own state directory, nothing else.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=/var/lib/netscribe
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+# Docker container data: uncomment and name the group that owns the socket.
+#SupplementaryGroups=docker
+
+[Install]
+WantedBy=multi-user.target

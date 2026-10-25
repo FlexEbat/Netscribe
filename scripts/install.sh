@@ -285,23 +285,26 @@ if [ "$WITH_CHROMIUM" -eq 1 ]; then
 	install_chromium
 fi
 
-say ""
-say "Next steps:"
-if [ "$WITH_SERVICE" -eq 1 ]; then
-	say "  1. Set scan.targets in $ETC_DIR/netscribe.yaml:"
-	say "       sudo -u $SERVICE_USER \${EDITOR:-vi} $ETC_DIR/netscribe.yaml"
-	say "  2. Create the first administrator:"
-	say "       sudo -u $SERVICE_USER $PREFIX/bin/netscribe user add alice --role admin --config $ETC_DIR/netscribe.yaml"
-	if [ -d /run/systemd/system ]; then
-		say "  3. Start the panel:"
-		say "       sudo systemctl enable --now netscribe"
+# The guided installer (get.sh) runs "netscribe setup" next, which says what to do.
+if [ -z "${NETSCRIBE_GUIDED:-}" ]; then
+	say ""
+	say "Next steps:"
+	if [ "$WITH_SERVICE" -eq 1 ]; then
+		say "  1. Set scan.targets in $ETC_DIR/netscribe.yaml:"
+		say "       sudo -u $SERVICE_USER \${EDITOR:-vi} $ETC_DIR/netscribe.yaml"
+		say "  2. Create the first administrator:"
+		say "       sudo -u $SERVICE_USER $PREFIX/bin/netscribe user add alice --role admin --config $ETC_DIR/netscribe.yaml"
+		if [ -d /run/systemd/system ]; then
+			say "  3. Start the panel:"
+			say "       sudo systemctl enable --now netscribe"
+		else
+			say "  3. Start the panel with your init system, as user $SERVICE_USER:"
+			say "       $PREFIX/bin/netscribe serve --config $ETC_DIR/netscribe.yaml"
+		fi
 	else
-		say "  3. Start the panel with your init system, as user $SERVICE_USER:"
-		say "       $PREFIX/bin/netscribe serve --config $ETC_DIR/netscribe.yaml"
+		say "  cp netscribe.example.yaml netscribe.yaml && chmod 600 netscribe.yaml"
+		say "  $PREFIX/bin/netscribe user add alice --role admin"
+		say "  $PREFIX/bin/netscribe serve"
 	fi
-else
-	say "  cp netscribe.example.yaml netscribe.yaml && chmod 600 netscribe.yaml"
-	say "  $PREFIX/bin/netscribe user add alice --role admin"
-	say "  $PREFIX/bin/netscribe serve"
+	say "The panel listens on 127.0.0.1:8080. See docs/installation.md for TLS, a reverse proxy and Nmap."
 fi
-say "The panel listens on 127.0.0.1:8080. See docs/installation.md for TLS, a reverse proxy and Nmap."
