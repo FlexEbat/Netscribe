@@ -25,10 +25,20 @@ type session struct {
 	ui  ui
 	p   *prompter
 
+	version     string
 	acc         *Account
 	cfg         *config.Config // the config on disk, when there is one
 	ans         Answers
 	dockerGroup string // the group to add to the unit for the Docker socket
+}
+
+// loadConfig reads the config on disk.
+func (s *session) loadConfig() (*config.Config, error) {
+	cfg, err := config.Load(s.o.ConfigPath, false)
+	if err != nil {
+		return nil, err
+	}
+	return &cfg, nil
 }
 
 func newSession(env Env, o Options) *session {
@@ -67,6 +77,7 @@ func (s *session) runChecked(ctx context.Context, c Command) error {
 // changes the system and ends with the checks of Doctor.
 func Setup(ctx context.Context, env Env, o Options, version string) error {
 	s := newSession(env, o)
+	s.version = version
 	s.ui.banner("Netscribe setup", version)
 	if o.DryRun {
 		s.ui.note("dry run: the setup prints what it would do and changes nothing")
@@ -97,7 +108,7 @@ func Setup(ctx context.Context, env Env, o Options, version string) error {
 func (s *session) system(context.Context) error {
 	s.ui.findings(checkSystem(s.env, s.o))
 	if s.env.GOOS != "linux" {
-		return errors.New("Netscribe runs on Linux only")
+		return errors.New("this system is not Linux: Netscribe runs on Linux only")
 	}
 	if s.env.Getuid() != 0 && !s.o.DryRun {
 		return errors.New("the setup changes system files: run it with sudo")
@@ -322,7 +333,7 @@ func (s *session) configure(context.Context) error {
 	if err != nil {
 		return err
 	}
-	listen, err := s.chooseListen()
+	listen, err := s.pickListen(s.o.Listen, false)
 	if err != nil {
 		return err
 	}
@@ -336,7 +347,8 @@ func (s *session) configure(context.Context) error {
 	if err != nil {
 		return err
 	}
-	s.ans.Targets, s.ans.Listen, s.ans.Interval = targets, listen, interval
+	s.ans.Targets, s.ans.Listen, s.ans.Interval = targets, listen.Listen, interval
+	s.ans.TLSCert, s.ans.TLSKey, s.ans.Proxies = listen.TLSCert, listen.TLSKey, listen.Proxies
 	s.ans.Database = filepath.Join(s.o.StateDir, "netscribe.db")
 	if s.ans.DockerSocket == "" {
 		s.ans.DockerSocket = "/var/run/docker.sock"
@@ -419,38 +431,6 @@ func (s *session) chooseTargets() ([]string, error) {
 
 func splitList(v string) []string {
 	return strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' })
-}
-
-func (s *session) chooseListen() (string, error) {
-	def := s.o.Listen
-	if def == "" {
-		def = "127.0.0.1:8080"
-	}
-	s.ui.note("127.0.0.1 keeps the panel on this host: reach it with ssh -L or a TLS reverse proxy.")
-	listen, err := s.p.ask("Listen address of the panel", def, func(v string) error {
-		if err := config.ValidateListen(v); err != nil {
-			return err
-		}
-		if err := s.env.CanListen(v); err != nil {
-			return fmt.Errorf("cannot bind %s: %w", v, err)
-		}
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	host, _, _ := net.SplitHostPort(listen)
-	if isLoopback(host) {
-		return listen, nil
-	}
-	ok, err := s.p.confirm("This address is open to the network, and the setup has no TLS certificate to give it. Use it anyway?", false)
-	if err != nil {
-		return "", err
-	}
-	if !ok {
-		return "", errors.New("choose a loopback address, or set tls.certFile and tls.keyFile in the config first")
-	}
-	return listen, nil
 }
 
 func (s *session) icmp(ctx context.Context) error {
@@ -663,7 +643,18 @@ func (s *session) summary(ctx context.Context) error {
 	if fail > 0 {
 		return fmt.Errorf("%d checks failed", fail)
 	}
-	return nil
+	if !s.env.Interactive || s.o.Yes {
+		return nil
+	}
+	s.ui.printf("\n  From now on the command %s opens the console: watch, checks, settings, accounts.\n", s.ui.bold("netscribe"))
+	open, err := s.p.confirm("Open the console now?", true)
+	if errors.Is(err, errInput) || err == nil && !open {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return Console(ctx, s.env, s.o, s.version)
 }
 
 // Doctor runs every check and prints the findings by area. It changes nothing and

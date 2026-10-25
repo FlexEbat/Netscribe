@@ -21,7 +21,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/term"
 )
 
 // Level ranks a finding. A failure means the install does not work, a warning means it
@@ -88,6 +91,8 @@ type Env struct {
 
 	GOOS, GOARCH string
 
+	Now        func() time.Time
+	Getenv     func(key string) string
 	Getuid     func() int
 	Executable func() (string, error)
 	ReadFile   func(path string) ([]byte, error)
@@ -109,17 +114,23 @@ type Env struct {
 	MkdirAll  func(path string, mode fs.FileMode, owner *Account) error
 	// CopyExecutable copies a program to its place, replacing a running copy safely.
 	CopyExecutable func(src, dst string) error
+	Remove         func(path string) error
+	// ReadSecret reads a line without showing it, for a community string. Without a
+	// terminal it reads an ordinary line.
+	ReadSecret func() (string, error)
 }
 
 // NewEnv returns the real machine. in and out are the terminal of the caller.
 func NewEnv(in io.Reader, out io.Writer, interactive, color bool) Env {
-	return Env{
+	e := Env{
 		In:             bufio.NewReader(in),
 		Out:            out,
 		Color:          color,
 		Interactive:    interactive,
 		GOOS:           runtime.GOOS,
 		GOARCH:         runtime.GOARCH,
+		Now:            time.Now,
+		Getenv:         os.Getenv,
 		Getuid:         os.Getuid,
 		Executable:     os.Executable,
 		ReadFile:       os.ReadFile,
@@ -136,7 +147,23 @@ func NewEnv(in io.Reader, out io.Writer, interactive, color bool) Env {
 		WriteFile:      writeFileAtomic,
 		MkdirAll:       mkdirAll,
 		CopyExecutable: copyExecutable,
+		Remove:         os.Remove,
 	}
+	e.ReadSecret = func() (string, error) { return readSecret(e.In, interactive) }
+	return e
+}
+
+func readSecret(in *bufio.Reader, interactive bool) (string, error) {
+	if interactive {
+		b, err := term.ReadPassword(int(os.Stdin.Fd()))
+		_, _ = fmt.Fprintln(os.Stdout)
+		return string(b), err
+	}
+	line, err := in.ReadString('\n')
+	if err != nil && line == "" {
+		return "", errInput
+	}
+	return strings.TrimSpace(line), nil
 }
 
 func interfaces() ([]NetIface, error) {

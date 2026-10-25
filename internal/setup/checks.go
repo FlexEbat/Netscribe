@@ -24,13 +24,23 @@ type Options struct {
 	SysctlDir   string
 	ServiceUser string
 
-	Yes           bool
-	DryRun        bool
-	NoService     bool
-	Admin         string
-	PasswordStdin bool
-	Targets       []string
-	Listen        string
+	Yes            bool
+	DryRun         bool
+	NoService      bool
+	Admin          string
+	PasswordStdin  bool
+	Targets        []string
+	Listen         string
+	TLSCert        string
+	TLSKey         string
+	TrustedProxies []string
+	// PlainHTTP accepts a listen address beyond loopback without TLS or a proxy.
+	PlainHTTP bool
+	// Once makes watch print one sample and stop. WatchEvery is the time between samples.
+	Once       bool
+	WatchEvery time.Duration
+	// WatchCount stops watch after that many samples. Zero means no limit.
+	WatchCount int
 	// HealthTimeout is how long the setup waits for the panel to answer after the start.
 	HealthTimeout time.Duration
 }
@@ -47,6 +57,7 @@ func DefaultOptions() Options {
 		Listen:      "127.0.0.1:8080",
 
 		HealthTimeout: 20 * time.Second,
+		WatchEvery:    2 * time.Second,
 	}
 }
 
@@ -141,8 +152,8 @@ func checkSystem(env Env, o Options) []Finding {
 func checkInstall(env Env, o Options) []Finding {
 	var out []Finding
 	exe, _ := env.Executable()
-	switch {
-	case exe == o.BinPath:
+	switch exe {
+	case o.BinPath:
 		out = append(out, finding(areaInstall, LevelOK, "The netscribe command is at "+o.BinPath, "", ""))
 	default:
 		if _, err := env.Stat(o.BinPath); err == nil {

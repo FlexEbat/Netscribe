@@ -21,6 +21,9 @@ curl -fsSL https://raw.githubusercontent.com/FlexEbat/Netscribe/main/scripts/get
 sudo sh get.sh
 ```
 
+Without options the setup is a guided session; afterwards `netscribe` typed alone opens a
+console with a live watcher of the service, the checks, every setting of the config, the
+accounts and the service. With options (`--yes --admin alice --listen ...`) it runs unattended.
 `sudo netscribe doctor` checks an install later and says what to fix.
 
 ### Install script

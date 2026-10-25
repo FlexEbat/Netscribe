@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeSys is a machine for the tests: the files live in a temporary directory, and
@@ -31,6 +32,11 @@ type fakeSys struct {
 	cmds     []Command
 	copied   [][2]string
 	out      *bytes.Buffer
+	secrets  []string
+	vars     map[string]string
+	clock    time.Time
+	proc     map[string]string // contents of /proc files
+	logLines string
 }
 
 func newFake(t *testing.T) *fakeSys {
@@ -44,6 +50,9 @@ func newFake(t *testing.T) *fakeSys {
 		ping:    "1\t0\n",
 		active:  "inactive",
 		out:     &bytes.Buffer{},
+		vars:    map[string]string{},
+		clock:   time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC),
+		proc:    map[string]string{},
 		ifaces: []NetIface{
 			{Name: "lo", Up: true, Loopback: true, Addrs: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/8")}},
 			{Name: "eth0", Up: true, Addrs: []netip.Prefix{netip.MustParsePrefix("192.168.1.20/24")}},
@@ -83,11 +92,28 @@ func (f *fakeSys) env(in string) Env {
 		Interactive: true,
 		GOOS:        "linux",
 		GOARCH:      "amd64",
-		Getuid:      func() int { return f.uid },
-		Executable:  func() (string, error) { return exe, nil },
+		Now: func() time.Time {
+			f.clock = f.clock.Add(7 * time.Millisecond)
+			return f.clock
+		},
+		Getenv: func(k string) string { return f.vars[k] },
+		Remove: os.Remove,
+		ReadSecret: func() (string, error) {
+			if len(f.secrets) == 0 {
+				return "", errInput
+			}
+			v := f.secrets[0]
+			f.secrets = f.secrets[1:]
+			return v, nil
+		},
+		Getuid:     func() int { return f.uid },
+		Executable: func() (string, error) { return exe, nil },
 		ReadFile: func(p string) ([]byte, error) {
 			if p == pingRange {
 				return []byte(f.ping), nil
+			}
+			if v, ok := f.proc[p]; ok {
+				return []byte(v), nil
 			}
 			return os.ReadFile(p) //nolint:gosec // test paths
 		},
@@ -143,8 +169,12 @@ func (f *fakeSys) run(_ context.Context, c Command) ([]byte, error) {
 	switch c.Name {
 	case "useradd":
 		f.addUser(c.Args[len(c.Args)-1])
+	case "journalctl":
+		return []byte(f.logLines), nil
 	case "systemctl":
 		switch c.Args[0] {
+		case "show":
+			return []byte("ActiveState=" + f.active + "\nSubState=running\nMainPID=4242\nNRestarts=0\nActiveEnterTimestamp=Sat 2026-10-24 11:00:00 UTC\nUnitFileState=enabled\n"), nil
 		case "is-active":
 			return []byte(f.active + "\n"), nil
 		case "is-enabled":

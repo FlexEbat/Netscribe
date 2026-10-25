@@ -31,8 +31,8 @@ A machine without the toolchain can install Go and Node.js with
 
 ## Layout and import rules
 
-- `cmd/netscribe` holds the commands `serve`, `scan`, `devices`, `export`, `user`, `setup` and
-  `doctor`.
+- `cmd/netscribe` holds the commands `serve`, `scan`, `devices`, `export`, `user`, `setup`,
+  `doctor`, `console`, `watch` and `config`.
 - `internal/collector` does not import `store`. A collector returns a `Result`, and
   `scanner` stores it through `Repo.ApplyResult`.
 - `internal/render` imports neither `collector` nor `api`.

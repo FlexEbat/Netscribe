@@ -147,3 +147,35 @@ func parseChoice(s string, def []bool) ([]bool, error) {
 	}
 	return out, nil
 }
+
+// pick lets the person choose one of the options by its number. An empty answer takes the
+// option at index def.
+func (p *prompter) pick(question string, options []string, def int) (int, error) {
+	p.ui.printf("  %s %s\n", p.ui.paint("36", "?"), question)
+	for i, o := range options {
+		mark := " "
+		if i == def {
+			mark = "›"
+		}
+		p.ui.printf("      %s %d  %s\n", p.ui.paint("36", mark), i+1, o)
+	}
+	if p.yes {
+		return def, nil
+	}
+	for {
+		p.ui.printf("    number [%d]: ", def+1)
+		s, err := p.line()
+		if err != nil {
+			return 0, err
+		}
+		if s == "" {
+			return def, nil
+		}
+		n, err := strconv.Atoi(s)
+		if err != nil || n < 1 || n > len(options) {
+			p.ui.printf("    choose a number from 1 to %d\n", len(options))
+			continue
+		}
+		return n - 1, nil
+	}
+}

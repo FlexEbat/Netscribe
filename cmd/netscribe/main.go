@@ -43,6 +43,9 @@ commands:
   export    write the network documentation: --format md|html|pdf|drawio --out <file>
   user      manage accounts: add, list, disable, passwd
   setup     guided install: checks, recommendations, config, service, first account
+  console   the menu: watch, checks, settings, accounts, service (also: netscribe alone)
+  watch     live view of the service, the panel and the host; --once for monitors
+  config    change the configuration: interactively, with get, set, show or edit
   doctor    check an install and say what to fix
   version   print the version of this build
 
@@ -65,6 +68,9 @@ func main() {
 }
 
 func run(args []string, e streams) int {
+	if len(args) == 0 && e.interactive {
+		args = []string{"console"} // a person at a terminal gets the menu, not the usage text
+	}
 	if len(args) == 0 {
 		_, _ = fmt.Fprintln(e.err, usage)
 		return 2
@@ -77,6 +83,9 @@ func run(args []string, e streams) int {
 		"user":    user,
 		"setup":   runSetup,
 		"doctor":  runDoctor,
+		"console": runConsole,
+		"watch":   runWatch,
+		"config":  runConfig,
 	}
 	if cmd, ok := commands[args[0]]; ok {
 		if err := cmd(args[1:], e); err != nil {

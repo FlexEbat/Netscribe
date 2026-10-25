@@ -26,6 +26,9 @@ type Answers struct {
 	Docker       bool
 	DockerSocket string
 	Nmap         bool
+	TLSCert      string
+	TLSKey       string
+	Proxies      []string
 }
 
 // RenderConfig returns the text of a new config file.
@@ -41,6 +44,14 @@ func RenderConfig(a Answers) []byte {
 	b.WriteString("scan:\n")
 	fmt.Fprintf(&b, "  targets: [%s]\n", strings.Join(a.Targets, ", "))
 	fmt.Fprintf(&b, "  interval: %s\n\n", a.Interval)
+	if a.TLSCert != "" {
+		b.WriteString("tls:\n")
+		fmt.Fprintf(&b, "  certFile: %s\n", strconv.Quote(a.TLSCert))
+		fmt.Fprintf(&b, "  keyFile: %s\n\n", strconv.Quote(a.TLSKey))
+	}
+	if len(a.Proxies) > 0 {
+		fmt.Fprintf(&b, "trustedProxies: [%s]\n\n", strings.Join(a.Proxies, ", "))
+	}
 	b.WriteString("docker:\n")
 	fmt.Fprintf(&b, "  enabled: %t\n", a.Docker)
 	fmt.Fprintf(&b, "  socket: %s\n\n", strconv.Quote(a.DockerSocket))

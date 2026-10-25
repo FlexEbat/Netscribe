@@ -15,7 +15,15 @@ to run. Nmap, Chromium and Docker are optional and each switches on one feature.
 ## Guided installer
 
 `get.sh` installs the `netscribe` command and runs `netscribe setup`, which does the rest
-and explains each step. Run it on the host that will scan the network, as root:
+and explains each step. There are two ways to use it:
+
+- **Without options** it is a guided session in the terminal. It asks the few questions that
+  matter, marks problems and says how to fix them. When it ends, `netscribe` is a command
+  of its own: typed alone at a terminal it opens the [console](#the-console).
+- **With options** (`--yes`, `--admin`, `--listen` and the others below) it asks nothing and
+  can run from a provisioning script.
+
+Run it on the host that will scan the network, as root:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/FlexEbat/Netscribe/main/scripts/get.sh -o get.sh
@@ -35,11 +43,11 @@ The setup walks through nine steps. Each step prints what it found, marks a prob
 | The netscribe command | Copies the binary to `/usr/local/bin/netscribe` when it runs from elsewhere |
 | Service account | Creates the `netscribe` account and the directories `/etc/netscribe` and `/var/lib/netscribe` with mode 0750 |
 | Features | Offers to install Nmap and Chromium with the package manager, and finds the Docker socket |
-| Configuration | Proposes the private networks of the host as scan targets, asks for the listen address and the scan interval, and writes `netscribe.yaml` with mode 0600. An existing config is never overwritten |
+| Configuration | Proposes the private networks of the host as scan targets, asks [where the panel listens](#where-the-panel-listens) and the scan interval, and writes `netscribe.yaml` with mode 0600. An existing config is never overwritten |
 | ICMP probes | Reads `net.ipv4.ping_group_range`. When ICMP echo is off for every group, it writes `/etc/sysctl.d/99-netscribe.conf` for the service group |
 | First administrator | Runs `netscribe user add` as the service account when no account exists, so that the database belongs to the service |
 | Service | Installs the unit, adds a drop-in for the Docker group and for Nmap, starts the service and waits until the panel answers |
-| Result | Runs every check again and lists what is left, with the fix for each |
+| Result | Runs every check again, lists what is left with the fix for each, and offers to open the console |
 
 The setup proposes networks it finds on the interfaces. A network wider than a /24 is narrowed
 to the /24 of the address, and the interfaces of containers and virtual machines are left
@@ -55,6 +63,9 @@ Options of `netscribe setup`:
 | `--admin NAME` | Create the first administrator with this name. Add `--password-stdin` to read the password from standard input |
 | `--targets LIST` | Scan targets of a new config, CIDRs separated by commas |
 | `--listen ADDR` | Listen address of a new config, default `127.0.0.1:8080` |
+| `--tls-cert FILE`, `--tls-key FILE` | The panel serves TLS with this certificate and key. Needed with a listen address beyond loopback, unless a proxy or `--plain-http` is given |
+| `--trusted-proxy LIST` | Address or network of the reverse proxy in front of the panel, separated by commas |
+| `--plain-http` | Accept a listen address beyond loopback without TLS or a proxy |
 | `--no-service` | Install no unit and start nothing |
 | `--config PATH` | Config file to write or keep, default `/etc/netscribe/netscribe.yaml` |
 
@@ -62,6 +73,74 @@ An unattended install:
 
 ```sh
 printf '%s\n' "$ADMIN_PASSWORD" | sudo sh get.sh --yes --admin alice --password-stdin --targets 192.168.1.0/24
+```
+
+### Where the panel listens
+
+The guided setup offers four places, and the same list appears in `netscribe config`:
+
+| Choice | Meaning |
+| --- | --- |
+| `127.0.0.1:8080` | This host only. It is the recommended default: reach the panel with `ssh -L 8080:127.0.0.1:8080 user@host`, or put a TLS reverse proxy on the same host in front of it |
+| An address of an interface, such as `192.168.1.20:8080` | Open to that network only. One entry for each interface the setup finds, container bridges left out |
+| `0.0.0.0:8080` | Open to every network of the host |
+| Another address | Any `host:port` that the host can bind |
+
+An address beyond loopback sends passwords and session cookies over the network, so the setup
+then asks how the traffic is protected: a TLS reverse proxy on another host (its address goes
+into `trustedProxies`), a certificate and a key for the panel itself (checked to belong
+together, written to `tls`), or plain HTTP after an explicit yes. In a script, the options
+`--tls-cert` and `--tls-key`, `--trusted-proxy` and `--plain-http` give the same answers.
+
+### The console
+
+Once the install is done, `netscribe` typed alone at a terminal opens a menu:
+
+| Item | What it does |
+| --- | --- |
+| Watch | The live view below |
+| Check | The checks of `netscribe doctor` |
+| Settings | Every setting of the config, with its value and advice |
+| Accounts | List, add, reset a password and disable, as the service account |
+| Service | Status, start, stop, restart, reload the config, start at boot, log |
+| Setup | The guided setup again. It skips what is done and repairs what is not |
+
+### The watcher
+
+`netscribe watch` refreshes a screen every two seconds (`--interval`) until Ctrl-C:
+
+- the service: state, since when, restarts, whether it starts at boot;
+- the panel: whether it answers, how fast, and the last 28 answers as a chart;
+- the process: CPU, memory, threads and open files;
+- the data: size of the database and its log, free disk space;
+- the host: load and free memory;
+- the config: valid or not, and when it changed;
+- the events: what changed since the watcher started, such as a service that went down, a
+  panel that stopped answering, a restart, a config that stopped loading, less than 256 MiB of
+  disk left, a memory jump. A bad event rings the terminal bell;
+- the last lines of the log of the service.
+
+`netscribe watch --once` prints one sample and exits with 1 when the service is not up or the
+panel does not answer, so a monitor or a cron job can call it.
+
+### Settings
+
+`netscribe config` opens the editor: panel access, scanning, discovery, Docker, SNMP, history,
+sign-in policy and export, each with its value, an explanation and the recommended value. A
+change is checked against the whole config before it is saved, the old file stays as
+`netscribe.yaml.bak`, and the comments of your file are kept. The editor says whether the
+running service applies the change by itself (keys under `scan`, `snmp`, `ssh`, `docker`,
+`history` and `export`) or needs a restart, and offers the restart. Community strings are typed
+without echo and never shown again.
+
+For scripts:
+
+```sh
+sudo netscribe config show                        # the file, secrets hidden
+sudo netscribe config get scan.interval
+sudo netscribe config set scan.interval 30m
+sudo netscribe config set scan.targets 10.0.0.0/24 10.0.1.0/24
+sudo netscribe config edit                        # your editor, checked before it saves
 ```
 
 ### Check an install

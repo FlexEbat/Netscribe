@@ -104,7 +104,7 @@ func TestCheckInstall(t *testing.T) {
 	if byTitle(t, got, "readable by every user").Level != LevelWarn {
 		t.Error("a state directory open to everyone must warn")
 	}
-	if err := os.Chmod(o.StateDir, 0o750); err != nil {
+	if err := os.Chmod(o.StateDir, 0o750); err != nil { //nolint:gosec // a directory mode, not a file mode
 		t.Fatal(err)
 	}
 	for _, f := range checkInstall(f.env(""), o) {
