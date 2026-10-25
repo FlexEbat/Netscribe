@@ -233,3 +233,17 @@ func TestWatchOnATerminalRedrawsAndRestoresTheCursor(t *testing.T) {
 		t.Errorf("terminal control codes: %q", out)
 	}
 }
+
+func TestWatchWithoutAConfigPointsToSetup(t *testing.T) {
+	f := newFake(t)
+	o := f.opts()
+	o.Once = true
+	_ = Watch(context.Background(), f.env(""), o, "v")
+	out := f.out.String()
+	if !strings.Contains(out, "no config at") || !strings.Contains(out, "run netscribe setup") || !strings.Contains(out, "unknown until there is a config") {
+		t.Errorf("a missing config is a hint, not a pile of zeros:\n%s", out)
+	}
+	if strings.Contains(out, "0 B free") {
+		t.Errorf("no disk figure without a config:\n%s", out)
+	}
+}

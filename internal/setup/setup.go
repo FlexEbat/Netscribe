@@ -27,6 +27,7 @@ type session struct {
 
 	version     string
 	acc         *Account
+	accPlanned  bool           // a dry run: the account does not exist, its ids are not known
 	cfg         *config.Config // the config on disk, when there is one
 	ans         Answers
 	dockerGroup string // the group to add to the unit for the Docker socket
@@ -151,6 +152,7 @@ func (s *session) account(ctx context.Context) error {
 		}
 		if err != nil {
 			acc = Account{Name: s.o.ServiceUser}
+			s.accPlanned = true
 		}
 	} else {
 		s.ui.done(fmt.Sprintf("service account %s exists (uid %d)", acc.Name, acc.UID))
@@ -448,7 +450,11 @@ func (s *session) icmp(ctx context.Context) error {
 		s.ui.note("the current range allows other groups, so the setup leaves it to you")
 		return nil
 	}
-	ok, err := s.p.confirm(fmt.Sprintf("ICMP echo is off for every group. Allow it for the group %s (gid %d)? Without it hosts that drop TCP stay unseen.", s.o.ServiceUser, gid), true)
+	who := fmt.Sprintf("the group %s (gid %d)", s.o.ServiceUser, gid)
+	if s.accPlanned {
+		who = "the group " + s.o.ServiceUser + " once the account exists"
+	}
+	ok, err := s.p.confirm("ICMP echo is off for every group. Allow it for "+who+"? Without it hosts that drop TCP stay unseen.", true)
 	if err != nil || !ok {
 		return err
 	}

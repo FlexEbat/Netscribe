@@ -137,6 +137,9 @@ func TestSetupDryRunChangesNothing(t *testing.T) {
 		}
 	}
 	out := f.out.String()
+	if strings.Contains(out, "gid 0") || !strings.Contains(out, "once the account exists") {
+		t.Errorf("a dry run does not know the group id of an account that does not exist yet:\n%s", out)
+	}
 	for _, want := range []string{"would", "192.168.1.0/24", "listen: 127.0.0.1:8080", "nothing was changed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the plan lacks %q:\n%s", want, out)

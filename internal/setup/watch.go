@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -48,6 +49,7 @@ type Sample struct {
 	MemAvail   uint64 // bytes
 	MemTotal   uint64
 	ConfigErr  string
+	NoConfig   bool // there is no config file yet
 	ConfigTime time.Time
 	Log        []string
 }
@@ -140,6 +142,7 @@ func collect(ctx context.Context, env Env, o Options, prev *Sample) Sample {
 	switch {
 	case err != nil:
 		s.ConfigErr = err.Error()
+		s.NoConfig = errors.Is(err, fs.ErrNotExist)
 	default:
 		if info, err := env.Stat(o.ConfigPath); err == nil {
 			s.ConfigTime = info.ModTime()
@@ -335,18 +338,24 @@ func (v *view) render(u ui, s Sample, o Options, version string) {
 		u.printf("  %-8s %s\n", u.bold("Process"), u.dim("none"))
 	}
 
-	data := "database " + size(s.DBBytes)
-	if s.WALBytes > 0 {
-		data += " (+" + size(s.WALBytes) + " log)"
+	if s.NoConfig {
+		u.printf("  %-8s %s\n", u.bold("Data"), u.dim("unknown until there is a config"))
+	} else {
+		data := "database " + size(s.DBBytes)
+		if s.WALBytes > 0 {
+			data += " (+" + size(s.WALBytes) + " log)"
+		}
+		disk := u.paint("32", size(s.DiskFree)+" free")
+		if s.DiskFree > 0 && s.DiskFree < minFreeBytes {
+			disk = u.paint("31", size(s.DiskFree)+" free")
+		}
+		u.printf("  %-8s %s   disk %s\n", u.bold("Data"), data, disk)
 	}
-	disk := u.paint("32", size(s.DiskFree)+" free")
-	if s.DiskFree > 0 && s.DiskFree < minFreeBytes {
-		disk = u.paint("31", size(s.DiskFree)+" free")
-	}
-	u.printf("  %-8s %s   disk %s\n", u.bold("Data"), data, disk)
 	u.printf("  %-8s load %.2f %.2f %.2f   memory %s free of %s\n", u.bold("Host"), s.Load[0], s.Load[1], s.Load[2], size(s.MemAvail), size(s.MemTotal))
 
-	if s.ConfigErr != "" {
+	if s.NoConfig {
+		u.printf("  %-8s %s no config at %s: run netscribe setup\n", u.bold("Config"), u.dot(false, true), o.ConfigPath)
+	} else if s.ConfigErr != "" {
 		u.printf("  %-8s %s %s\n", u.bold("Config"), u.dot(false, false), s.ConfigErr)
 	} else {
 		u.printf("  %-8s %s valid   %s   %s\n", u.bold("Config"), u.dot(true, false), o.ConfigPath, u.dim("changed "+s.ConfigTime.Format("15:04")))
