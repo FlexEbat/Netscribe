@@ -153,10 +153,10 @@ func collect(ctx context.Context, env Env, o Options, prev *Sample) Sample {
 			s.Health = errors.New("the service is not running")
 		}
 		if info, err := env.Stat(cfg.Database); err == nil {
-			s.DBBytes = uint64(max(info.Size(), 0))
+			s.DBBytes = uint64(max(info.Size(), 0)) //nolint:gosec // a size is not negative
 		}
 		if info, err := env.Stat(cfg.Database + "-wal"); err == nil {
-			s.WALBytes = uint64(max(info.Size(), 0))
+			s.WALBytes = uint64(max(info.Size(), 0)) //nolint:gosec // a size is not negative
 		}
 		if free, err := env.FreeBytes(existingParent(env, filepath.Dir(cfg.Database))); err == nil {
 			s.DiskFree = free

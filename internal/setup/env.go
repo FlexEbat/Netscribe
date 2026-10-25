@@ -155,7 +155,7 @@ func NewEnv(in io.Reader, out io.Writer, interactive, color bool) Env {
 
 func readSecret(in *bufio.Reader, interactive bool) (string, error) {
 	if interactive {
-		b, err := term.ReadPassword(int(os.Stdin.Fd()))
+		b, err := term.ReadPassword(int(os.Stdin.Fd())) //nolint:gosec // a file descriptor fits an int
 		_, _ = fmt.Fprintln(os.Stdout)
 		return string(b), err
 	}
