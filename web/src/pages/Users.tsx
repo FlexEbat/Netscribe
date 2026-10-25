@@ -82,7 +82,7 @@ export function Users() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold">Users</h1>
+        <h1 className="text-2xl font-semibold">Users</h1>
         <Button size="sm" onClick={() => setDialog({ kind: "add" })}>
           Add user
         </Button>
@@ -113,7 +113,7 @@ export function Users() {
                   <RoleBadge role={u.role} />
                   <select
                     aria-label={`Role of ${u.username}`}
-                    className="h-8 rounded-md border bg-background px-2 text-xs"
+                    className="h-8 rounded-md border bg-input px-2 text-xs"
                     value={u.role}
                     onChange={(e) => void change(u, { role: e.target.value as Role })}
                   >
@@ -237,7 +237,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
             <Label htmlFor="new-role">Role</Label>
             <select
               id="new-role"
-              className="h-9 rounded-lg border bg-background px-3 text-sm"
+              className="h-9 rounded-lg border bg-input px-3 text-sm"
               value={role}
               onChange={(e) => setRole(e.target.value as Role)}
             >

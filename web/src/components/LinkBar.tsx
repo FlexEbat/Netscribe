@@ -32,7 +32,7 @@ export function LinkBar({ link, aName, bName, canEdit, onDeleted }: LinkBarProps
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-2 text-sm">
+    <div className="surface flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
       <span>
         Link: {aName}
         {link.aPort ? ` (${link.aPort})` : ""} to {bName}

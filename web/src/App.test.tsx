@@ -92,6 +92,34 @@ describe("routing", () => {
   })
 })
 
+describe("top bar", () => {
+  it("names the page and has a round button that switches the theme", async () => {
+    mockFetch({
+      "GET /api/auth/me": () => json(200, meBody(makeUser({ role: "operator" }))),
+      "GET /api/topology": () => json(200, { devices: [], links: [], containers: [] }),
+    })
+    document.documentElement.classList.add("dark")
+    renderApp("/")
+    await screen.findByText("No scans yet")
+    const toggle = screen.getByRole("button", { name: "Switch to the light theme" })
+    await userEvent.setup().click(toggle)
+    expect(document.documentElement.classList.contains("dark")).toBe(false)
+    expect(screen.getByRole("button", { name: "Switch to the dark theme" })).toBeInTheDocument()
+  })
+
+  it("groups the navigation under Workspace and, for an admin, Administration", async () => {
+    mockFetch({
+      "GET /api/auth/me": () => json(200, meBody(makeUser({ role: "admin" }))),
+      "GET /api/topology": () => json(200, { devices: [], links: [], containers: [] }),
+    })
+    renderApp("/")
+    await screen.findByText("No scans yet")
+    const nav = screen.getByRole("navigation", { name: "Main" })
+    expect(within(nav).getByText("Workspace")).toBeInTheDocument()
+    expect(within(nav).getByText("Administration")).toBeInTheDocument()
+  })
+})
+
 describe("signing out", () => {
   it("calls the server with the CSRF token and returns to the login page", async () => {
     const mock = mockFetch({

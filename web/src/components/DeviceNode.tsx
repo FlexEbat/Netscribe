@@ -41,7 +41,7 @@ function DeviceNodeView({ data, selected }: NodeProps) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`flex w-48 items-center gap-3 rounded-lg border bg-card px-3 py-2 text-card-foreground shadow-sm ${
+          className={`surface surface-lift flex w-48 items-center gap-3 rounded-xl px-3 py-2.5 text-card-foreground ${
             selected ? "ring-2 ring-ring" : ""
           } ${device.online ? "" : "opacity-60"}`}
         >

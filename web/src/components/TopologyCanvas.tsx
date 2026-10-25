@@ -63,7 +63,7 @@ export function TopologyCanvas({
   return (
     <TooltipProvider delayDuration={300}>
       <div
-        className="h-[calc(100vh-10rem)] min-h-96 w-full rounded-lg border"
+        className="surface h-[calc(100vh-10rem)] min-h-96 w-full overflow-hidden"
         data-testid="topology-canvas"
       >
         <ReactFlow

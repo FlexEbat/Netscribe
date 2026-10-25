@@ -6,9 +6,9 @@ export type ResolvedTheme = "light" | "dark"
 /** The key public/theme-init.js reads before the first paint. */
 export const THEME_KEY = "netscribe.theme"
 
-/** An unknown or missing stored value means the system setting. */
+/** The design is dark first: an unknown or missing stored value means dark. */
 export function parseChoice(raw: string | null | undefined): ThemeChoice {
-  return raw === "light" || raw === "dark" ? raw : "system"
+  return raw === "light" || raw === "system" ? raw : "dark"
 }
 
 export function resolveTheme(choice: ThemeChoice, systemDark: boolean): ResolvedTheme {
@@ -30,11 +30,11 @@ function readStored(): ThemeChoice {
   try {
     return parseChoice(localStorage.getItem(THEME_KEY))
   } catch {
-    return "system"
+    return "dark"
   }
 }
 
-let choice: ThemeChoice = "system"
+let choice: ThemeChoice = "dark"
 let systemDark = false
 const listeners = new Set<() => void>()
 

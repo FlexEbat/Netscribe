@@ -5,12 +5,17 @@ import { toast } from "sonner"
 import { openEvents } from "@/api/events"
 import { SessionProvider, useSession } from "@/api/session"
 import { routes } from "@/App"
+import { AmbientBackground } from "@/components/AmbientBackground"
 import { Toaster } from "@/components/ui/sonner"
 import { can } from "@/lib/permissions"
+import { startSpotlight } from "@/lib/spotlight"
 import { initTheme } from "@/lib/theme"
+import "@fontsource-variable/geist"
+import "@fontsource-variable/geist-mono"
 import "./index.css"
 
 initTheme()
+startSpotlight()
 
 const router = createBrowserRouter(routes)
 
@@ -38,6 +43,7 @@ if (!root) throw new Error("missing #root element")
 createRoot(root).render(
   <StrictMode>
     <SessionProvider>
+      <AmbientBackground />
       <ConfigToasts />
       <RouterProvider router={router} />
       <Toaster />

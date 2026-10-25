@@ -99,7 +99,7 @@ export function TokensCard({ role }: TokensCardProps) {
             <Label htmlFor="token-scope">Scope</Label>
             <select
               id="token-scope"
-              className="h-9 rounded-lg border bg-background px-3 text-sm"
+              className="h-9 rounded-lg border bg-input px-3 text-sm"
               value={scope}
               onChange={(e) => setScope(e.target.value as "read" | "write")}
             >

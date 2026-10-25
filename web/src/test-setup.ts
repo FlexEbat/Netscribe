@@ -15,3 +15,6 @@ Element.prototype.hasPointerCapture ??= () => false
 Element.prototype.setPointerCapture ??= () => {}
 Element.prototype.releasePointerCapture ??= () => {}
 Element.prototype.scrollIntoView ??= () => {}
+
+// jsdom has no canvas. The background paints nothing there and the tests do not need it.
+HTMLCanvasElement.prototype.getContext = () => null
