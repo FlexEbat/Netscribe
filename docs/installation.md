@@ -1,5 +1,7 @@
 # Installation
 
+**English** · [Русский](installation.ru.md)
+
 Netscribe runs on any Linux distribution on amd64 or arm64. The release binary is static:
 it needs no libraries, no Go and no Node.js on the host, and it has no packages to install
 to run. Nmap, Chromium and Docker are optional and each switches on one feature.
@@ -22,6 +24,13 @@ and explains each step. There are two ways to use it:
   of its own: typed alone at a terminal it opens the [console](#the-console).
 - **With options** (`--yes`, `--admin`, `--listen` and the others below) it asks nothing and
   can run from a provisioning script.
+
+In the guided session every change asks first: creating the account, the directories, the
+config, each unit file. Enter takes the answer in brackets, `n` skips the change and stops the
+setup before it, and `q` (or `quit`, `exit`, Ctrl-D) leaves at any question. The setup says at
+which step it stopped. What was done stays done, and running it again continues from there.
+The password of the first administrator is typed into `netscribe user add` itself, which
+reads it without echo; Ctrl-C leaves that prompt.
 
 Run it on the host that will scan the network, as root:
 
@@ -94,16 +103,30 @@ together, written to `tls`), or plain HTTP after an explicit yes. In a script, t
 
 ### The console
 
-Once the install is done, `netscribe` typed alone at a terminal opens a menu:
+Once the install is done, `netscribe` typed alone at a terminal opens a menu that covers the
+whole program. Run it with `sudo`: the config and the database belong to the service account.
 
 | Item | What it does |
 | --- | --- |
 | Watch | The live view below |
 | Check | The checks of `netscribe doctor` |
-| Settings | Every setting of the config, with its value and advice |
+| Scan | Scan the networks of the config, the same with Nmap, or networks you name. The scan runs as the service account and shows its progress; Ctrl-C ends the scan, not the console |
+| Devices | The devices found so far |
+| Export | Markdown, HTML, PDF or Draw.io, written to the file you name. The file belongs to you, not to root. An existing file is replaced only after you say yes |
+| Settings | Every setting of the config with its value and advice, the SSH hosts, the file in your editor, and a restore of the previous config |
 | Accounts | List, add, reset a password and disable, as the service account |
 | Service | Status, start, stop, restart, reload the config, start at boot, log |
 | Setup | The guided setup again. It skips what is done and repairs what is not |
+| Commands | Every command with its arguments, for scripts and cron |
+
+Every menu and every question has a way out, and nothing changes without a yes:
+
+- `b` goes back from any submenu that has a Back item. `q`, `quit`, `exit` or Ctrl-D leaves
+  the whole console from any question, however deep.
+- Starting a scan, writing an export, starting, stopping or restarting the service, adding,
+  resetting or disabling an account, saving a setting, editing the SSH hosts, restoring the
+  config and running the setup again each ask first and say what they will do. A no changes
+  nothing. Reading (status, log, list, devices, check, watch) asks nothing.
 
 ### The watcher
 
@@ -126,9 +149,11 @@ panel does not answer, so a monitor or a cron job can call it.
 ### Settings
 
 `netscribe config` opens the editor: panel access, scanning, discovery, Docker, SNMP, history,
-sign-in policy and export, each with its value, an explanation and the recommended value. A
-change is checked against the whole config before it is saved, the old file stays as
-`netscribe.yaml.bak`, and the comments of your file are kept. The editor says whether the
+sign-in policy, export, SSH and the list of SSH hosts, each with its value, an explanation and
+the recommended value. Every change shows the old and the new value and asks before it is
+saved. A change is checked against the whole config before it is saved, the old file stays as
+`netscribe.yaml.bak`, and the comments of your file are kept. "Restore the previous config"
+swaps the file with that `.bak`, so the swap can be undone. The editor says whether the
 running service applies the change by itself (keys under `scan`, `snmp`, `ssh`, `docker`,
 `history` and `export`) or needs a restart, and offers the restart. Community strings are typed
 without echo and never shown again.
