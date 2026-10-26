@@ -260,7 +260,7 @@ func (s *session) invokingUser() *Account {
 	if err1 != nil || err2 != nil {
 		return nil
 	}
-	return &Account{UID: uint32(uid), GID: uint32(gid)}
+	return &Account{UID: uint32(uid), GID: uint32(gid)} //nolint:gosec // ParseUint with 32 bits cannot overflow
 }
 
 var exportFormats = []struct{ format, ext, label string }{
