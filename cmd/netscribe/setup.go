@@ -67,7 +67,7 @@ func setupEnv(e streams) setup.Env {
 	return setup.NewEnv(e.in, e.out, e.interactive, color)
 }
 
-// runConsole opens the menu: watch, checks, settings, accounts and the service.
+// runConsole opens the menu: watch, checks, scans, devices, export, settings, accounts and the service.
 func runConsole(args []string, e streams) error {
 	fs := flag.NewFlagSet("console", flag.ContinueOnError)
 	fs.SetOutput(e.err)

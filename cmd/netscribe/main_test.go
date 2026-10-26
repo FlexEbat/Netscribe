@@ -852,7 +852,7 @@ func TestDoctorReportsAMissingConfigAndDoesNotFail(t *testing.T) {
 
 func TestBareNetscribeOpensTheConsoleOnATerminal(t *testing.T) {
 	var out bytes.Buffer
-	code := run(nil, streams{in: strings.NewReader("7\n"), out: &out, err: io.Discard, interactive: true})
+	code := run(nil, streams{in: strings.NewReader("11\n"), out: &out, err: io.Discard, interactive: true})
 	if code != 0 || !strings.Contains(out.String(), "What do you want to do?") {
 		t.Errorf("exit code %d, output: %s", code, out.String())
 	}

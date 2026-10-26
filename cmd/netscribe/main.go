@@ -43,7 +43,7 @@ commands:
   export    write the network documentation: --format md|html|pdf|drawio --out <file>
   user      manage accounts: add, list, disable, passwd
   setup     guided install: checks, recommendations, config, service, first account
-  console   the menu: watch, checks, settings, accounts, service (also: netscribe alone)
+  console   the menu: watch, checks, scan, devices, export, settings, accounts, service (also: netscribe alone)
   watch     live view of the service, the panel and the host; --once for monitors
   config    change the configuration: interactively, with get, set, show or edit
   doctor    check an install and say what to fix

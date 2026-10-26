@@ -18,12 +18,20 @@ const (
 	sysctlName = "99-netscribe.conf"
 )
 
+// ErrStopped is what Setup returns when the person quit or declined an action before the
+// end. What was done stays done, and running the setup again continues from there.
+var ErrStopped = errors.New("setup stopped before the end")
+
 // session holds what the steps of one run share.
 type session struct {
 	env Env
 	o   Options
 	ui  ui
 	p   *prompter
+
+	// confirmEach makes every change of the system ask first. It is on in a run that talks
+	// to a person and off with --yes and --dry-run.
+	confirmEach bool
 
 	version     string
 	acc         *Account
@@ -47,8 +55,35 @@ func newSession(env Env, o Options) *session {
 	return &session{env: env, o: o, ui: u, p: &prompter{in: env.In, ui: u, yes: o.Yes}}
 }
 
-// do runs one change, or only announces it in a dry run.
+// do asks first when the run talks to a person, then makes the change. A no stops the run:
+// the steps after it need the change.
 func (s *session) do(desc string, fn func() error) error {
+	if s.confirmEach && !s.o.DryRun {
+		ok, err := s.p.confirm(capitalize(desc)+"?", true)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			s.ui.note("not done: %s", desc)
+			return fmt.Errorf("%w: %s", errDeclined, desc)
+		}
+	}
+	return s.doConfirmed(desc, fn)
+}
+
+// capitalize makes the first letter of a description a capital, for a question.
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = []rune(strings.ToUpper(string(r[0])))[0]
+	return string(r)
+}
+
+// doConfirmed makes a change that a question before it already covered, or announces it in
+// a dry run.
+func (s *session) doConfirmed(desc string, fn func() error) error {
 	if s.o.DryRun {
 		s.ui.planned(desc)
 		return nil
@@ -79,9 +114,13 @@ func (s *session) runChecked(ctx context.Context, c Command) error {
 func Setup(ctx context.Context, env Env, o Options, version string) error {
 	s := newSession(env, o)
 	s.version = version
+	s.confirmEach = env.Interactive && !o.Yes && !o.DryRun
 	s.ui.banner("Netscribe setup", version)
 	if o.DryRun {
 		s.ui.note("dry run: the setup prints what it would do and changes nothing")
+	}
+	if s.confirmEach {
+		s.ui.note("every change asks first. Enter takes the answer in brackets, q quits at any question.")
 	}
 	steps := []struct {
 		title string
@@ -100,6 +139,10 @@ func Setup(ctx context.Context, env Env, o Options, version string) error {
 	for i, st := range steps {
 		s.ui.step(i+1, len(steps), st.title)
 		if err := st.fn(ctx); err != nil {
+			if isExit(err) || errors.Is(err, errDeclined) {
+				s.ui.printf("\n  %s\n", s.ui.paint("33", "Setup stopped at step "+fmt.Sprint(i+1)+" ("+st.title+"). What was done stays done; run netscribe setup again to continue."))
+				return fmt.Errorf("%w: %w", ErrStopped, err)
+			}
 			return err
 		}
 	}
@@ -137,7 +180,7 @@ func (s *session) command(context.Context) error {
 		s.ui.note("the unit starts %s: put the binary there before you start the service", s.o.BinPath)
 		return nil
 	}
-	return s.do("copy netscribe to "+s.o.BinPath, func() error { return s.env.CopyExecutable(exe, s.o.BinPath) })
+	return s.doConfirmed("copy netscribe to "+s.o.BinPath, func() error { return s.env.CopyExecutable(exe, s.o.BinPath) })
 }
 
 func (s *session) account(ctx context.Context) error {
@@ -158,12 +201,15 @@ func (s *session) account(ctx context.Context) error {
 		s.ui.done(fmt.Sprintf("service account %s exists (uid %d)", acc.Name, acc.UID))
 	}
 	s.acc = &acc
-	for _, dir := range []string{s.o.StateDir, filepath.Dir(s.o.ConfigPath)} {
-		if err := s.do("create "+dir+" for the service account, mode 0750", func() error { return s.env.MkdirAll(dir, 0o750, s.acc) }); err != nil {
-			return err
+	dirs := []string{s.o.StateDir, filepath.Dir(s.o.ConfigPath)}
+	return s.do("create "+strings.Join(dirs, " and ")+" for the service account, mode 0750", func() error {
+		for _, dir := range dirs {
+			if err := s.env.MkdirAll(dir, 0o750, s.acc); err != nil {
+				return err
+			}
 		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (s *session) createAccount(ctx context.Context) error {
@@ -227,7 +273,7 @@ func (s *session) installPackages(ctx context.Context, names ...string) error {
 }
 
 func (s *session) offerInstall(ctx context.Context, what string, names ...string) bool {
-	if err := s.do("install "+what, func() error { return s.installPackages(ctx, names...) }); err != nil {
+	if err := s.doConfirmed("install "+what, func() error { return s.installPackages(ctx, names...) }); err != nil {
 		s.ui.note("continuing without %s: install it with your package manager", what)
 		return false
 	}
@@ -377,17 +423,7 @@ func (s *session) configure(context.Context) error {
 }
 
 func (s *session) chooseTargets() ([]string, error) {
-	valid := func(list []string) error {
-		if len(list) == 0 {
-			return errors.New("name at least one network")
-		}
-		for _, t := range list {
-			if _, err := config.ParseTarget(t, false); err != nil {
-				return fmt.Errorf("%s: %w", t, err)
-			}
-		}
-		return nil
-	}
+	valid := validateTargets
 	if len(s.o.Targets) > 0 {
 		return s.o.Targets, valid(s.o.Targets)
 	}
@@ -460,7 +496,7 @@ func (s *session) icmp(ctx context.Context) error {
 	}
 	value := fmt.Sprintf("%d %d", gid, gid)
 	path := filepath.Join(s.o.SysctlDir, sysctlName)
-	if err := s.do("write "+path, func() error {
+	if err := s.doConfirmed("write "+path, func() error {
 		if err := s.env.MkdirAll(s.o.SysctlDir, 0o755, nil); err != nil { //nolint:gosec // sysctl.d is readable by everyone
 			return err
 		}
@@ -468,7 +504,7 @@ func (s *session) icmp(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
-	return s.do("apply it now", func() error {
+	return s.doConfirmed("apply it now", func() error {
 		return s.runChecked(ctx, Command{Name: "sysctl", Args: []string{"-w", "net.ipv4.ping_group_range=" + value}})
 	})
 }
@@ -557,7 +593,7 @@ func (s *session) service(ctx context.Context) error {
 		}
 	}
 	if changed {
-		if err := s.do("reload systemd", func() error {
+		if err := s.doConfirmed("reload systemd", func() error {
 			return s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"daemon-reload"}})
 		}); err != nil {
 			return err
@@ -575,7 +611,7 @@ func (s *session) service(ctx context.Context) error {
 	if state, _ := s.env.Run(ctx, Command{Name: "systemctl", Args: []string{"is-active", "netscribe"}}); changed && strings.TrimSpace(string(state)) == "active" {
 		verb = []string{"restart", "netscribe"}
 	}
-	if err := s.do("systemctl "+strings.Join(verb, " "), func() error {
+	if err := s.doConfirmed("systemctl "+strings.Join(verb, " "), func() error {
 		return s.runChecked(ctx, Command{Name: "systemctl", Args: verb})
 	}); err != nil {
 		return err
@@ -652,9 +688,9 @@ func (s *session) summary(ctx context.Context) error {
 	if !s.env.Interactive || s.o.Yes {
 		return nil
 	}
-	s.ui.printf("\n  From now on the command %s opens the console: watch, checks, settings, accounts.\n", s.ui.bold("netscribe"))
+	s.ui.printf("\n  From now on the command %s opens the console: watch, checks, scans, export, settings, accounts, service.\n", s.ui.bold("netscribe"))
 	open, err := s.p.confirm("Open the console now?", true)
-	if errors.Is(err, errInput) || err == nil && !open {
+	if isExit(err) || err == nil && !open {
 		return nil
 	}
 	if err != nil {
