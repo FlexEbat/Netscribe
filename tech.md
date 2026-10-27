@@ -1,168 +1,169 @@
-# tech.md: генератор сетевой документации (Netscribe)
+# tech.md: network documentation generator (Netscribe)
 
-**Версия: v0 (черновик)** (2026-10-23)
+**Version: v0 (draft)** (2026-10-23)
 
 Changelog:
-- v0 (правка 32) - слайс 23: дизайн интерфейса по заданию владельца. Тёмный минимализм: почти чёрный фон, матовые карточки, один электрический синий акцент, шрифт Geist (npm-пакеты `@fontsource-variable/geist` и `@fontsource-variable/geist-mono`, лицензия OFL, файлы шрифтов лежат в `dist` и отдаются с того же origin, CSP не менялся), анимированный фон из точек и тонких линий на canvas, поочерёдное появление блоков, свечение карточки под курсором. Это отменяет для слайса 23 ограничение слайса 17 «анимации сверх простых переходов»: движение допускается там, где оно даёт обратную связь, и всегда отключается при `prefers-reduced-motion`. Тема по умолчанию теперь тёмная (раньше `system`): неизвестное или пустое значение в `localStorage` и в `public/theme-init.js` означает `dark`, выбор `system` остаётся в меню пользователя. Светлая тема сохранена и собрана из тех же токенов.
-- v0 (правка 31) - слайс 22: второй установщик. `scripts/get.sh` ставит команду `netscribe` через `install.sh --no-service` и запускает `netscribe setup`. `setup` проверяет машину, предлагает цели сканирования по интерфейсам, пишет конфиг, создаёт учётку и каталоги, при необходимости ставит Nmap и Chromium, разрешает ICMP для группы сервиса, ставит юнит и drop-in, запускает сервис, ждёт ответа панели и создаёт первого администратора. `netscribe doctor` выполняет те же проверки и ничего не меняет. Без флагов `setup` ведёт человека по пунктам в терминале и в конце предлагает консоль, с флагами (`--yes`, `--admin`, `--listen`, `--tls-cert`, `--trusted-proxy` и другие) ничего не спрашивает. Голая команда `netscribe` в терминале открывает консоль: `watch` (наблюдатель за сервисом, панелью и хостом), проверки, настройки, учётки, сервис. `netscribe config` меняет любой ключ конфига с проверкой, копией `.bak` и сохранением комментариев. Адрес панели выбирается из четырёх вариантов (`127.0.0.1`, адрес интерфейса, `0.0.0.0`, свой), для адреса вне loopback спрашивается защита: прокси, TLS или явное «без TLS». Классический `install.sh` не изменился, кроме того, что при запуске из `get.sh` он не печатает «Next steps». Новый пакет `internal/setup` импортирует только `config`, зависимостей в `go.mod` нет. Юнит встроен копией `internal/setup/netscribe.service`, тест сверяет её с `deploy/netscribe.service`: бинарник не может встроить файл вне своих пакетов.
-- v0 (правка 30) - исправлены два редких падения гейта под нагрузкой на раннере. Интервал keep-alive потока событий (`heartbeat`) стал полем сервера API, по умолчанию 25 секунд, в тестах его задаёт неэкспортируемое поле `Options.heartbeat`: раньше тест писал в пакетную переменную, пока обработчики потоков могли её читать, и `-race` изредка это ловил. В `TestAPDFWaitingForItsTurnGivesUpWithItsContext` ожидание «первая печать заняла слот» заменено сигналом из принтера вместо `time.Sleep`: на медленном раннере вторая печать могла занять слот первой и тест зависал. В раздел 10 добавлено правило про пакетные переменные и паузы. Причины найдены чтением кода, логи CI были недоступны.
-- v0 (правка 29) - блокировка при неудачных входах считается по паре (IP, имя пользователя), а не по учётке. Пять неудач подряд с одного адреса под одним именем блокируют эту пару на 15 минут (даже с верным паролем), тот же пользователь с другого адреса входит свободно, поэтому тот, кто знает только имя, не может заблокировать владельца. Неизвестные имена считаются так же. Счётчики лежат в памяти (после перезапуска начинаются заново, лимит по IP остаётся), таблица ограничена 10 000 записями. Неверный текущий пароль в `PUT /api/auth/password` по-прежнему блокирует саму учётку: для него нужна действующая сессия. Минус: перебор одного имени с многих адресов упирается только в 5 попыток на каждый адрес, против него работают список частых паролей и минимум 12 символов.
-- v0 (правка 28) - пароль, который после отбрасывания цифр и знаков равен имени сервиса (`Netscribe-2026!`), тоже отклоняется как частый. Список паролей пересобирается скриптом `scripts/update-common-passwords.sh`. Тесты фронтенда для `TopologyCanvas`, узлов графа, `LinkBar`, `PortsDialog` и `DeviceForm`.
-- v0 (правка 27) - закрыты два пункта по входу. Пароль не должен входить во встроенный список частых паролей (`internal/auth/common_passwords.txt`, около 20 тысяч записей длиной от 12 символов из публичных утечек, SecLists, MIT), сравнение без учёта регистра, ошибка `password is too common` (400). Вопрос 8 раздела 18 закрыт. Лимит входа по IP считает только неудачные попытки: сервер учитывает попытку до проверки пароля (параллельный перебор не обходит лимит) и возвращает её, если пароль верный (`Limiter.Refund`). Верные входы лимит не расходуют и не сбрасывают счётчик неудач, поэтому честные пользователи за одним адресом не получают 429 друг из-за друга. Пока с адреса накоплено 10 неудач за минуту, 429 получают все попытки с него, в том числе с верным паролем.
-- v0 (правка 26) - `Docker.Watch` принимает `targets func() []netip.Prefix` вместо среза и спрашивает цели при каждом подключении, добавлен `Docker.Retarget()`, `Scanner.SetConfig` вызывает его при смене `scan.targets` или `allowPublicTargets`. Хост контейнеров после перезагрузки конфига больше не остаётся прежним.
-- v0 (правка 25) - добавлен слайс 21: проверка кода, порт и установка. Флаги `serve --listen` и `serve --auto-port`, проверка `listen` в `Validate`, метод `Store.FailRunningScans`, `Service.Recheck` для проверки открытого потока событий, скрипты `scripts/install.sh` и `scripts/install-build-deps.sh`, юнит `deploy/netscribe.service`, файлы `AGENTS.md`, `CONTRIBUTING.md` и `docs/`.
-- v0 (правка 24) - уточнены два решения правки 23. Apple iOS отличается от Cisco IOS по атрибуту `vendor` класса ОС: факт `family=apple ios` даёт вид `host`, Cisco остаётся `family=ios` и вида не получает. Определение одного устройства теперь пишет изменение в ленту: запись `device_changed` вида `Nmap: <устройство> changed: kind unknown -> router; system - -> Linux 5.4` относится к последнему завершённому скану, потому что лента хранится по сканам (`changes.scan_id`). Без завершённого скана запись не делается. Если ответ ничего не меняет, запись не создаётся. Лента сканов теперь тоже сообщает о смене строки ОС (`system`).
-- v0 (правка 23) - слайс 20 реализован. `family=ios` не задаёт вид, потому что Nmap использует одно имя семейства для Apple iOS и Cisco IOS. Пустое значение `discovery.nmapScope` считается как `untyped`. Запрос `POST /api/devices/{id}/identify` занимает тот же слот, что и скан, поэтому во время скана отвечает 409. Определение одного устройства не пишет в историю изменений.
-- v0 (правка 22) - добавлен слайс 20: доработка Nmap и логики обнаружения (только устройства с открытым портом, семейство ОС как факт, охват `discovery.nmapScope`, определение одного устройства из панели).
-- v0 (правка 21) - слайс 19: Nmap доработан (см. раздел слайса 19). Проверка на реальном Nmap 7.94 показала, что вывод разбирается как ожидалось, а без capabilities Nmap завершается с `dnet: Failed to open device`, что видно в логе. Хосты Linux Nmap относит к `general purpose`, поэтому вид устройства он для них не определяет, и главная польза в строке ОС.
-- v0 (правка 20) - добавлен необязательный источник Nmap (после слайса 18, вне нумерации слайсов). Ключи `discovery.nmap` (по умолчанию `false`) и `discovery.nmapPath` (пусто или абсолютный путь), флаг `netscribe scan --nmap` включает его для одного запуска, сканы из панели и по расписанию следуют ключу. Nmap запускается только для устройств, которые не опознали ни SNMP, ни LLDP, ни HTTP, ни mDNS, ни SSDP, с фиксированными аргументами (`-O -n -Pn --privileged --top-ports 100 -oX -`) и адресом, разобранным как IPv4, без оболочки и с минимальным окружением. Читается только XML, догадка с точностью ниже 85 процентов отбрасывается. В классификатор добавлено поле `nmap` (между `ssdp` и `services`), правила сопоставляют типы Nmap с видами устройств, тип `general purpose` намеренно не типизирует ничего. Для определения ОС Nmap нужны raw-сокеты, поэтому в образе Docker (без Nmap и без capabilities) функция недоступна, README описывает `setcap`. Переключателя в панели нет.
-- v0 (правка 19) - слайс 18 смержен в `main` (PR #40), это последний слайс плана. HTTP-баннер собирается как `Server`, затем `X-Powered-By: ...`, `realm: ...` и `CN: ...` через `; `, а если есть только `Server`, баннер равен его значению. Имя из mDNS записывается с суффиксом `.local`, помечено источником `mdns` и в хранилище заполняет только пустой `hostname`. Один и тот же сервис из порт-сканера и из HTTP-этапа объединяется в планировщике (`mergeServices`), чтобы поздний ввод не затирал имя или баннер. Сканирование, которое не нашло баннер, очищает старый. Правила `mdns` сравниваются на полное совпадение типа, остальные поля на подстроку. Проверка UTF-8 выполняется до приведения к нижнему регистру: `strings.ToLower` превращает плохие байты в U+FFFD и скрывает их. Мультикаст уходит с сокета, привязанного к адресу интерфейса, и ответ принимается только из подсети этого интерфейса. Новые ключи `discovery.httpHeaders`, `discovery.mdns`, `discovery.ssdp` по умолчанию включены и применяются после перезапуска. Миграция `0009_service_banner.sql`.
-- v0 (правка 18) - слайс 17 смержен в `main` (PR #38). Тема хранится в `localStorage` под ключом `netscribe.theme` (`light`, `dark`, любое другое значение означает `system`), переключатель в меню пользователя. Библиотеки `sonner` и `react-style-singleton` (блокировка прокрутки в диалогах Radix) создают элемент `<style>` во время работы, а CSP `style-src 'self'` его запрещает, поэтому плагин Vite в `web/vite.config.ts` отключает это, CSS тоста подключается файлом, правило блокировки прокрутки лежит в `index.css`. Плагин завершает сборку ошибкой, если код этих библиотек изменился. Это же исправляет тосты слайса 15, которые под CSP были бы без стилей. Критерий 6 (1280 и 390 пикселей) и отсутствие мигания темы при перезагрузке проверяются руками в браузере. Страницы уже имели состояния загрузки, пустоты и ошибки, слайс добавил границу ошибок с кнопкой повтора вокруг страницы.
-- v0 (правка 17) - слайс 16 смержен в `main` (PR #33). Конфиг в контейнере монтируется в `/data/netscribe.yaml` только на чтение, рабочий каталог образа `/data`, поэтому `netscribe user add` внутри контейнера работает без флагов `--config`. Файл `netscribe.example.yaml` в клоне имеет режим 0644, поэтому `compose.yaml` запускает `serve --allow-loose-permissions`, а `user add` и другие команды через `exec` получают тот же флаг, пока используется пример; свой конфиг подключается через `NETSCRIBE_CONFIG`, файл с режимом 0600 и владельцем uid 65532. Образ основан на `distroless/static:nonroot` и не содержит Chromium, поэтому PDF-экспорт в нём недоступен. Docker-клиент (слайс 11) умеет только unix-сокет, поэтому `docker-socket-proxy` по TCP без моста не подключается, README описывает это. Добавлены `.dockerignore` и docker-секция в `dependabot.yml`. В README нет скриншота: его нужно снять с работающей панели.
-- v0 (правка 16) - слайс 15 смержен в `main` (PR #31). На лету применяются только `scan`, `snmp`, `ssh`, `docker`, `history` и `export`; изменение `listen`, `database`, `auth`, `tls`, `audit`, `discovery`, `trustedProxies` или `allowPublicTargets` пишет в лог предупреждение и требует перезапуска, а файл, у которого прежние ключи не проходят валидацию вместе с новыми (например, публичные цели без `allowPublicTargets`), отклоняется целиком. Новый `scan.interval` перезапускает ожидание планировщика сразу, `0` выключает расписание. Событие `config.reloaded` не несёт данных, `config.error` несёт `{ "error": "..." }`. Аудит: действия `config_reload` и `config_reload_failed`, пользователь `system`. Docker-наблюдатель получает цели скана при старте и их смену на лету не видит. Статус в разделе 16 обновлён.
-- v0 (правка 15) - в спецификацию добавлен слайс 18: заголовки HTTP, mDNS и SSDP. Они раньше были запрещены слайсом 9 и вынесены в открытый вопрос 11. Слайс 9 по-прежнему не читает баннеры, это делает слайс 18 после слайса 17. Добавлены ключи `discovery.httpHeaders`, `discovery.mdns`, `discovery.ssdp` и правила безопасности в разделе 9.6.
-- v0 (правка 14) - порты по умолчанию в `scan.ports` теперь `22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100`: без 515, 554, 631 и 9100 правила классификации принтеров и камер не срабатывали. Запись про это в правке 13 больше не действует.
-- v0 (правка 13) - слайс 9 смержен в `main`. Миграция слайса называется `0006_services.sql`. `GET /api/devices/{id}` отвечает `{ "device", "interfaces", "services" }`. `collector.Result` получил `ServicesPolled`: сервис, который не ответил снова, удаляется только у устройства, чьи порты сканировались в этом скане. Сборщик `services` идёт последним в цепочке и отдаёт найденные порты в `classify`. В списке `scan.ports` по умолчанию нет 9100, 515, 631 и 554, поэтому правила классификации принтеров и камер срабатывают, только когда эти порты добавлены в конфиг. Страница `/services` фильтрует по имени сервиса, сервис без имени находится по номеру порта.
-- v0 (правка 12) - слайс 8 смержен в `main`. Порядок сборщиков после обнаружения: `probe`, `snmp`, `lldp`, `snmparp`, затем `classify`: LLDP должен знать магистральные порты раньше, чем `snmparp` решит, какие хосты из FDB привязывать к портам. Живой хост, найденный `probe`, получает источник `probe` (ранг как у `arp`). `collector.Result` получил `FDBPolled`: связь `fdb` пропадает, только если таблица пересылки одного из её устройств прочитана. `snmparp` опрашивает устройства, у которых в `sysServices` есть бит bridge или router. `classify` работает по полям `descr`, `services`, `port`, `vendor` в таком порядке приоритета, ошибка в `classify_rules.csv` не даёт запуститься правилам, а не молча отключает строку. Открытые порты пока известны только от `probe` (22, 80, 443): правила для 9100, 515, 631, 554 начнут срабатывать со слайсом 9, когда появится скан портов. Хосты, найденные таблицами роутеров, не опрашиваются по SNMP в том же скане.
-- v0 (правка 11) - слайс 7 смержен в `main` (PR #21). Миграция слайса называется `0005_interfaces.sql` и создаёт только `interfaces`: таблица `links` появилась в слайсе 5. `GET /api/devices/{id}` отвечает `{ "device", "interfaces" }`. `collector.Result` получил поле `LinksPolled`: связь `lldp` удаляется, только если опрошено одно из её устройств, молчащее устройство связей не теряет. Источник устройства не понижается, порядок `manual`, `ssh`, `snmp`, `arp`. `oui.csv` содержит стартовый набор известных префиксов, полный реестр IEEE кладётся в тот же файл без правок кода. В `DevicePanel` вкладки собраны на `@radix-ui/react-tabs`. Если подключены сборщики SNMP и LLDP, у скана четыре стадии прогресса вместо трёх.
-- v0 (правка 10) - слайс 6 смержен в `main` (PR #19). Токен никогда не открывает `users:manage`, `audit:read` и `tokens:manage`: украденный токен не может создавать новые токены. Из маршрутов `/api/auth/*` токену доступен только `GET /api/auth/me`. Права токена - пересечение его области и текущей роли владельца. В раздел 8 добавлены сообщения слайса 6.
-- v0 (правка 9) - ручное устройство принимает необязательное поле `hostname` (до 255 символов). Явно записано, что ручное устройство с MAC или IP, уже занятым другой записью, отвечает 409. В раздел 8 добавлено сообщение `hostname is longer than 255 characters`.
-- v0 (правка 8) - слайс 5 смержен в `main` (PR #16). Таблицу `links` создаёт миграция слайса 5, а не слайса 7, потому что ручные связи нужны раньше. В раздел 8 добавлены два сообщения, которых не было в списке: `port is longer than 64 characters` и `version is required`.
-- v0 (правка 7) - слайсы 3 и 4 смержены в `main` (PR #13 и #14), в разделе 16 добавлена строка статуса.
-- v0 (правка 6) - слайс 4, критерий 3: гарантия «не сдвигаются» относится к узлам с сохранёнными координатами.
-- v0 (правка 5) - раздел 15: пункты «Не делать» действуют в своём слайсе, в слайсах 1, 3, 4 и 12 добавлены ссылки на слайсы, которые реализуют отложенное. Содержание слайсов не менялось.
-- v0 (правка 4) - ответ `GET /api/devices` имеет вид `{ "devices": [...] }`. Лимит попыток входа реализован собственным лимитером (`internal/auth/ratelimit.go`), `golang.org/x/time/rate` не используется.
-- v0 (правка 3) - проект называется Netscribe: везде заменено рабочее имя netdoc (модуль, бинарник, cookie, переменные, тексты). Вопрос 1 раздела 18 закрыт.
-- v0 (правка 2) - добавлены раздел 9 «Безопасность», аутентификация, роли и многопользовательский режим, ручное добавление устройств, расширенное обнаружение. Слайсы 2, 5, 6, 8 новые, остальные сдвинуты.
-- v0 - черновик для финализации. Контракты не заморожены. Раздел 18 перечисляет открытые вопросы. После ответов на них версия поднимается до v1 и контракты замораживаются.
+- v0 (amendment 33) - the specification is translated into English (it was in Russian) and the README and the documents in `docs/` got Russian versions (`README.ru.md`, `docs/*.ru.md`). The console and the installer are complete: every menu and question has a way out (`q`, `quit`, `exit`, `b`), every action that changes something asks first, and the console covers scans, devices, export, SSH hosts and the restore of the previous config (slice 22).
+- v0 (amendment 32) - slice 23: interface design to the owner's brief. Dark minimalism: a near-black background, matte cards, one electric blue accent, the Geist font (npm packages `@fontsource-variable/geist` and `@fontsource-variable/geist-mono`, OFL license, the font files sit in `dist` and are served from the same origin, the CSP did not change), an animated canvas background of dots and thin lines, blocks that appear one after another, a glow under the cursor on a card. This lifts for slice 23 the slice 17 restriction "animations beyond simple transitions": motion is allowed where it gives feedback, and it is always off under `prefers-reduced-motion`. The default theme is now dark (it was `system`): an unknown or empty value in `localStorage` and in `public/theme-init.js` means `dark`, and the `system` choice stays in the user menu. The light theme is kept and built from the same tokens.
+- v0 (amendment 31) - slice 22: the second installer. `scripts/get.sh` installs the `netscribe` command through `install.sh --no-service` and runs `netscribe setup`. `setup` checks the machine, proposes scan targets from the interfaces, writes the config, creates the account and the directories, installs Nmap and Chromium when asked, allows ICMP for the service group, installs the unit and drop-in, starts the service, waits for the panel to answer and creates the first administrator. `netscribe doctor` runs the same checks and changes nothing. Without flags `setup` guides a person through the items in a terminal and at the end offers the console, with flags (`--yes`, `--admin`, `--listen`, `--tls-cert`, `--trusted-proxy` and others) it asks nothing. The bare `netscribe` command in a terminal opens the console: `watch` (the watcher of the service, the panel and the host), the checks, the settings, the accounts, the service. `netscribe config` changes any key of the config with a check, a `.bak` copy and the comments kept. The panel address is chosen from four options (`127.0.0.1`, an interface address, `0.0.0.0`, your own), and for an address beyond loopback the protection is asked: a proxy, TLS or an explicit "no TLS". The classic `install.sh` did not change, except that when it runs from `get.sh` it does not print "Next steps". The new package `internal/setup` imports only `config`, and there are no dependencies in `go.mod`. The unit is embedded as a copy, `internal/setup/netscribe.service`, and a test compares it with `deploy/netscribe.service`: a binary cannot embed a file outside its own packages.
+- v0 (amendment 30) - two rare gate failures under load on the runner are fixed. The keep-alive interval of the event stream (`heartbeat`) became a field of the API server, 25 seconds by default, and in tests it is set by the unexported field `Options.heartbeat`: before, a test wrote to a package variable while the stream handlers could read it, and `-race` caught that now and then. In `TestAPDFWaitingForItsTurnGivesUpWithItsContext` the wait "the first print took the slot" was replaced by a signal from the printer instead of `time.Sleep`: on a slow runner the second print could take the slot of the first and the test hung. A rule about package variables and pauses was added to section 10. The causes were found by reading the code, the CI logs were not available.
+- v0 (amendment 29) - the lockout after failed logins is counted per pair (IP, username), not per account. Five failures in a row from one address under one name lock that pair for 15 minutes (even with the right password), the same user from another address signs in freely, so someone who knows only the name cannot lock the owner out. Unknown names are counted the same way. The counters live in memory (after a restart they start again, the per-IP limit stays), and the table is limited to 10,000 entries. A wrong current password in `PUT /api/auth/password` still locks the account itself: it needs a live session. The downside: guessing one name from many addresses is limited only by 5 attempts per address, and the list of common passwords and the 12-character minimum work against it.
+- v0 (amendment 28) - a password that equals the service name after digits and signs are dropped (`Netscribe-2026!`) is also rejected as common. The password list is rebuilt by the script `scripts/update-common-passwords.sh`. Frontend tests for `TopologyCanvas`, the graph nodes, `LinkBar`, `PortsDialog` and `DeviceForm`.
+- v0 (amendment 27) - two sign-in items are closed. A password must not be in the built-in list of common passwords (`internal/auth/common_passwords.txt`, about 20 thousand entries of 12 characters or more from public leaks, SecLists, MIT), compared without regard to case, the error is `password is too common` (400). Question 8 of section 18 is closed. The per-IP login limit counts only failed attempts: the server counts an attempt before it checks the password (parallel guessing does not get around the limit) and gives it back if the password is right (`Limiter.Refund`). Successful logins neither use up the limit nor reset the failure counter, so honest users behind one address do not get a 429 because of each other. While 10 failures per minute are accumulated from an address, every attempt from it gets 429, including one with the right password.
+- v0 (amendment 26) - `Docker.Watch` takes `targets func() []netip.Prefix` instead of a slice and asks for the targets at each connection, `Docker.Retarget()` is added, and `Scanner.SetConfig` calls it when `scan.targets` or `allowPublicTargets` changes. The container host no longer stays the old one after a config reload.
+- v0 (amendment 25) - slice 21 is added: code check, port and installation. The flags `serve --listen` and `serve --auto-port`, the check of `listen` in `Validate`, the method `Store.FailRunningScans`, `Service.Recheck` for checking an open event stream, the scripts `scripts/install.sh` and `scripts/install-build-deps.sh`, the unit `deploy/netscribe.service`, and the files `AGENTS.md`, `CONTRIBUTING.md` and `docs/`.
+- v0 (amendment 24) - two decisions of amendment 23 are made precise. Apple iOS is told apart from Cisco IOS by the `vendor` attribute of the OS class: the fact `family=apple ios` gives the kind `host`, while Cisco stays `family=ios` and gets no kind. Identifying one device now writes a change to the feed: an entry `device_changed` of the form `Nmap: <device> changed: kind unknown -> router; system - -> Linux 5.4` belongs to the last completed scan, because the feed is kept per scan (`changes.scan_id`). Without a completed scan no entry is made. If the answer changes nothing, no entry is created. The scan feed now also reports a change of the OS string (`system`).
+- v0 (amendment 23) - slice 20 is implemented. `family=ios` does not set a kind, because Nmap uses one family name for Apple iOS and Cisco IOS. An empty value of `discovery.nmapScope` counts as `untyped`. The request `POST /api/devices/{id}/identify` takes the same slot as a scan, so during a scan it answers 409. Identifying one device does not write to the change history.
+- v0 (amendment 22) - slice 20 is added: refinement of Nmap and of the discovery logic (only devices with an open port, the OS family as a fact, the scope `discovery.nmapScope`, identifying one device from the panel).
+- v0 (amendment 21) - slice 19: Nmap is refined (see the section of slice 19). A check against a real Nmap 7.94 showed that the output is parsed as expected, and that without capabilities Nmap ends with `dnet: Failed to open device`, which shows in the log. Nmap puts Linux hosts in `general purpose`, so it does not set a device kind for them, and the main benefit is the OS string.
+- v0 (amendment 20) - an optional Nmap source is added (after slice 18, outside the slice numbering). The keys `discovery.nmap` (`false` by default) and `discovery.nmapPath` (empty or an absolute path), and the flag `netscribe scan --nmap` turns it on for one run; scans from the panel and on schedule follow the key. Nmap runs only for devices that none of SNMP, LLDP, HTTP, mDNS and SSDP identified, with fixed arguments (`-O -n -Pn --privileged --top-ports 100 -oX -`) and an address parsed as IPv4, without a shell and with a minimal environment. Only XML is read, and a guess with accuracy below 85 percent is dropped. The classifier gets the field `nmap` (between `ssdp` and `services`), the rules map Nmap types to device kinds, and the type `general purpose` deliberately types nothing. OS detection needs raw sockets, so the feature is unavailable in the Docker image (without Nmap and without capabilities), and the README describes `setcap`. There is no switch in the panel.
+- v0 (amendment 19) - slice 18 is merged into `main` (PR #40), this is the last slice of the plan. The HTTP banner is assembled as `Server`, then `X-Powered-By: ...`, `realm: ...` and `CN: ...` joined with `; `, and if there is only `Server`, the banner equals its value. A name from mDNS is written with the suffix `.local`, marked with the source `mdns`, and in the store fills only an empty `hostname`. The same service from the port scanner and from the HTTP stage is merged in the scheduler (`mergeServices`), so that late input does not overwrite the name or the banner. A scan that found no banner clears the old one. The `mdns` rules compare the type for a full match, the other fields for a substring. The UTF-8 check runs before lowercasing: `strings.ToLower` turns bad bytes into U+FFFD and hides them. Multicast leaves from a socket bound to the interface address, and the answer is accepted only from the subnet of that interface. The new keys `discovery.httpHeaders`, `discovery.mdns` and `discovery.ssdp` are on by default and apply after a restart. Migration `0009_service_banner.sql`.
+- v0 (amendment 18) - slice 17 is merged into `main` (PR #38). The theme is kept in `localStorage` under the key `netscribe.theme` (`light`, `dark`, any other value means `system`), with a switch in the user menu. The libraries `sonner` and `react-style-singleton` (scroll locking in Radix dialogs) create a `<style>` element at run time, and the CSP `style-src 'self'` forbids it, so a Vite plugin in `web/vite.config.ts` turns that off, the CSS of the toast is included as a file, and the scroll-lock rule lives in `index.css`. The plugin fails the build if the code of these libraries changes. This also fixes the toasts of slice 15, which would have been unstyled under the CSP. Criterion 6 (1280 and 390 pixels) and the absence of a theme flash on reload are checked by hand in a browser. The pages already had loading, empty and error states, and the slice added an error boundary with a retry button around the page.
+- v0 (amendment 17) - slice 16 is merged into `main` (PR #33). The config in the container is mounted at `/data/netscribe.yaml` read-only, the working directory of the image is `/data`, so `netscribe user add` inside the container works without the `--config` flags. The file `netscribe.example.yaml` in a clone has mode 0644, so `compose.yaml` runs `serve --allow-loose-permissions`, and `user add` and other commands through `exec` get the same flag while the example is used; your own config is connected through `NETSCRIBE_CONFIG`, a file with mode 0600 and owner uid 65532. The image is based on `distroless/static:nonroot` and has no Chromium, so PDF export is unavailable in it. The Docker client (slice 11) can only do a unix socket, so `docker-socket-proxy` over TCP does not connect without a bridge, and the README describes this. `.dockerignore` and a docker section in `dependabot.yml` are added. The README has no screenshot: it has to be taken from a running panel.
+- v0 (amendment 16) - slice 15 is merged into `main` (PR #31). Only `scan`, `snmp`, `ssh`, `docker`, `history` and `export` apply on the fly; a change of `listen`, `database`, `auth`, `tls`, `audit`, `discovery`, `trustedProxies` or `allowPublicTargets` writes a warning to the log and needs a restart, and a file whose old keys fail validation together with the new ones (for example, public targets without `allowPublicTargets`) is rejected as a whole. A new `scan.interval` restarts the scheduler's wait at once, and `0` turns the schedule off. The event `config.reloaded` carries no data, `config.error` carries `{ "error": "..." }`. Audit: the actions `config_reload` and `config_reload_failed`, the user `system`. The Docker watcher gets the scan targets at start and does not see their change on the fly. The status in section 16 is updated.
+- v0 (amendment 15) - slice 18 is added to the specification: HTTP headers, mDNS and SSDP. They were forbidden earlier by slice 9 and moved to open question 11. Slice 9 still does not read banners, slice 18 does that after slice 17. The keys `discovery.httpHeaders`, `discovery.mdns` and `discovery.ssdp` and the security rules in section 9.6 are added.
+- v0 (amendment 14) - the default ports in `scan.ports` are now `22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100`: without 515, 554, 631 and 9100 the classification rules of printers and cameras did not fire. The note about this in amendment 13 no longer applies.
+- v0 (amendment 13) - slice 9 is merged into `main`. The migration of the slice is called `0006_services.sql`. `GET /api/devices/{id}` answers `{ "device", "interfaces", "services" }`. `collector.Result` got `ServicesPolled`: a service that did not answer again is deleted only for a device whose ports were scanned in this scan. The `services` collector goes last in the chain and passes the ports found to `classify`. The default list `scan.ports` has no 9100, 515, 631 and 554, so the classification rules of printers and cameras fire only when those ports are added to the config. The page `/services` filters by service name, and a service without a name is found by port number.
+- v0 (amendment 12) - slice 8 is merged into `main`. The order of collectors after discovery: `probe`, `snmp`, `lldp`, `snmparp`, then `classify`: LLDP has to know the trunk ports before `snmparp` decides which hosts of the FDB to bind to ports. A live host found by `probe` gets the source `probe` (the same rank as `arp`). `collector.Result` got `FDBPolled`: an `fdb` link disappears only if the forwarding table of one of its devices has been read. `snmparp` polls the devices whose `sysServices` has the bridge or router bit. `classify` works on the fields `descr`, `services`, `port`, `vendor` in that order of priority, and an error in `classify_rules.csv` stops the rules from starting instead of silently turning a line off. Open ports are so far known only from `probe` (22, 80, 443): the rules for 9100, 515, 631 and 554 start to fire with slice 9, when the port scan appears. Hosts found by router tables are not polled over SNMP in the same scan.
+- v0 (amendment 11) - slice 7 is merged into `main` (PR #21). The migration of the slice is called `0005_interfaces.sql` and creates only `interfaces`: the table `links` appeared in slice 5. `GET /api/devices/{id}` answers `{ "device", "interfaces" }`. `collector.Result` got the field `LinksPolled`: an `lldp` link is deleted only if one of its devices was polled, and a silent device does not lose links. The source of a device is not lowered, the order is `manual`, `ssh`, `snmp`, `arp`. `oui.csv` holds a starter set of known prefixes, and the full IEEE registry goes into the same file without code changes. In `DevicePanel` the tabs are built on `@radix-ui/react-tabs`. If the SNMP and LLDP collectors are connected, a scan has four progress stages instead of three.
+- v0 (amendment 10) - slice 6 is merged into `main` (PR #19). A token never opens `users:manage`, `audit:read` and `tokens:manage`: a stolen token cannot create new tokens. Of the `/api/auth/*` routes only `GET /api/auth/me` is open to a token. The rights of a token are the intersection of its scope and the current role of its owner. The messages of slice 6 are added to section 8.
+- v0 (amendment 9) - a manual device accepts an optional field `hostname` (up to 255 characters). It is stated explicitly that a manual device with a MAC or IP already taken by another record answers 409. The message `hostname is longer than 255 characters` is added to section 8.
+- v0 (amendment 8) - slice 5 is merged into `main` (PR #16). The table `links` is created by the migration of slice 5, not of slice 7, because manual links are needed earlier. Two messages that were not in the list are added to section 8: `port is longer than 64 characters` and `version is required`.
+- v0 (amendment 7) - slices 3 and 4 are merged into `main` (PR #13 and #14), and a status row is added to section 16.
+- v0 (amendment 6) - slice 4, criterion 3: the guarantee "they do not move" applies to nodes with saved coordinates.
+- v0 (amendment 5) - section 15: the "Do not" items apply in their own slice, and links to the slices that implement the deferred work are added in slices 1, 3, 4 and 12. The content of the slices did not change.
+- v0 (amendment 4) - the answer of `GET /api/devices` has the form `{ "devices": [...] }`. The login attempt limit is implemented by its own limiter (`internal/auth/ratelimit.go`), and `golang.org/x/time/rate` is not used.
+- v0 (amendment 3) - the project is called Netscribe: the working name netdoc is replaced everywhere (module, binary, cookie, variables, texts). Question 1 of section 18 is closed.
+- v0 (amendment 2) - section 9 "Security", authentication, roles and multi-user mode, manual device addition and extended discovery are added. Slices 2, 5, 6 and 8 are new, the others moved.
+- v0 - a draft for finalization. The contracts are not frozen. Section 18 lists the open questions. After they are answered the version rises to v1 and the contracts are frozen.
 
 ---
 
-## 0. Как читать этот файл
+## 0. How to read this file
 
-Это источник истины проекта. Читай его перед каждой задачей и подчиняйся дословно.
+This is the source of truth of the project. Read it before every task and obey it to the letter.
 
-- Имена таблиц, полей, типов, функций и маршрутов берутся отсюда. Свои варианты не придумывай.
-- Нужного контракта здесь нет → СТОП, выдай блок `CONTRACT GAP` (раздел 14). Код с выдуманным типом не пиши.
-- Файл меняет только владелец проекта. Каждое изменение контракта поднимает версию сверху файла.
-- Работаешь один слайс за заход. Стадии и слайсы - раздел 16, иди по нему сверху вниз.
-- Пока версия v0, контракты можно править. С версии v1 они заморожены.
-
----
-
-## 1. Проект
-
-Панель для документирования локальной сети. Сервис сканирует сеть по расписанию и по кнопке (ARP, SNMP, LLDP, SSH, Docker), хранит инвентарь устройств, IP-адреса, связи, сервисы и контейнеры, рисует топологию и отдаёт документацию в Markdown, HTML, PDF и Draw.io. Один бинарник, веб-панель встроена. Устройства находятся автоматически, а то, что обнаружить нельзя, добавляется вручную. Панель многопользовательская: вход по логину и паролю, три роли (`viewer`, `operator`, `admin`), журнал аудита.
-
-Для кого: малый и средний бизнес без сетевой документации и студенты, которым нужно её сдавать.
-
-Зачем: документация устаревает. Сервис пересобирает её из живой сети и показывает, что изменилось с прошлого скана.
-
-Цель v1: работающая панель с топологией, инвентарём, контейнерами, экспортом и разграничением доступа, которая проходит гейт проверок. Не платформа: нет мультитенантности (несколько организаций в одном экземпляре), алертинга, мониторинга трафика и управления устройствами.
-
-Границы безопасности (действуют во всех слайсах):
-
-- Сервис сканирует только цели из конфига. По умолчанию разрешены только частные диапазоны RFC 1918. Публичные адреса включаются явным флагом `allowPublicTargets`.
-- Сервис только читает. SNMP: GET, GETNEXT, GETBULK, без SET. SSH: фиксированный набор команд на чтение. Docker: только запросы списков и поток событий.
-- Доступ к панели только после входа. Права проверяются на сервере для каждого маршрута. Панель слушает `127.0.0.1` по умолчанию. Полный перечень параметров безопасности в разделе 9, он обязателен для каждого слайса.
-- Секреты (SNMP community, пути к ключам) не попадают в логи, API и экспорт.
+- Names of tables, fields, types, functions and routes come from here. Do not invent your own.
+- The contract you need is not here → STOP, issue a `CONTRACT GAP` block (section 14). Do not write code with an invented type.
+- Only the project owner changes this file. Every change of a contract raises the version at the top of the file.
+- Work one slice at a time. Stages and slices are in section 16, go through it from top to bottom.
+- While the version is v0, contracts may be edited. From version v1 they are frozen.
 
 ---
 
-## 2. Стек
+## 1. Project
 
-Бэкенд:
+A panel for documenting a local network. The service scans the network on a schedule and on a button (ARP, SNMP, LLDP, SSH, Docker), keeps an inventory of devices, IP addresses, links, services and containers, draws the topology and hands out the documentation in Markdown, HTML, PDF and Draw.io. One binary, the web panel is embedded. Devices are found automatically, and what cannot be discovered is added by hand. The panel is multi-user: sign-in by login and password, three roles (`viewer`, `operator`, `admin`), an audit log.
 
-- Go (актуальная стабильная версия, фиксируется в `go.mod`), в v1 только Linux
-- `net/http` + `chi`, логи через `log/slog`
-- SQLite через `modernc.org/sqlite` (чистый Go, без CGO), миграции `goose`, запросы через `sqlc`
-- `gosnmp` (SNMP v2c), `golang.org/x/crypto/ssh`, официальный Docker Go client, `fsnotify`, `gopkg.in/yaml.v3`
-- `golang.org/x/crypto/argon2` (пароли), `crypto/tls` из стандартной библиотеки
-- `chromedp` только для экспорта в PDF
+Who it is for: small and medium businesses without network documentation, and students who have to hand it in.
 
-Фронтенд:
+Why: documentation goes stale. The service rebuilds it from the live network and shows what changed since the last scan.
+
+Goal of v1: a working panel with topology, inventory, containers, export and access control that passes the check gate. Not a platform: no multi-tenancy (several organizations in one instance), no alerting, no traffic monitoring and no device management.
+
+Security boundaries (they apply in all slices):
+
+- The service scans only the targets from the config. By default only the private ranges of RFC 1918 are allowed. Public addresses are turned on by the explicit flag `allowPublicTargets`.
+- The service only reads. SNMP: GET, GETNEXT, GETBULK, no SET. SSH: a fixed set of read commands. Docker: only list requests and the event stream.
+- Access to the panel only after sign-in. Rights are checked on the server for every route. The panel listens on `127.0.0.1` by default. The full list of security parameters is in section 9, and it is mandatory for every slice.
+- Secrets (SNMP community, paths to keys) do not get into logs, the API and exports.
+
+---
+
+## 2. Stack
+
+Backend:
+
+- Go (the current stable version, pinned in `go.mod`), in v1 Linux only
+- `net/http` + `chi`, logs through `log/slog`
+- SQLite through `modernc.org/sqlite` (pure Go, no CGO), `goose` migrations, queries through `sqlc`
+- `gosnmp` (SNMP v2c), `golang.org/x/crypto/ssh`, the official Docker Go client, `fsnotify`, `gopkg.in/yaml.v3`
+- `golang.org/x/crypto/argon2` (passwords), `crypto/tls` from the standard library
+- `chromedp` only for PDF export
+
+Frontend:
 
 - React, TypeScript strict, Vite
-- Tailwind CSS, shadcn/ui (компоненты копируются в репозиторий)
-- React Flow (`@xyflow/react`) для топологии, Recharts для графиков
-- TanStack Query для серверного состояния, React Router для маршрутов
-- Собранный фронтенд встраивается в бинарник через `go:embed`
+- Tailwind CSS, shadcn/ui (components are copied into the repository)
+- React Flow (`@xyflow/react`) for the topology, Recharts for charts
+- TanStack Query for server state, React Router for routes
+- The built frontend is embedded in the binary through `go:embed`
 
-Тесты и проверки: `go test`, `gofmt`, `go vet`, `golangci-lint` (включая `gosec`), `govulncheck`, vitest, eslint (с `jsx-a11y`), prettier, `tsc`, `npm audit`.
+Tests and checks: `go test`, `gofmt`, `go vet`, `golangci-lint` (including `gosec`), `govulncheck`, vitest, eslint (with `jsx-a11y`), prettier, `tsc`, `npm audit`.
 
-Поставка: нативный бинарник (основной способ) и Docker-образ с `compose.yaml`.
+Delivery: a native binary (the main way) and a Docker image with `compose.yaml`.
 
-Без ORM, без PostgreSQL в v1, без Redux и других стейт-менеджеров, без CSS-in-JS, без GraphQL и gRPC, без брокеров сообщений. Один процесс, один бинарник, один файл базы. Аутентификация своя (пользователи и сессии в SQLite), внешних провайдеров в v1 нет.
+No ORM, no PostgreSQL in v1, no Redux or other state managers, no CSS-in-JS, no GraphQL and gRPC, no message brokers. One process, one binary, one database file. Authentication is our own (users and sessions in SQLite), and there are no external providers in v1.
 
 ---
 
-## 3. Структура папок
+## 3. Folder structure
 
 ```
 cmd/
   netscribe/
-    main.go                   подкоманды serve, scan, devices, export, user, setup, doctor
-    setup.go                  флаги setup и doctor, остальное в internal/setup
+    main.go                   subcommands serve, scan, devices, export, user, setup, doctor
+    setup.go                  flags of setup and doctor, the rest is in internal/setup
   seed/
-    main.go                   демо-сеть для разработки и скриншотов, учётка dev из NETSCRIBE_DEV_PASSWORD
+    main.go                   a demo network for development and screenshots, account dev from NETSCRIBE_DEV_PASSWORD
 internal/
   config/
-    config.go                 структуры конфига, загрузка YAML, Validate, тип Secret
-    watch.go                  fsnotify и SIGHUP, атомарная подмена конфига
+    config.go                 config structs, YAML loading, Validate, type Secret
+    watch.go                  fsnotify and SIGHUP, atomic swap of the config
   auth/
-    password.go               argon2id: хеш, проверка, правила пароля
-    common_passwords.txt      список частых паролей для отказа (go:embed)
-    session.go                сессии и токены доступа: выпуск, проверка, отзыв
-    rbac.go                   роли, права, таблица «роль - права»
-    ratelimit.go              ограничение попыток входа
+    password.go               argon2id: hash, check, password rules
+    common_passwords.txt      list of common passwords to reject (go:embed)
+    session.go                sessions and access tokens: issue, check, revoke
+    rbac.go                   roles, permissions, the table "role - permissions"
+    ratelimit.go              login attempt limit
   model/
-    model.go                  доменные типы и константы (раздел 4)
+    model.go                  domain types and constants (section 4)
   store/
-    store.go                  Open(path), интерфейс Repo, ErrNotFound
-    apply.go                  ApplyResult: слияние результата скана с базой, запись changes
-    migrations/               goose, файлы NNNN_<тема>.sql, одна миграция на слайс, номера по порядку слайсов
-    queries/                  SQL для sqlc
-    db/                       код sqlc, сгенерирован, руками не править
+    store.go                  Open(path), the interface Repo, ErrNotFound
+    apply.go                  ApplyResult: merging a scan result into the database, writing changes
+    migrations/               goose, files NNNN_<topic>.sql, one migration per slice, numbered in slice order
+    queries/                  SQL for sqlc
+    db/                       sqlc code, generated, do not edit by hand
   collector/
-    collector.go              интерфейс Collector, Input, Result
-    arp.go                    прогрев ARP и чтение /proc/net/arp
+    collector.go              the interface Collector, Input, Result
+    arp.go                    ARP warm-up and reading /proc/net/arp
     snmp.go                   sysName, sysDescr, ifTable
-    lldp.go                   соседи из LLDP-MIB
-    snmparp.go                ARP-таблицы и таблицы пересылки (FDB) маршрутизаторов и коммутаторов
-    probe.go                  ICMP и TCP-зондирование маршрутизируемых подсетей
-    classify.go               вид устройства по правилам, правила в classify_rules.csv
-    oui.go, oui.csv           вендор по MAC (встроенная таблица)
-    services.go               TCP connect-скан списка портов
-    httpbanner.go             заголовки HTTP(S) на открытых веб-портах (слайс 18)
-    mdns.go, ssdp.go          запросы mDNS и SSDP в локальном сегменте (слайс 18)
-    ssh.go                    фиксированные команды на чтение
-    docker.go                 контейнеры, сети, события
-    scanner.go                оркестрация скана, расписание, запись в store, события
+    lldp.go                   neighbors from the LLDP-MIB
+    snmparp.go                ARP tables and forwarding tables (FDB) of routers and switches
+    probe.go                  ICMP and TCP probing of routable subnets
+    classify.go               device kind by rules, the rules are in classify_rules.csv
+    oui.go, oui.csv           vendor by MAC (built-in table)
+    services.go               TCP connect scan of a list of ports
+    httpbanner.go             HTTP(S) headers on open web ports (slice 18)
+    mdns.go, ssdp.go          mDNS and SSDP queries in the local segment (slice 18)
+    ssh.go                    fixed read commands
+    docker.go                 containers, networks, events
+    scanner.go                scan orchestration, schedule, writing to store, events
   events/
-    hub.go                    шина событий для SSE
+    hub.go                    event bus for SSE
   setup/
-    env.go                    Env: всё, что пакет делает с машиной; настоящая и поддельная
-    checks.go                 проверки: Diagnose возвращает []Finding (OK, Info, Warn, Fail)
-    setup.go                  шаги setup и Doctor
-    listen.go                 выбор адреса панели и защиты (TLS, прокси)
-    settings.go, yamledit.go  редактор конфига: группы настроек, get/set/show/edit, YAML с комментариями
-    watch.go                  наблюдатель: выборки, события, экран
-    console.go                меню консоли
-    render.go                 конфиг, юнит, drop-in, подбор целей по интерфейсам
-    prompt.go, ui.go          вопросы и вывод без внешних библиотек
-    netscribe.service         копия deploy/netscribe.service
+    env.go                    Env: everything the package does to the machine; real and fake
+    checks.go                 checks: Diagnose returns []Finding (OK, Info, Warn, Fail)
+    setup.go                  the steps of setup and Doctor
+    listen.go                 choice of the panel address and its protection (TLS, proxy)
+    settings.go, yamledit.go  config editor: groups of settings, get/set/show/edit, YAML with comments
+    watch.go                  the watcher: samples, events, screen
+    console.go                the console menu
+    render.go                 config, unit, drop-in, choosing targets from interfaces
+    prompt.go, ui.go          questions and output without external libraries
+    netscribe.service         a copy of deploy/netscribe.service
   render/
-    layout.go                 раскладка по слоям с учётом сохранённых координат
-    svg.go                    SVG-диаграмма
-    mermaid.go                Mermaid-граф
+    layout.go                 layered layout that respects saved coordinates
+    svg.go                    SVG diagram
+    mermaid.go                Mermaid graph
     markdown.go
     drawio.go
     html.go
     pdf.go
     templates/                html/template
   api/
-    router.go                 таблица маршрутов (метод, путь, право, обработчик), раздача SPA
-    middleware.go             заголовки безопасности, лимиты, аутентификация, CSRF, проверка прав, аудит
+    router.go                 the route table (method, path, permission, handler), serving the SPA
+    middleware.go             security headers, limits, authentication, CSRF, permission check, audit
     auth.go, users.go, tokens.go, audit.go
     devices.go, links.go, scans.go, topology.go, containers.go, services.go, changes.go
     export.go
@@ -172,77 +173,77 @@ web/
   src/
     main.tsx
     api/
-      client.ts               fetch-обёртка и типы ответов (зеркало раздела 4)
-      events.ts               подписка на SSE
+      client.ts               fetch wrapper and response types (a mirror of section 4)
+      events.ts               SSE subscription
     components/
-      ui/                     примитивы shadcn/ui
+      ui/                     shadcn/ui primitives
       DeviceNode.tsx, TopologyCanvas.tsx, DevicePanel.tsx
       ScanBar.tsx, ExportMenu.tsx, StatusBadge.tsx, EmptyState.tsx
       DeviceForm.tsx, RoleBadge.tsx, UserMenu.tsx, RequirePermission.tsx
     pages/
       Login.tsx, Account.tsx, Topology.tsx, Inventory.tsx, Containers.tsx, Services.tsx, Changes.tsx
       Users.tsx, Audit.tsx
-    lib/                      чистая логика без React (сортировка IP, фильтры, форматирование, permissions.ts)
+    lib/                      pure logic without React (IP sorting, filters, formatting, permissions.ts)
   public/
-    theme-init.js             выбор темы до отрисовки, внешний файл (inline-скриптов нет)
+    theme-init.js             theme choice before the first paint, an external file (there are no inline scripts)
   tests/
 deploy/
   Dockerfile
-  compose.yaml                сервис в бою
-  compose.lab.yaml            тестовая лаборатория
-  lab/                        конфиги лаборатории
-testdata/                     фикстуры snmpwalk, /proc/net/arp, golden-файлы
+  compose.yaml                the service in production
+  compose.lab.yaml            test lab
+  lab/                        lab configs
+testdata/                     snmpwalk fixtures, /proc/net/arp, golden files
 netscribe.example.yaml
 Makefile
 .air.toml, .golangci.yml, sqlc.yaml
 SECURITY.md
 ```
 
-Правила размещения:
+Placement rules:
 
-- SQL живёт только в `internal/store/migrations` и `internal/store/queries`. Код в `internal/store/db` генерирует sqlc.
-- Пакет `collector` не импортирует `store`. Коллектор возвращает `Result`, а `scanner` записывает его через `Repo.ApplyResult`.
-- Пакет `render` не импортирует `collector` и `api`. Он принимает `model.Topology` и `[]model.Change`.
-- Пакет `api` не содержит SQL и не вызывает коллекторы напрямую. Он использует `store.Repo`, `scanner` и `render`.
-- Фронтенд ходит к серверу только через `web/src/api/`. Компоненты не вызывают `fetch` сами.
-- Чистая логика (парсеры, раскладка, валидация, сортировка IP) лежит в функциях без сети и базы, чтобы тестироваться без них.
-- Значения типа `config.Secret` не логируются, не сериализуются в JSON и не попадают в экспорт.
-- Маршруты регистрируются только через таблицу в `internal/api/router.go` (метод, путь, право, обработчик). Прямая регистрация через `mux.Handle` запрещена. Маршрут без права не регистрируется, публичные маршруты помечаются явно.
-- Пакет `auth` не импортирует `api` и `store`: данные он получает через интерфейс `AuthRepo`.
-- Пакет `setup` импортирует только `config`. Всё, что он делает с машиной (файлы, процессы, сеть, учётки), идёт через `setup.Env`, поэтому тесты не трогают `/etc` и не запускают процессы.
-- Права проверяет только middleware. Обработчики роль не сравнивают.
-- Фронтенд скрывает недоступные действия по `web/src/lib/permissions.ts`. Это удобство, защита работает на сервере.
+- SQL lives only in `internal/store/migrations` and `internal/store/queries`. The code in `internal/store/db` is generated by sqlc.
+- The package `collector` does not import `store`. A collector returns a `Result`, and `scanner` writes it through `Repo.ApplyResult`.
+- The package `render` does not import `collector` and `api`. It takes `model.Topology` and `[]model.Change`.
+- The package `api` contains no SQL and does not call collectors directly. It uses `store.Repo`, `scanner` and `render`.
+- The frontend talks to the server only through `web/src/api/`. Components do not call `fetch` themselves.
+- Pure logic (parsers, layout, validation, IP sorting) lives in functions without network and database, so that it can be tested without them.
+- Values of type `config.Secret` are not logged, not serialized to JSON and do not get into exports.
+- Routes are registered only through the table in `internal/api/router.go` (method, path, permission, handler). Direct registration through `mux.Handle` is forbidden. A route without a permission is not registered, and public routes are marked explicitly.
+- The package `auth` does not import `api` and `store`: it gets data through the interface `AuthRepo`.
+- The package `setup` imports only `config`. Everything it does to the machine (files, processes, network, accounts) goes through `setup.Env`, so tests do not touch `/etc` and do not start processes.
+- Only middleware checks permissions. Handlers do not compare roles.
+- The frontend hides unavailable actions according to `web/src/lib/permissions.ts`. This is a convenience, and the protection works on the server.
 
 ---
 
-## 4. Контракт данных (черновик)
+## 4. Data contract (draft)
 
-Время хранится в UTC, в SQLite это TEXT в формате RFC 3339. Имена колонок в базе в `snake_case`, поля Go в `CamelCase`, поля JSON в `camelCase`.
+Time is stored in UTC, in SQLite it is TEXT in RFC 3339 format. Column names in the database are `snake_case`, Go fields are `CamelCase`, JSON fields are `camelCase`.
 
-### 4.1 Схема базы
+### 4.1 Database schema
 
-Схема показана в итоговом виде. Каждую таблицу создаёт миграция слайса, который её использует (раздел 16), колонки, нужные позже, добавляют миграции следующих слайсов (`ALTER TABLE`). Таблица `devices` в слайсе 1 создаётся без колонок `manual`, `label`, `notes`, `kind_locked`, `version`, `updated_by`.
+The schema is shown in its final form. Each table is created by the migration of the slice that uses it (section 16), and the columns needed later are added by the migrations of the following slices (`ALTER TABLE`). The table `devices` in slice 1 is created without the columns `manual`, `label`, `notes`, `kind_locked`, `version`, `updated_by`.
 
 ```sql
 CREATE TABLE devices (
 	id            INTEGER PRIMARY KEY AUTOINCREMENT,
-	mac           TEXT NOT NULL DEFAULT '',        -- нижний регистр aa:bb:cc:dd:ee:ff, пусто если неизвестен
-	ip            TEXT NOT NULL DEFAULT '',        -- у ручного устройства может быть пусто
+	mac           TEXT NOT NULL DEFAULT '',        -- lowercase aa:bb:cc:dd:ee:ff, empty if unknown
+	ip            TEXT NOT NULL DEFAULT '',        -- may be empty for a manual device
 	hostname      TEXT NOT NULL DEFAULT '',
 	vendor        TEXT NOT NULL DEFAULT '',
 	kind          TEXT NOT NULL DEFAULT 'unknown', -- router, switch, ap, firewall, server, nas, printer, camera, iot, host, unknown
-	description   TEXT NOT NULL DEFAULT '',        -- sysDescr или uname
+	description   TEXT NOT NULL DEFAULT '',        -- sysDescr or uname
 	source        TEXT NOT NULL,                   -- arp, probe, snmp, ssh, local, manual
-	online        INTEGER NOT NULL DEFAULT 1,      -- 0 или 1
-	manual        INTEGER NOT NULL DEFAULT 0,      -- 1: создано вручную, сканы не удаляют и не помечают offline
-	label         TEXT NOT NULL DEFAULT '',        -- имя от человека, показывается вместо hostname
+	online        INTEGER NOT NULL DEFAULT 1,      -- 0 or 1
+	manual        INTEGER NOT NULL DEFAULT 0,      -- 1: created by hand, scans neither delete nor mark it offline
+	label         TEXT NOT NULL DEFAULT '',        -- a name from a person, shown instead of hostname
 	notes         TEXT NOT NULL DEFAULT '',
-	kind_locked   INTEGER NOT NULL DEFAULT 0,      -- 1: вид задан человеком, сканы его не меняют
-	version       INTEGER NOT NULL DEFAULT 1,      -- растёт при каждой правке человеком, оптимистичная блокировка
+	kind_locked   INTEGER NOT NULL DEFAULT 0,      -- 1: the kind was set by a person, scans do not change it
+	version       INTEGER NOT NULL DEFAULT 1,      -- grows on every edit by a person, optimistic locking
 	updated_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
 	first_seen_at TEXT NOT NULL,
 	last_seen_at  TEXT NOT NULL,
-	x             REAL,                            -- координаты на холсте, NULL пока не двигали
+	x             REAL,                            -- canvas coordinates, NULL until moved
 	y             REAL
 );
 CREATE UNIQUE INDEX devices_mac ON devices(mac) WHERE mac <> '';
@@ -282,21 +283,21 @@ CREATE TABLE services (
 );
 
 CREATE TABLE containers (
-	id              TEXT PRIMARY KEY,              -- полный id Docker
+	id              TEXT PRIMARY KEY,              -- full Docker id
 	device_id       INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
 	name            TEXT NOT NULL,
 	image           TEXT NOT NULL,
 	state           TEXT NOT NULL,                 -- running, exited, paused, restarting, created, dead
 	compose_project TEXT NOT NULL DEFAULT '',
-	ports           TEXT NOT NULL DEFAULT '[]',    -- JSON, массив PortMapping
-	networks        TEXT NOT NULL DEFAULT '[]',    -- JSON, массив ContainerNetwork
+	ports           TEXT NOT NULL DEFAULT '[]',    -- JSON, an array of PortMapping
+	networks        TEXT NOT NULL DEFAULT '[]',    -- JSON, an array of ContainerNetwork
 	first_seen_at   TEXT NOT NULL,
 	last_seen_at    TEXT NOT NULL
 );
 
 CREATE TABLE scans (
 	id              INTEGER PRIMARY KEY AUTOINCREMENT,
-	target          TEXT NOT NULL,                 -- цели через запятую
+	target          TEXT NOT NULL,                 -- targets separated by commas
 	status          TEXT NOT NULL,                 -- running, done, failed
 	started_at      TEXT NOT NULL,
 	finished_at     TEXT,
@@ -320,7 +321,7 @@ CREATE TABLE users (
 	id                   INTEGER PRIMARY KEY AUTOINCREMENT,
 	username             TEXT NOT NULL UNIQUE COLLATE NOCASE,
 	display_name         TEXT NOT NULL DEFAULT '',
-	password_hash        TEXT NOT NULL,            -- argon2id, формат PHC
+	password_hash        TEXT NOT NULL,            -- argon2id, PHC format
 	role                 TEXT NOT NULL,            -- viewer, operator, admin
 	disabled             INTEGER NOT NULL DEFAULT 0,
 	must_change_password INTEGER NOT NULL DEFAULT 0,
@@ -331,12 +332,12 @@ CREATE TABLE users (
 );
 
 CREATE TABLE sessions (
-	id_hash      TEXT PRIMARY KEY,                 -- SHA-256 значения cookie, сам идентификатор не хранится
+	id_hash      TEXT PRIMARY KEY,                 -- SHA-256 of the cookie value, the identifier itself is not stored
 	user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	csrf_token   TEXT NOT NULL,
 	created_at   TEXT NOT NULL,
 	last_seen_at TEXT NOT NULL,
-	expires_at   TEXT NOT NULL,                    -- абсолютный срок жизни
+	expires_at   TEXT NOT NULL,                    -- absolute lifetime
 	ip           TEXT NOT NULL DEFAULT '',
 	user_agent   TEXT NOT NULL DEFAULT ''
 );
@@ -345,9 +346,9 @@ CREATE TABLE api_tokens (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
 	user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	name         TEXT NOT NULL,
-	prefix       TEXT NOT NULL,                    -- первые 8 символов, для списка
-	token_hash   TEXT NOT NULL UNIQUE,             -- SHA-256 токена
-	scope        TEXT NOT NULL,                    -- read, write; не выше роли владельца
+	prefix       TEXT NOT NULL,                    -- the first 8 characters, for the list
+	token_hash   TEXT NOT NULL UNIQUE,             -- SHA-256 of the token
+	scope        TEXT NOT NULL,                    -- read, write; not above the role of the owner
 	created_at   TEXT NOT NULL,
 	expires_at   TEXT NOT NULL,
 	last_used_at TEXT,
@@ -357,20 +358,20 @@ CREATE TABLE api_tokens (
 CREATE TABLE audit_log (
 	id        INTEGER PRIMARY KEY AUTOINCREMENT,
 	at        TEXT NOT NULL,
-	user_id   INTEGER,                             -- NULL, если пользователь неизвестен
+	user_id   INTEGER,                             -- NULL if the user is unknown
 	username  TEXT NOT NULL DEFAULT '',
-	action    TEXT NOT NULL,                       -- список в разделе 9.8
+	action    TEXT NOT NULL,                       -- list in section 9.8
 	entity    TEXT NOT NULL DEFAULT '',
 	entity_id TEXT NOT NULL DEFAULT '',
 	result    TEXT NOT NULL,                       -- ok, denied, error
 	ip        TEXT NOT NULL DEFAULT '',
-	detail    TEXT NOT NULL DEFAULT ''             -- одна строка, без секретов
+	detail    TEXT NOT NULL DEFAULT ''             -- one line, no secrets
 );
 ```
 
-Идентичность устройства: по MAC, если он известен, иначе по IP. Устройство с тем же MAC и новым IP обновляет строку, новую не создаёт. Устройство, которого нет в завершённом скане, получает `online = 0` и остаётся в базе. Обнаруженное устройство, совпавшее по IP с записью без MAC (в том числе ручной), дополняет эту запись MAC и данными скана, новую строку не создаёт. Устройства с `manual = 1` и связи с `source = 'manual'` сканы не удаляют и не помечают offline. Поля, заданные человеком (`label`, `notes`, а также `kind` при `kind_locked = 1`), сканы не перезаписывают.
+Device identity: by MAC if it is known, otherwise by IP. A device with the same MAC and a new IP updates the row and does not create a new one. A device that is not in a completed scan gets `online = 0` and stays in the database. A discovered device that matches by IP a record without a MAC (including a manual one) completes that record with the MAC and the scan data and does not create a new row. Devices with `manual = 1` and links with `source = 'manual'` are neither deleted nor marked offline by scans. Fields set by a person (`label`, `notes`, and also `kind` when `kind_locked = 1`) are not overwritten by scans.
 
-### 4.2 Типы Go (`internal/model/model.go`)
+### 4.2 Go types (`internal/model/model.go`)
 
 ```go
 type DeviceKind string
@@ -421,7 +422,7 @@ type Interface struct {
 
 type Link struct {
 	ID         int64     `json:"id"`
-	ADeviceID  int64     `json:"aDeviceId"` // всегда меньше BDeviceID
+	ADeviceID  int64     `json:"aDeviceId"` // always less than BDeviceID
 	APort      string    `json:"aPort"`
 	BDeviceID  int64     `json:"bDeviceId"`
 	BPort      string    `json:"bPort"`
@@ -492,7 +493,7 @@ type Topology struct {
 }
 ```
 
-Типы пользователей и доступа (в том же пакете). Таблица «роль - права» лежит в `internal/auth/rbac.go` и повторяет раздел 9.3.
+The types of users and access (in the same package). The table "role - permissions" lives in `internal/auth/rbac.go` and repeats section 9.3.
 
 ```go
 type Role string
@@ -526,7 +527,7 @@ type User struct {
 	LastLoginAt        *time.Time `json:"lastLoginAt"`
 }
 
-// UserRecord живёт только внутри store и auth, в API не уходит.
+// UserRecord lives only inside store and auth and does not go to the API.
 type UserRecord struct {
 	User
 	PasswordHash string     `json:"-"`
@@ -559,7 +560,7 @@ type AuditEntry struct {
 }
 ```
 
-Типы ручного ввода:
+Types of manual input:
 
 ```go
 type ManualDevice struct {
@@ -567,11 +568,11 @@ type ManualDevice struct {
 	Kind                            DeviceKind
 }
 
-type DeviceEdit struct { // nil-поле не меняется
+type DeviceEdit struct { // a nil field is not changed
 	Label   *string
 	Notes   *string
-	Kind    *DeviceKind // непустое значение выставляет kind_locked = 1
-	Version int64       // версия, которую видел редактор, обязательное поле
+	Kind    *DeviceKind // a non-empty value sets kind_locked = 1
+	Version int64       // the version the editor saw, a required field
 }
 
 type ManualLink struct {
@@ -580,7 +581,7 @@ type ManualLink struct {
 }
 ```
 
-Типы входа коллекторов (в том же пакете). `DeviceKey` ссылается на устройство до того, как у него появился `id`: MAC приоритетнее IP.
+Types of collector input (in the same package). `DeviceKey` refers to a device before it has an `id`: MAC takes priority over IP.
 
 ```go
 type DeviceKey struct {
@@ -628,11 +629,11 @@ type ContainerInput struct {
 }
 ```
 
-Полей `owner`, `location`, `vlan` у устройства в v0 нет. Понадобились - `CONTRACT GAP`.
+A device has no fields `owner`, `location` and `vlan` in v0. If you need them - `CONTRACT GAP`.
 
-### 4.3 Конфиг (YAML)
+### 4.3 Config (YAML)
 
-Тип `config.Secret` заменяет значение на `***` при выводе через `String()`, `MarshalJSON` и `slog`.
+The type `config.Secret` replaces the value with `***` when printed through `String()`, `MarshalJSON` and `slog`.
 
 ```yaml
 listen: 127.0.0.1:8080
@@ -641,8 +642,8 @@ allowPublicTargets: false
 
 scan:
   targets: [192.168.1.0/24]
-  interval: 15m                  # 0 отключает расписание
-  ports: [22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100]   # пустой список отключает скан портов
+  interval: 15m                  # 0 turns the schedule off
+  ports: [22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100]   # an empty list turns the port scan off
 
 snmp:
   communities: [public]          # Secret
@@ -653,7 +654,7 @@ ssh:
   hosts:
     - address: 192.168.1.10
       user: audit
-      keyFile: ~/.ssh/netscribe_ed25519    # только ключи, паролей нет
+      keyFile: ~/.ssh/netscribe_ed25519    # keys only, no passwords
 
 docker:
   enabled: true
@@ -666,42 +667,42 @@ audit:
   keepDays: 365
 
 auth:
-  sessionIdleTimeout: 8h         # от 15m до 24h
-  sessionMaxAge: 168h            # не меньше sessionIdleTimeout, не больше 720h
-  minPasswordLength: 12          # не меньше 12
-  maxFailedLogins: 5             # от 3 до 20
+  sessionIdleTimeout: 8h         # from 15m to 24h
+  sessionMaxAge: 168h            # not less than sessionIdleTimeout, not more than 720h
+  minPasswordLength: 12          # not less than 12
+  maxFailedLogins: 5             # from 3 to 20
   lockoutDuration: 15m
   argon2:
-    memoryKiB: 65536             # не меньше 19456
-    iterations: 3                # не меньше 2
-    parallelism: 2               # не меньше 1
+    memoryKiB: 65536             # not less than 19456
+    iterations: 3                # not less than 2
+    parallelism: 2               # not less than 1
 
 tls:
-  certFile: ""                   # certFile и keyFile задаются вместе или не задаются
+  certFile: ""                   # certFile and keyFile are set together or not at all
   keyFile: ""
 
-trustedProxies: []               # CIDR обратных прокси, чьи X-Forwarded-* принимаются
+trustedProxies: []               # CIDRs of reverse proxies whose X-Forwarded-* are accepted
 
 discovery:
-  routerTables: true             # ARP и FDB по SNMP с известных маршрутизаторов и коммутаторов
-  httpHeaders: true              # слайс 18: заголовки HTTP(S) на открытых веб-портах
-  mdns: true                     # слайс 18: один запрос mDNS в локальном сегменте
-  ssdp: true                     # слайс 18: один запрос SSDP M-SEARCH в локальном сегменте
-  nmap: false                    # опционально: nmap -O для устройств, которые ничто другое не опознало
-  nmapPath: ""                   # пусто: искать nmap в PATH, иначе абсолютный путь
-  probeRoutedTargets: false      # ICMP и TCP-зондирование подсетей за маршрутизатором
+  routerTables: true             # ARP and FDB over SNMP from known routers and switches
+  httpHeaders: true              # slice 18: HTTP(S) headers on open web ports
+  mdns: true                     # slice 18: one mDNS query in the local segment
+  ssdp: true                     # slice 18: one SSDP M-SEARCH query in the local segment
+  nmap: false                    # optional: nmap -O for devices that nothing else identified
+  nmapPath: ""                   # empty: look for nmap in PATH, otherwise an absolute path
+  probeRoutedTargets: false      # ICMP and TCP probing of subnets behind a router
 
 export:
-  chromePath: ""                 # пусто: искать chromium и google-chrome в PATH
+  chromePath: ""                 # empty: look for chromium and google-chrome in PATH
 ```
 
 ---
 
-## 5. Контракты доступа к данным и коллекторов (черновик)
+## 5. Contracts of data access and of collectors (draft)
 
 ### 5.1 `store.Repo`
 
-`internal/store/store.go` экспортирует ровно это:
+`internal/store/store.go` exports exactly this:
 
 ```go
 type Repo interface {
@@ -710,9 +711,9 @@ type Repo interface {
 	SetDevicePosition(ctx context.Context, id int64, x, y float64) error      // ErrNotFound
 	ListInterfaces(ctx context.Context, deviceID int64) ([]model.Interface, error)
 	ListLinks(ctx context.Context) ([]model.Link, error)
-	ListServices(ctx context.Context, deviceID int64) ([]model.Service, error) // 0 значит все устройства
+	ListServices(ctx context.Context, deviceID int64) ([]model.Service, error) // 0 means all devices
 	ListContainers(ctx context.Context) ([]model.Container, error)
-	Topology(ctx context.Context) (model.Topology, error)                      // одна транзакция чтения
+	Topology(ctx context.Context) (model.Topology, error)                      // one read transaction
 
 	CreateDevice(ctx context.Context, in model.ManualDevice, userID int64) (model.Device, error)         // ErrConflict
 	UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, userID int64) (model.Device, error)  // ErrNotFound, ErrVersionConflict
@@ -737,7 +738,7 @@ type DeviceFilter struct {
 }
 ```
 
-`AuthRepo` (тот же пакет) хранит пользователей, сессии, токены и аудит:
+`AuthRepo` (the same package) stores users, sessions, tokens and the audit:
 
 ```go
 type AuthRepo interface {
@@ -747,7 +748,7 @@ type AuthRepo interface {
 	GetUser(ctx context.Context, id int64) (model.User, error)                      // ErrNotFound
 	ListUsers(ctx context.Context) ([]model.User, error)
 	UpdateUser(ctx context.Context, id int64, role *model.Role, disabled *bool) (model.User, error) // ErrNotFound, ErrLastAdmin
-	SetPassword(ctx context.Context, id int64, hash string, mustChange bool) error  // отзывает сессии пользователя
+	SetPassword(ctx context.Context, id int64, hash string, mustChange bool) error  // revokes the sessions of the user
 	RecordLogin(ctx context.Context, id int64, ok bool, lockAfter int, lockFor time.Duration) error
 	DeleteUser(ctx context.Context, id int64) error                                 // ErrNotFound, ErrLastAdmin
 
@@ -770,26 +771,26 @@ type AuthRepo interface {
 }
 ```
 
-`SessionRecord`, `TokenRecord` и `AuditFilter` объявлены в `store` и содержат колонки соответствующих таблиц (раздел 4.1).
+`SessionRecord`, `TokenRecord` and `AuditFilter` are declared in `store` and hold the columns of the matching tables (section 4.1).
 
-Правила:
+Rules:
 
-- Первый аргумент всегда `context.Context`. Ошибка «не найдено» - это `store.ErrNotFound`, а не `nil` и не паника. Остальные ошибки пакета: `ErrConflict` (нарушение уникальности), `ErrVersionConflict`, `ErrNotManual` (попытка удалить связь, найденную сканом), `ErrLastAdmin`.
-- `Open(path string)` включает `journal_mode = WAL`, `foreign_keys = ON`, `busy_timeout = 5000`. Для `":memory:"` ставит `SetMaxOpenConns(1)`.
-- `ApplyResult` работает в одной транзакции: слияние устройств по идентичности, upsert интерфейсов, связей, сервисов и контейнеров, пометка отсутствующих (`online = 0`, удаление исчезнувших связей, сервисов и контейнеров), запись в `changes`, обновление счётчиков скана.
-- `ApplyResult` не затрагивает устройства с `manual = 1` и связи с `source = 'manual'` (не помечает offline, не удаляет). Исчезнувшие связи удаляются только с источником `lldp` и `fdb`.
-- `ApplyResult` вызывается только для скана, в котором прошёл этап обнаружения. Неудавшийся скан не меняет состояние и не помечает устройства offline.
-- `Query` обрезается по краям. Пустая строка после обрезки означает, что фильтра нет. Совпадение ищется подстрокой по `ip`, `mac`, `hostname`, `vendor` без учёта регистра. Отбор идёт в Go: `LIKE` в SQLite знает регистр только для ASCII.
-- Сортировка по IP выполняется в Go, по числовому значению адреса.
+- The first argument is always `context.Context`. The error "not found" is `store.ErrNotFound`, not `nil` and not a panic. The other errors of the package: `ErrConflict` (a uniqueness violation), `ErrVersionConflict`, `ErrNotManual` (an attempt to delete a link that a scan found), `ErrLastAdmin`.
+- `Open(path string)` turns on `journal_mode = WAL`, `foreign_keys = ON`, `busy_timeout = 5000`. For `":memory:"` it sets `SetMaxOpenConns(1)`.
+- `ApplyResult` works in one transaction: merging devices by identity, upsert of interfaces, links, services and containers, marking the missing ones (`online = 0`, deleting vanished links, services and containers), writing to `changes`, updating the scan counters.
+- `ApplyResult` does not touch devices with `manual = 1` and links with `source = 'manual'` (it neither marks them offline nor deletes them). Vanished links are deleted only with the source `lldp` and `fdb`.
+- `ApplyResult` is called only for a scan in which the discovery stage passed. A failed scan changes no state and marks no devices offline.
+- `Query` is trimmed at the edges. An empty string after trimming means there is no filter. A match is searched as a substring in `ip`, `mac`, `hostname`, `vendor` without regard to case. The selection is done in Go: `LIKE` in SQLite knows case only for ASCII.
+- Sorting by IP is done in Go, by the numeric value of the address.
 
-### 5.2 Коллекторы
+### 5.2 Collectors
 
 `internal/collector/collector.go`:
 
 ```go
 type Input struct {
 	Targets []netip.Prefix
-	Devices []model.Device // живые устройства после этапа обнаружения
+	Devices []model.Device // live devices after the discovery stage
 	Config  config.Config
 }
 
@@ -807,1050 +808,1054 @@ type Collector interface {
 }
 ```
 
-Правила:
+Rules:
 
-- Порядок в `scanner`: `arp` (обнаружение в L2-сегменте) → `probe` (маршрутизируемые подсети, если включено) → `snmparp` (ARP и FDB маршрутизаторов и коммутаторов) → обратный DNS → `snmp` → `lldp` → `services` → `classify` → `ssh` → `docker`. `classify` не делает сетевых запросов: он выставляет `Kind` по вендору, данным SNMP, LLDP-возможностям и открытым портам.
-- Ошибка коллектора после этапа обнаружения не валит скан: ошибка пишется в лог, остальные коллекторы работают, статус скана `done`. Ошибка обнаружения даёт статус `failed`.
-- Слияние результатов нескольких коллекторов по `DeviceKey`: непустое значение побеждает пустое. При конфликте побеждает источник по приоритету `ssh`, `snmp`, `arp`. `Kind = unknown` никогда не затирает известный вид.
-- Каждый коллектор получает зависимости интерфейсом (`snmpClient`, `dialer`, `sshRunner`, `dockerAPI`), чтобы тесты подставляли фейки.
-- Каждая горутина завершается по отмене `ctx`. Утечек горутин нет.
+- The order in `scanner`: `arp` (discovery in the L2 segment) → `probe` (routable subnets, if enabled) → `snmparp` (ARP and FDB of routers and switches) → reverse DNS → `snmp` → `lldp` → `services` → `classify` → `ssh` → `docker`. `classify` makes no network requests: it sets `Kind` from the vendor, SNMP data, LLDP capabilities and open ports.
+- A collector error after the discovery stage does not fail the scan: the error is written to the log, the other collectors work, and the scan status is `done`. A discovery error gives the status `failed`.
+- Merging the results of several collectors by `DeviceKey`: a non-empty value wins over an empty one. On a conflict the source wins by priority `ssh`, `snmp`, `arp`. `Kind = unknown` never overwrites a known kind.
+- Each collector gets its dependencies through an interface (`snmpClient`, `dialer`, `sshRunner`, `dockerAPI`), so that tests can substitute fakes.
+- Every goroutine ends when `ctx` is cancelled. There are no goroutine leaks.
 
 ---
 
-## 6. UI-компоненты
+## 6. UI components
 
-Лежат в `web/src/components/`, используются во всех слайсах. Свои кнопки, поля и таблицы в страницах не писать.
+They live in `web/src/components/` and are used in all slices. Do not write your own buttons, fields and tables in pages.
 
-Примитивы shadcn/ui подключаются командой CLI в том слайсе, который их использует: `button`, `card`, `table`, `badge`, `tabs`, `sheet`, `dropdown-menu`, `input`, `skeleton`, `sonner`, `tooltip`, `dialog`, `alert-dialog`, `select`, `textarea`, `label`, `alert`.
+The shadcn/ui primitives are added with the CLI command in the slice that uses them: `button`, `card`, `table`, `badge`, `tabs`, `sheet`, `dropdown-menu`, `input`, `skeleton`, `sonner`, `tooltip`, `dialog`, `alert-dialog`, `select`, `textarea`, `label`, `alert`.
 
-Собственные компоненты:
+Own components:
 
-| компонент         | пропсы                                                              |
+| component         | props                                                               |
 | ----------------- | ------------------------------------------------------------------- |
 | `StatusBadge`     | `online: boolean`                                                   |
-| `EmptyState`      | `title`, `text`, `action?` (слот)                                   |
-| `ScanBar`         | `scan: Scan или null`, `onStart()`, `progress?`                     |
-| `DeviceNode`      | узел React Flow, `data: { device, containerCount }`                 |
-| `TopologyCanvas`  | `topology: Topology`, `onMove(id, x, y)`, `onSelect(id или null)`   |
+| `EmptyState`      | `title`, `text`, `action?` (slot)                                   |
+| `ScanBar`         | `scan: Scan or null`, `onStart()`, `progress?`                      |
+| `DeviceNode`      | a React Flow node, `data: { device, containerCount }`               |
+| `TopologyCanvas`  | `topology: Topology`, `onMove(id, x, y)`, `onSelect(id or null)`    |
 | `DevicePanel`     | `deviceId: number`, `onClose()`                                     |
 | `ExportMenu`      | `formats: ('md', 'html', 'pdf', 'drawio')[]`                        |
-| `DeviceForm`      | `device?: Device` (пусто: создание), `onSubmit(values)`, `onCancel()` |
+| `DeviceForm`      | `device?: Device` (empty: create), `onSubmit(values)`, `onCancel()` |
 | `RoleBadge`       | `role: Role`                                                        |
 | `UserMenu`        | `user: User`, `onLogout()`                                          |
-| `RequirePermission` | `permission: Permission`, `fallback?`, дети                       |
+| `RequirePermission` | `permission: Permission`, `fallback?`, children                   |
 
-Отдельного роута-витрины нет. Компонент, который не используется ни одним слайсом, не пишется.
+There is no separate showcase route. A component that no slice uses is not written.
 
 ---
 
-## 7. Маршруты и API
+## 7. Routes and API
 
 ### 7.1 HTTP API
 
-| метод и путь                         | что делает                                                        | право           | коды ответа            |
+| method and path                      | what it does                                                      | permission      | response codes         |
 | ------------------------------------ | ----------------------------------------------------------------- | --------------- | ---------------------- |
-| `GET /healthz`                       | проверка живости, без данных                                      | публичный       | 200                    |
-| `POST /api/auth/login`               | тело `{ "username", "password" }`, ставит cookie сессии           | публичный       | 200, 400, 401, 429     |
-| `POST /api/auth/logout`              | завершает сессию                                                  | только вход     | 204                    |
-| `GET /api/auth/me`                   | текущий пользователь, его права, CSRF-токен                       | только вход     | 200, 401               |
-| `PUT /api/auth/password`             | смена своего пароля (текущий и новый)                             | только вход     | 204, 400, 401          |
-| `GET /api/topology`                  | устройства, связи, контейнеры одним ответом                       | `topology:read` | 200                    |
-| `GET /api/devices?online=&kind=&q=`  | список устройств, ответ `{ "devices": [...] }`                    | `topology:read` | 200, 400               |
-| `POST /api/devices`                  | ручное добавление; 409, если MAC или IP занят другой записью  | `devices:write` | 201, 400, 409          |
-| `GET /api/devices/{id}`              | устройство, его интерфейсы и сервисы                              | `topology:read` | 200, 404               |
-| `PATCH /api/devices/{id}`            | правка `label`, `notes`, `kind`, поле `version` обязательно       | `devices:write` | 200, 400, 404, 409     |
-| `DELETE /api/devices/{id}`           | удаление устройства                                               | `devices:write` | 204, 404               |
-| `PUT /api/devices/{id}/position`     | тело `{ "x": 1, "y": 2 }`, сохраняет координаты                   | `devices:write` | 204, 400, 404          |
-| `POST /api/links`                    | ручная связь между устройствами                                   | `devices:write` | 201, 400, 404, 409     |
-| `DELETE /api/links/{id}`             | удаление ручной связи                                             | `devices:write` | 204, 404, 409          |
-| `GET /api/containers`                | список контейнеров                                                | `topology:read` | 200                    |
-| `GET /api/services?deviceId=`        | список сервисов                                                   | `topology:read` | 200, 400               |
-| `GET /api/scans`                     | последние сканы                                                   | `topology:read` | 200                    |
-| `POST /api/scans`                    | запускает скан                                                    | `scans:run`     | 202, 409               |
-| `GET /api/scans/{id}`                | один скан                                                         | `topology:read` | 200, 404               |
-| `GET /api/changes?limit=`            | лента изменений, новые сверху                                     | `topology:read` | 200, 400               |
-| `GET /api/events`                    | поток SSE                                                         | `topology:read` | 200                    |
-| `GET /api/export/{format}`           | `md`, `html`, `pdf`, `drawio`, файл с `Content-Disposition`       | `export:run`    | 200, 404, 503          |
-| `GET /api/users`                     | список пользователей                                              | `users:manage`  | 200                    |
-| `POST /api/users`                    | создание пользователя (имя, роль, временный пароль)               | `users:manage`  | 201, 400, 409          |
-| `PATCH /api/users/{id}`              | смена роли, отключение                                            | `users:manage`  | 200, 400, 404, 409     |
-| `PUT /api/users/{id}/password`       | задать новый пароль, включает `must_change_password`              | `users:manage`  | 204, 400, 404          |
-| `DELETE /api/users/{id}`             | удаление пользователя                                             | `users:manage`  | 204, 404, 409          |
-| `GET /api/tokens`                    | свои токены доступа                                               | `tokens:manage` | 200                    |
-| `POST /api/tokens`                   | выпуск токена, значение возвращается один раз                     | `tokens:manage` | 201, 400, 409          |
-| `DELETE /api/tokens/{id}`            | отзыв токена                                                      | `tokens:manage` | 204, 404               |
-| `GET /api/audit?limit=&before=`      | журнал аудита с фильтрами                                         | `audit:read`    | 200, 400               |
+| `GET /healthz`                       | liveness check, no data                                           | public          | 200                    |
+| `POST /api/auth/login`               | body `{ "username", "password" }`, sets the session cookie       | public          | 200, 400, 401, 429     |
+| `POST /api/auth/logout`              | ends the session                                                  | sign-in only    | 204                    |
+| `GET /api/auth/me`                   | the current user, their permissions, the CSRF token               | sign-in only    | 200, 401               |
+| `PUT /api/auth/password`             | change your own password (current and new)                        | sign-in only    | 204, 400, 401          |
+| `GET /api/topology`                  | devices, links, containers in one answer                          | `topology:read` | 200                    |
+| `GET /api/devices?online=&kind=&q=`  | list of devices, the answer is `{ "devices": [...] }`             | `topology:read` | 200, 400               |
+| `POST /api/devices`                  | manual add; 409 if the MAC or IP is taken by another record       | `devices:write` | 201, 400, 409          |
+| `GET /api/devices/{id}`              | a device, its interfaces and services                             | `topology:read` | 200, 404               |
+| `PATCH /api/devices/{id}`            | edit `label`, `notes`, `kind`, the field `version` is required   | `devices:write` | 200, 400, 404, 409     |
+| `DELETE /api/devices/{id}`           | delete a device                                                   | `devices:write` | 204, 404               |
+| `PUT /api/devices/{id}/position`     | body `{ "x": 1, "y": 2 }`, saves the coordinates                  | `devices:write` | 204, 400, 404          |
+| `POST /api/links`                    | a manual link between devices                                     | `devices:write` | 201, 400, 404, 409     |
+| `DELETE /api/links/{id}`             | delete a manual link                                              | `devices:write` | 204, 404, 409          |
+| `GET /api/containers`                | list of containers                                                | `topology:read` | 200                    |
+| `GET /api/services?deviceId=`        | list of services                                                  | `topology:read` | 200, 400               |
+| `GET /api/scans`                     | the latest scans                                                  | `topology:read` | 200                    |
+| `POST /api/scans`                    | starts a scan                                                     | `scans:run`     | 202, 409               |
+| `GET /api/scans/{id}`                | one scan                                                          | `topology:read` | 200, 404               |
+| `GET /api/changes?limit=`            | the change feed, newest on top                                    | `topology:read` | 200, 400               |
+| `GET /api/events`                    | the SSE stream                                                    | `topology:read` | 200                    |
+| `GET /api/export/{format}`           | `md`, `html`, `pdf`, `drawio`, a file with `Content-Disposition`  | `export:run`    | 200, 404, 503          |
+| `GET /api/users`                     | list of users                                                     | `users:manage`  | 200                    |
+| `POST /api/users`                    | create a user (name, role, temporary password)                    | `users:manage`  | 201, 400, 409          |
+| `PATCH /api/users/{id}`              | change the role, disable                                          | `users:manage`  | 200, 400, 404, 409     |
+| `PUT /api/users/{id}/password`       | set a new password, turns on `must_change_password`               | `users:manage`  | 204, 400, 404          |
+| `DELETE /api/users/{id}`             | delete a user                                                     | `users:manage`  | 204, 404, 409          |
+| `GET /api/tokens`                    | your own access tokens                                            | `tokens:manage` | 200                    |
+| `POST /api/tokens`                   | issue a token, the value is returned once                         | `tokens:manage` | 201, 400, 409          |
+| `DELETE /api/tokens/{id}`            | revoke a token                                                    | `tokens:manage` | 204, 404               |
+| `GET /api/audit?limit=&before=`      | the audit log with filters                                        | `audit:read`    | 200, 400               |
 
-События SSE: `scan.started`, `scan.progress` (данные `{ scanId, stage, done, total }`), `scan.finished`, `topology.changed`, `config.reloaded`, `config.error`. События `config.*` получают только пользователи с правом `users:manage`.
+SSE events: `scan.started`, `scan.progress` (data `{ scanId, stage, done, total }`), `scan.finished`, `topology.changed`, `config.reloaded`, `config.error`. The `config.*` events go only to users with the permission `users:manage`.
 
-### 7.2 Страницы интерфейса
+### 7.2 Interface pages
 
-| путь            | что показывает                                                  |
+| path            | what it shows                                                   |
 | --------------- | --------------------------------------------------------------- |
-| `/`             | топология, боковая панель устройства по `?device=<id>`          |
-| `/inventory`    | таблица устройств и IP, поиск, фильтры                          |
-| `/containers`   | таблица контейнеров                                             |
-| `/services`     | таблица сервисов                                                |
-| `/changes`      | лента изменений и график числа устройств по сканам              |
-| `/login`        | вход                                                            |
-| `/account`      | смена пароля, токены доступа                                    |
-| `/users`        | управление пользователями (право `users:manage`)                |
-| `/audit`        | журнал аудита (право `audit:read`)                              |
+| `/`             | the topology, the device side panel by `?device=<id>`           |
+| `/inventory`    | the table of devices and IPs, search, filters                   |
+| `/containers`   | the table of containers                                         |
+| `/services`     | the table of services                                           |
+| `/changes`      | the change feed and a chart of the number of devices per scan   |
+| `/login`        | sign-in                                                         |
+| `/account`      | change password, access tokens                                  |
+| `/users`        | user management (permission `users:manage`)                     |
+| `/audit`        | the audit log (permission `audit:read`)                         |
 
-Правила:
+Rules:
 
-- Ответы API в JSON, поля `camelCase`. Ошибка: `{ "error": "text" }` с подходящим кодом.
-- Нечисловой `id` (`/api/devices/abc`) даёт 404, а не 500 и не 400.
-- Одновременно идёт один скан. `POST /api/scans` во время скана отвечает 409.
-- Тело запроса ограничено 1 МиБ.
-- Все пути вне `/api` и `/healthz` отдают встроенный `index.html`, роутинг делает React Router.
-- Экспорт `pdf` без найденного Chrome отвечает 503 с текстом, как получить PDF через печать HTML.
-- Любой маршрут кроме `/healthz` и `POST /api/auth/login` требует сессии (cookie) или токена (`Authorization: Bearer`). Нет аутентификации - 401, нет права - 403.
-- Небезопасные методы (`POST`, `PUT`, `PATCH`, `DELETE`) с сессией требуют заголовок `X-CSRF-Token`, токену он не нужен.
-- Токен доступа не вызывает `/api/users`, `/api/audit` и `/api/auth/*` (кроме `GET /api/auth/me`).
-- Тексты ответов 401 и 403 не раскрывают, существует ли пользователь или ресурс.
-- Колонка «право» таблицы 7.1 и есть таблица маршрутов из `internal/api/router.go`. Маршрут без права не регистрируется.
-
----
-
-## 8. Валидация
-
-`config.Validate() error` (возвращает `errors.Join`) и проверки входа API. Чистые функции без сети и базы.
-
-Правила конфига:
-
-- Каждая цель в `scan.targets` - корректный CIDR.
-- Цель - IPv4. IPv6 в версии 1 не поддерживается, потому что обнаружение идёт по ARP.
-- Префикс IPv4-цели не шире `/16`.
-- Цель лежит в диапазонах RFC 1918, если `allowPublicTargets` не включён.
-- `scan.interval` равен `0` или не меньше `1m`.
-- `snmp.timeout` от `1s` до `30s`.
-- `ssh.hosts[].keyFile` обязателен для каждого хоста.
-- `auth.sessionIdleTimeout` от `15m` до `24h`, `auth.sessionMaxAge` не меньше простоя и не больше `720h`.
-- `auth.minPasswordLength` не меньше 12, `auth.maxFailedLogins` от 3 до 20.
-- Параметры `auth.argon2` не ниже `memoryKiB 19456`, `iterations 2`, `parallelism 1`.
-- `tls.certFile` и `tls.keyFile` задаются вместе или не задаются.
-- Каждый элемент `trustedProxies` - корректный CIDR.
-- `listen` не на loopback без `tls` и без `trustedProxies` → предупреждение в лог, что трафик идёт без шифрования. Запуск не блокируется.
-
-Правила API:
-
-- `x` и `y` позиции - конечные числа по модулю не больше 100000.
-- `limit` - целое от 1 до 500, по умолчанию 50.
-- Неизвестный `format` экспорта - 404.
-- Имя пользователя `^[a-z0-9._-]{3,32}$`, роль из набора `viewer`, `operator`, `admin`.
-- Пароль от `auth.minPasswordLength` до 128 символов, не равен имени пользователя и не входит в список частых паролей.
-- Ручное устройство: `ip` пустой или корректный адрес, `mac` пустой или корректный (приводится к нижнему регистру с двоеточиями), хотя бы одно из полей `ip`, `mac`, `label` не пусто, `label` до 100 символов, `notes` до 2000, `hostname` до 255 символов (необязательное), `kind` из набора `DeviceKind`.
-- Связь: оба устройства существуют и различны, порт до 64 символов.
-- Токен: имя от 1 до 64 символов, область `read` или `write`, срок от 1 до 365 дней.
-
-Сообщения об ошибках на английском, по одной строке: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `password is too common`, `port is longer than 64 characters`, `hostname is longer than 255 characters`, `token name is invalid`, `scope is unknown`, `scope is above your role`, `token lifetime is out of range`, `too many active tokens`, `before is not valid`, `result is unknown`, `from is not a date`, `to is not a date`, `filter is too long`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
+- API responses are JSON, fields in `camelCase`. An error: `{ "error": "text" }` with a fitting code.
+- A non-numeric `id` (`/api/devices/abc`) gives 404, not 500 and not 400.
+- One scan runs at a time. `POST /api/scans` during a scan answers 409.
+- The request body is limited to 1 MiB.
+- All paths outside `/api` and `/healthz` serve the embedded `index.html`, and React Router does the routing.
+- The `pdf` export without a Chrome found answers 503 with a text on how to get a PDF by printing the HTML.
+- Any route except `/healthz` and `POST /api/auth/login` needs a session (cookie) or a token (`Authorization: Bearer`). No authentication - 401, no permission - 403.
+- Unsafe methods (`POST`, `PUT`, `PATCH`, `DELETE`) with a session need the header `X-CSRF-Token`, and a token does not need it.
+- An access token does not call `/api/users`, `/api/audit` and `/api/auth/*` (except `GET /api/auth/me`).
+- The texts of the 401 and 403 answers do not reveal whether a user or a resource exists.
+- The "permission" column of table 7.1 is the route table from `internal/api/router.go`. A route without a permission is not registered.
 
 ---
 
-## 9. Безопасность (руководство, обязательно для всех слайсов)
+## 8. Validation
 
-Принцип: запрет по умолчанию, минимальные права, сервис только читает сеть. Все параметры ниже заданы заранее. Параметр меняется только через `CONTRACT GAP` (раздел 14). Слайс не ослабляет параметр ради удобства разработки.
+`config.Validate() error` (returns `errors.Join`) and the checks of API input. Pure functions without network and database.
 
-### 9.1 Модель угроз
+Config rules:
 
-Что защищаем:
+- Each target in `scan.targets` is a valid CIDR.
+- A target is IPv4. IPv6 is not supported in version 1, because discovery goes through ARP.
+- The prefix of an IPv4 target is not wider than `/16`.
+- A target lies in the ranges of RFC 1918 unless `allowPublicTargets` is on.
+- `scan.interval` is `0` or not less than `1m`.
+- `snmp.timeout` is from `1s` to `30s`.
+- `ssh.hosts[].keyFile` is required for every host.
+- `auth.sessionIdleTimeout` is from `15m` to `24h`, `auth.sessionMaxAge` is not less than the idle time and not more than `720h`.
+- `auth.minPasswordLength` is not less than 12, `auth.maxFailedLogins` is from 3 to 20.
+- The `auth.argon2` parameters are not below `memoryKiB 19456`, `iterations 2`, `parallelism 1`.
+- `tls.certFile` and `tls.keyFile` are set together or not at all.
+- Each element of `trustedProxies` is a valid CIDR.
+- `listen` not on loopback without `tls` and without `trustedProxies` → a warning in the log that the traffic goes unencrypted. The start is not blocked.
 
-- карту сети и инвентарь (они раскрывают топологию и слабые места);
-- учётные данные доступа к устройствам (SNMP community, ключи SSH);
-- учётные записи, сессии и токены панели;
-- возможность запускать сканы из сети хоста;
-- доступ к Docker-сокету хоста.
+API rules:
 
-От кого защищаем:
+- The `x` and `y` of a position are finite numbers with an absolute value of at most 100000.
+- `limit` is an integer from 1 to 500, 50 by default.
+- An unknown export `format` is 404.
+- A username matches `^[a-z0-9._-]{3,32}$`, the role is one of `viewer`, `operator`, `admin`.
+- A password is from `auth.minPasswordLength` to 128 characters, is not equal to the username and is not in the list of common passwords.
+- A manual device: `ip` is empty or a valid address, `mac` is empty or valid (converted to lowercase with colons), at least one of the fields `ip`, `mac`, `label` is not empty, `label` is up to 100 characters, `notes` up to 2000, `hostname` up to 255 characters (optional), `kind` is from the set `DeviceKind`.
+- A link: both devices exist and differ, the port is up to 64 characters.
+- A token: the name is from 1 to 64 characters, the scope is `read` or `write`, the lifetime is from 1 to 365 days.
 
-- сетевой посетитель без учётной записи;
-- пользователь с низкой ролью, который пытается получить права выше;
-- содержимое из сети: hostname, `sysDescr` и имена контейнеров контролируют третьи лица;
-- похищенные сессия или токен.
+Error messages are in English, one line each: `target is not a valid CIDR`, `target is wider than /16`, `target is outside private ranges`, `scan interval is below 1m`, `snmp timeout is out of range`, `ssh host has no key file`, `position is not finite`, `limit is out of range`, `username is invalid`, `password is shorter than the minimum`, `password is longer than 128 characters`, `password equals username`, `password is too common`, `port is longer than 64 characters`, `hostname is longer than 255 characters`, `token name is invalid`, `scope is unknown`, `scope is above your role`, `token lifetime is out of range`, `too many active tokens`, `before is not valid`, `result is unknown`, `from is not a date`, `to is not a date`, `filter is too long`, `version is required`, `role is unknown`, `ip is not valid`, `mac is not valid`, `device has no ip, mac or label`, `label is longer than 100 characters`, `notes are longer than 2000 characters`, `link connects a device to itself`, `session timeout is out of range`, `argon2 parameters are below the minimum`, `tls needs both certFile and keyFile`, `token lifetime is out of range`, `only IPv4 targets are supported`, `min password length is below 12`, `max failed logins is out of range`, `trusted proxy is not a valid CIDR`.
 
-Вне защиты v1: злоумышленник с доступом к файловой системе хоста (он читает конфиг и базу) и атаки на само сетевое оборудование.
+---
 
-| угроза                    | мера                                                                                                   | где проверяется                 |
+## 9. Security (a guide, mandatory for all slices)
+
+The principle: deny by default, minimal rights, the service only reads the network. All parameters below are set in advance. A parameter changes only through `CONTRACT GAP` (section 14). A slice does not weaken a parameter for the convenience of development.
+
+### 9.1 Threat model
+
+What we protect:
+
+- the network map and the inventory (they reveal the topology and the weak points);
+- credentials for access to devices (SNMP community, SSH keys);
+- accounts, sessions and tokens of the panel;
+- the ability to start scans from the host's network;
+- access to the Docker socket of the host.
+
+Whom we protect against:
+
+- a network visitor without an account;
+- a user with a low role who tries to get higher rights;
+- content from the network: hostname, `sysDescr` and container names are controlled by third parties;
+- a stolen session or token.
+
+Outside the protection of v1: an attacker with access to the file system of the host (they read the config and the database) and attacks on the network equipment itself.
+
+| threat                    | measure                                                                                                | where it is checked             |
 | ------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------- |
-| подбор пароля             | argon2id, блокировка учётки, лимит попыток с IP, одинаковый ответ на любую ошибку входа                | слайс 2                         |
-| кража или фиксация сессии | случайный идентификатор, хеш в базе, `HttpOnly`, `SameSite=Strict`, новый идентификатор при входе, отзыв сессий | слайсы 2 и 6           |
-| CSRF                      | `SameSite=Strict` и заголовок `X-CSRF-Token` для небезопасных методов                                  | слайс 2                         |
-| XSS через данные сети     | экранирование при выводе, CSP без inline-скриптов, запрет `dangerouslySetInnerHTML`                    | каждый слайс, который выводит данные |
-| повышение прав            | таблица маршрутов с правом, проверка на сервере, запрет по умолчанию                                   | слайсы 2, 3, 5, 6               |
-| утечка секретов           | тип `Secret`, фильтр логов, секреты только в конфиге                                                   | слайсы 0, 7, 10                 |
-| злоупотребление сканером  | цели из конфига, RFC 1918 по умолчанию, лимиты параллелизма, право `scans:run`, аудит                  | слайсы 1 и 3                    |
-| перегрузка сервиса        | лимиты тела и заголовков, таймауты, лимиты SSE и PDF                                                   | слайсы 3 и 13                   |
-| доступ через Docker-сокет | сокет только на чтение, рекомендуется `docker-socket-proxy`                                            | слайсы 11 и 16                  |
-| уязвимые зависимости      | `govulncheck`, `npm audit`, Dependabot                                                                 | слайс 16                        |
+| password guessing         | argon2id, account lockout, per-IP attempt limit, the same answer to any login error                    | slice 2                         |
+| session theft or fixation | a random identifier, a hash in the database, `HttpOnly`, `SameSite=Strict`, a new identifier at sign-in, revoking sessions | slices 2 and 6 |
+| CSRF                      | `SameSite=Strict` and the header `X-CSRF-Token` for unsafe methods                                     | slice 2                         |
+| XSS through network data  | escaping on output, CSP without inline scripts, a ban on `dangerouslySetInnerHTML`                     | every slice that shows data     |
+| privilege escalation      | a route table with a permission, a check on the server, deny by default                                | slices 2, 3, 5, 6               |
+| secret leak               | the type `Secret`, a log filter, secrets only in the config                                            | slices 0, 7, 10                 |
+| scanner abuse             | targets from the config, RFC 1918 by default, concurrency limits, the permission `scans:run`, audit    | slices 1 and 3                  |
+| service overload          | limits on body and headers, timeouts, SSE and PDF limits                                               | slices 3 and 13                 |
+| access through the Docker socket | a read-only socket, `docker-socket-proxy` is recommended                                        | slices 11 and 16                |
+| vulnerable dependencies   | `govulncheck`, `npm audit`, Dependabot                                                                 | slice 16                        |
 
-### 9.2 Аутентификация
+### 9.2 Authentication
 
-| параметр                  | значение                                                                                                      |
+| parameter                 | value                                                                                                         |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| хеш пароля                | argon2id, память 64 MiB, 3 прохода, параллелизм 2, соль 16 байт, ключ 32 байта, формат PHC. Нижняя граница (OWASP): 19 MiB, 2 прохода, параллелизм 1 |
-| перехеширование           | при успешном входе, если параметры в хеше слабее текущих                                                       |
-| длина пароля              | от 12 до 128 символов, любые символы Unicode, без правил состава, не равен имени пользователя, нет в списке частых паролей (без учёта регистра) |
-| имя пользователя          | `^[a-z0-9._-]{3,32}$`, регистр не различается                                                                  |
-| ответ на ошибку входа     | всегда 401 и текст `invalid username or password`: неверный пароль, неизвестный пользователь, заблокированная или отключённая учётка |
-| выравнивание времени      | для неизвестного пользователя выполняется проверка по фиктивному хешу                                          |
-| блокировка при входе      | 5 неудачных входов подряд с одного IP под одним именем, блокировка этой пары на 15 минут, успешный вход сбрасывает счётчик пары |
-| лимит по IP               | 10 неудачных попыток входа в минуту с одного IP (верный пароль лимит не расходует), ответ 429 с заголовком `Retry-After` |
-| идентификатор сессии      | 32 случайных байта из `crypto/rand`, base64url, в базе только SHA-256                                          |
-| cookie сессии             | `netscribe_session`, `HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure` при HTTPS                                  |
-| срок сессии               | 8 часов без активности, 7 дней абсолютно, новый идентификатор при каждом входе                                 |
-| лимит сессий              | 10 на пользователя, самая старая вытесняется                                                                   |
-| отзыв сессий              | при выходе, смене пароля, смене роли, отключении и удалении пользователя                                       |
-| CSRF-токен                | 32 случайных байта на сессию, отдаётся в `GET /api/auth/me`, передаётся в `X-CSRF-Token`                       |
-| токен доступа             | `ndt_` и 32 случайных байта base64url, в базе SHA-256 и префикс из 8 символов, значение показывается один раз  |
-| область токена            | `read` (права viewer) или `write` (права operator), не выше роли владельца, никогда не даёт `users:manage` и `audit:read` |
-| срок токена               | по умолчанию 90 дней, максимум 365, бессрочных нет, не больше 20 активных на пользователя                      |
+| password hash             | argon2id, memory 64 MiB, 3 passes, parallelism 2, salt 16 bytes, key 32 bytes, PHC format. The lower bound (OWASP): 19 MiB, 2 passes, parallelism 1 |
+| rehashing                 | at a successful sign-in, if the parameters in the hash are weaker than the current ones                       |
+| password length           | from 12 to 128 characters, any Unicode characters, no composition rules, not equal to the username, not in the list of common passwords (case-insensitive) |
+| username                  | `^[a-z0-9._-]{3,32}$`, case is not distinguished                                                              |
+| answer to a login error   | always 401 and the text `invalid username or password`: a wrong password, an unknown user, a locked or disabled account |
+| timing equalization       | for an unknown user a check against a dummy hash is performed                                                 |
+| lockout at sign-in        | 5 failed sign-ins in a row from one IP under one name lock that pair for 15 minutes, a successful sign-in resets the counter of the pair |
+| per-IP limit              | 10 failed sign-in attempts per minute from one IP (a right password does not use up the limit), the answer is 429 with the header `Retry-After` |
+| session identifier        | 32 random bytes from `crypto/rand`, base64url, only SHA-256 in the database                                   |
+| session cookie            | `netscribe_session`, `HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure` over HTTPS                             |
+| session lifetime          | 8 hours without activity, 7 days absolute, a new identifier at every sign-in                                  |
+| session limit             | 10 per user, the oldest is displaced                                                                          |
+| session revocation        | at sign-out, password change, role change, disabling and deleting a user                                      |
+| CSRF token                | 32 random bytes per session, returned in `GET /api/auth/me`, sent in `X-CSRF-Token`                           |
+| access token              | `ndt_` and 32 random bytes in base64url, SHA-256 and a prefix of 8 characters in the database, the value is shown once |
+| token scope               | `read` (viewer rights) or `write` (operator rights), not above the role of the owner, never gives `users:manage` and `audit:read` |
+| token lifetime            | 90 days by default, 365 at most, there are no eternal ones, no more than 20 active per user                   |
 
-Первый запуск и служебные правила:
+First start and service rules:
 
-- Пароля по умолчанию нет. Пока в базе нет пользователей, все маршруты кроме `/healthz` отвечают 503 с текстом `no users: run "netscribe user add"`.
-- `netscribe user add <name> --role admin` читает пароль с терминала без эха или из stdin (`--password-stdin`). Аргумента с паролем нет.
-- Учётная запись с `must_change_password` может только сменить пароль.
-- Последнего администратора нельзя удалить, отключить или понизить.
-- Отключить аутентификацию нельзя.
+- There is no default password. While the database has no users, all routes except `/healthz` answer 503 with the text `no users: run "netscribe user add"`.
+- `netscribe user add <name> --role admin` reads the password from the terminal without echo or from stdin (`--password-stdin`). There is no argument with a password.
+- An account with `must_change_password` can only change its password.
+- The last administrator cannot be deleted, disabled or demoted.
+- Authentication cannot be turned off.
 
-### 9.3 Роли и права
+### 9.3 Roles and permissions
 
-| право           | что разрешает                                                                              | viewer | operator | admin |
+| permission      | what it allows                                                                             | viewer | operator | admin |
 | --------------- | ------------------------------------------------------------------------------------------ | ------ | -------- | ----- |
-| `topology:read` | чтение топологии, инвентаря, сервисов, контейнеров, изменений, поток событий                | да     | да       | да    |
-| `export:run`    | экспорт документации                                                                       | да     | да       | да    |
-| `tokens:manage` | выпуск и отзыв собственных токенов                                                         | да     | да       | да    |
-| `scans:run`     | запуск скана                                                                               | нет    | да       | да    |
-| `devices:write` | ручное добавление, правка и удаление устройств и ручных связей, позиции узлов на холсте    | нет    | да       | да    |
-| `audit:read`    | чтение журнала аудита                                                                      | нет    | нет      | да    |
-| `users:manage`  | управление пользователями, события `config.*`                                              | нет    | нет      | да    |
+| `topology:read` | reading the topology, inventory, services, containers, changes, the event stream           | yes    | yes      | yes   |
+| `export:run`    | exporting the documentation                                                                | yes    | yes      | yes   |
+| `tokens:manage` | issuing and revoking your own tokens                                                       | yes    | yes      | yes   |
+| `scans:run`     | starting a scan                                                                            | no     | yes      | yes   |
+| `devices:write` | manual adding, editing and deleting of devices and manual links, node positions on the canvas | no  | yes      | yes   |
+| `audit:read`    | reading the audit log                                                                      | no     | no       | yes   |
+| `users:manage`  | managing users, the `config.*` events                                                      | no     | no       | yes   |
 
-Правила:
+Rules:
 
-- Права проверяет только middleware по таблице маршрутов. Обработчики роль не сравнивают.
-- Маршрут без права в таблице не регистрируется: регистрация паникует при старте. Запрет по умолчанию.
-- Маршруты `/healthz` и `POST /api/auth/login` публичные, остальные требуют сессии или токена. Маршруты `/api/auth/*` кроме входа требуют только входа, без права.
-- Пользователь не меняет собственную роль и не отключает сам себя.
-- Интерфейс скрывает недоступные действия по `web/src/lib/permissions.ts`. Это удобство, защита работает на сервере.
-- Объектных прав нет: все пользователи видят всю сеть (раздел 18).
+- Only middleware checks permissions, by the route table. Handlers do not compare roles.
+- A route without a permission in the table is not registered: registration panics at start. Deny by default.
+- The routes `/healthz` and `POST /api/auth/login` are public, the others need a session or a token. The routes `/api/auth/*` except sign-in need only a sign-in, without a permission.
+- A user does not change their own role and does not disable themselves.
+- The interface hides unavailable actions according to `web/src/lib/permissions.ts`. This is a convenience, and the protection works on the server.
+- There are no object permissions: all users see the whole network (section 18).
 
-Многопользовательская работа:
+Multi-user work:
 
-- Топология общая. Позиции узлов: побеждает последняя запись.
-- Правки устройств идут с оптимистичной блокировкой по `version`. Расхождение даёт 409, интерфейс предлагает загрузить актуальные данные.
-- Каждое значимое действие пишется в журнал аудита (9.8).
+- The topology is shared. Node positions: the last write wins.
+- Edits of devices go with optimistic locking by `version`. A mismatch gives 409, and the interface offers to load the current data.
+- Every significant action is written to the audit log (9.8).
 
-### 9.4 Транспорт и заголовки
+### 9.4 Transport and headers
 
-- Панель слушает `127.0.0.1:8080` по умолчанию. Адрес вне loopback без TLS и без доверенного прокси даёт предупреждение в лог и баннер администраторам в интерфейсе.
-- TLS: встроенный (`tls.certFile`, `tls.keyFile`, минимум TLS 1.2) или обратный прокси. Заголовки `X-Forwarded-For` и `X-Forwarded-Proto` принимаются только от адресов из `trustedProxies`, иначе игнорируются.
-- `Strict-Transport-Security: max-age=31536000` отправляется только по HTTPS.
-- Заголовки на всех ответах:
+- The panel listens on `127.0.0.1:8080` by default. An address beyond loopback without TLS and without a trusted proxy gives a warning in the log and a banner for administrators in the interface.
+- TLS: built-in (`tls.certFile`, `tls.keyFile`, TLS 1.2 at minimum) or a reverse proxy. The headers `X-Forwarded-For` and `X-Forwarded-Proto` are accepted only from the addresses in `trustedProxies`, otherwise they are ignored.
+- `Strict-Transport-Security: max-age=31536000` is sent only over HTTPS.
+- Headers on all responses:
   - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`
   - `X-Content-Type-Options: nosniff`
   - `Referrer-Policy: no-referrer`
   - `X-Frame-Options: DENY`
   - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
   - `Cross-Origin-Opener-Policy: same-origin`
-  - `Cache-Control: no-store` для всех путей `/api`
-- Inline-скриптов нет. Скрипты подключаются только внешними файлами.
-- CORS не включается: только same-origin.
-- Экспорт HTML отдаётся как вложение (`Content-Disposition: attachment`) с собственным `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:` и `X-Content-Type-Options: nosniff`.
+  - `Cache-Control: no-store` for all `/api` paths
+- There are no inline scripts. Scripts are included only as external files.
+- CORS is not enabled: same-origin only.
+- The HTML export is served as an attachment (`Content-Disposition: attachment`) with its own `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src data:` and `X-Content-Type-Options: nosniff`.
 
-### 9.5 Ввод, вывод и ресурсы
+### 9.5 Input, output and resources
 
-- Данные из сети (hostname, `sysName`, `sysDescr`, имена контейнеров, образы) недоверенные. При записи в базу они обрезаются до 255 символов, управляющие символы удаляются. Выводятся только через экранирующие механизмы: React, `html/template`, XML-энкодер. `dangerouslySetInnerHTML` запрещён правилом eslint.
-- Запросы к базе только параметризованные (sqlc). Сборки SQL из строк нет.
-- Тело запроса не больше 1 МиБ, заголовки не больше 16 КиБ.
-- Таймауты сервера: `ReadHeaderTimeout` 10 с, `ReadTimeout` 30 с, `WriteTimeout` 60 с, `IdleTimeout` 120 с. SSE и экспорт PDF исключены из `WriteTimeout`, у них свои дедлайны.
-- SSE: не больше 5 соединений на пользователя. PDF: один рендер одновременно, не дольше 60 секунд.
-- Пути файлов из пользовательского ввода не принимаются. Имена экспортируемых файлов формирует сервер.
+- Data from the network (hostname, `sysName`, `sysDescr`, container names, images) is untrusted. When written to the database it is cut to 255 characters, and control characters are removed. It is shown only through escaping mechanisms: React, `html/template`, an XML encoder. `dangerouslySetInnerHTML` is forbidden by an eslint rule.
+- Queries to the database are only parameterized (sqlc). There is no SQL built from strings.
+- The request body is at most 1 MiB, the headers at most 16 KiB.
+- Server timeouts: `ReadHeaderTimeout` 10 s, `ReadTimeout` 30 s, `WriteTimeout` 60 s, `IdleTimeout` 120 s. SSE and PDF export are excluded from `WriteTimeout`, they have their own deadlines.
+- SSE: no more than 5 connections per user. PDF: one render at a time, no longer than 60 seconds.
+- File paths from user input are not accepted. The names of exported files are formed by the server.
 
-### 9.6 Сканирование
+### 9.6 Scanning
 
-- Цели только из конфига. По умолчанию только RFC 1918, не шире `/16`. Публичные адреса включает флаг `allowPublicTargets`.
-- Пределы параллелизма: 128 отправок ARP-прогрева, 256 TCP-соединений за скан, 32 одновременных SNMP-запроса, 4 SSH-хоста. Одновременно идёт один скан.
-- Запуск скана требует права `scans:run`. Минимальный интервал расписания 1 минута.
-- Ручное добавление устройства ничего не зондирует.
-- Зондирование маршрутизируемых подсетей (`discovery.probeRoutedTargets`) по умолчанию выключено.
-- Слайс 18: HTTP читает только строку статуса и заголовки ответа на `HEAD /`, без тела и без переходов по редиректам, ограничение 8 КиБ и 2 секунды на запрос. Проверка сертификата отключена только для чтения заголовков, учётные данные и cookie не отправляются. mDNS и SSDP выходят только в локальные сегменты хоста, адрес из `LOCATION` в ответе SSDP не запрашивается никогда. Всё, что пришло по сети, считается недоверенным: обрезается по длине и очищается от управляющих символов.
-- SNMP: в v1 только v2c, community передаётся открытым текстом. README требует read-only community и ACL на устройстве. В клиенте нет метода записи, SNMP SET невозможен.
-- SSH: только ключи, `known_hosts` проверяется строго, команды фиксированы, отдельная учётная запись без прав записи. Права файла ключа не шире `0600`, иначе хост пропускается.
-- Docker: сокет подключается только на чтение. Рекомендуется `docker-socket-proxy` с разрешением только `containers`, `networks`, `events`. Риск доступа к сокету описан в README.
+- Targets only from the config. By default only RFC 1918, not wider than `/16`. Public addresses are turned on by the flag `allowPublicTargets`.
+- Concurrency limits: 128 ARP warm-up sends, 256 TCP connections per scan, 32 concurrent SNMP requests, 4 SSH hosts. One scan runs at a time.
+- Starting a scan needs the permission `scans:run`. The minimum interval of the schedule is 1 minute.
+- Adding a device by hand probes nothing.
+- Probing routable subnets (`discovery.probeRoutedTargets`) is off by default.
+- Slice 18: HTTP reads only the status line and the response headers of `HEAD /`, without a body and without following redirects, with a limit of 8 KiB and 2 seconds per request. Certificate verification is off only for reading headers, and no credentials or cookies are sent. mDNS and SSDP go out only into the local segments of the host, and the address from `LOCATION` in an SSDP answer is never requested. Everything that came over the network is untrusted: it is cut by length and cleaned of control characters.
+- SNMP: in v1 only v2c, and the community goes in clear text. The README requires a read-only community and an ACL on the device. The client has no write method, so SNMP SET is impossible.
+- SSH: keys only, `known_hosts` is checked strictly, the commands are fixed, a separate account without write rights. The key file permissions are not wider than `0600`, otherwise the host is skipped.
+- Docker: the socket is connected read-only. `docker-socket-proxy` allowing only `containers`, `networks`, `events` is recommended. The risk of socket access is described in the README.
 
-### 9.7 Секреты и данные на диске
+### 9.7 Secrets and data on disk
 
-- Секреты (`snmp.communities`, пути к ключам SSH) живут только в конфиге. Права файла конфига не шире `0600`, иначе сервис отказывается запускаться. Флаг `--allow-loose-permissions` разрешает запуск с предупреждением для окружений вроде bind-mount в Docker.
-- Файл базы создаётся с правами `0600`, каталог данных с `0700`. Шифрования базы в v1 нет, защита на уровне ОС (раздел 18).
-- Хеши паролей, токенов и сессий не возвращаются API, не логируются и не попадают в экспорт.
-- В логах (`slog`) запрещены пароли, токены, значения cookie, заголовок `Authorization` и community. Фильтр покрыт тестом.
-- Экспорт не содержит секретов, учётных данных и данных пользователей.
+- Secrets (`snmp.communities`, paths to SSH keys) live only in the config. The permissions of the config file are not wider than `0600`, otherwise the service refuses to start. The flag `--allow-loose-permissions` allows a start with a warning for environments such as a bind mount in Docker.
+- The database file is created with permissions `0600`, the data directory with `0700`. There is no database encryption in v1, and the protection is at the OS level (section 18).
+- Hashes of passwords, tokens and sessions are not returned by the API, not logged and do not get into exports.
+- Passwords, tokens, cookie values, the `Authorization` header and communities are forbidden in logs (`slog`). The filter is covered by a test.
+- The export contains no secrets, credentials or user data.
 
-### 9.8 Аудит
+### 9.8 Audit
 
-Пишутся события: `login`, `login_failed`, `logout`, `password_change`, `user_create`, `user_update`, `user_delete`, `user_password_reset`, `token_create`, `token_revoke`, `scan_start`, `device_create`, `device_edit`, `device_delete`, `link_create`, `link_delete`, `export`, `config_reload`, `config_reload_failed`, `access_denied`.
+These events are written: `login`, `login_failed`, `logout`, `password_change`, `user_create`, `user_update`, `user_delete`, `user_password_reset`, `token_create`, `token_revoke`, `scan_start`, `device_create`, `device_edit`, `device_delete`, `link_create`, `link_delete`, `export`, `config_reload`, `config_reload_failed`, `access_denied`.
 
-Запись содержит время, пользователя, IP, результат (`ok`, `denied`, `error`) и одну строку описания без секретов. API не умеет менять и удалять записи: старые записи удаляет только очистка по `audit.keepDays` (365 по умолчанию). Журнал читает только право `audit:read`.
+An entry holds the time, the user, the IP, the result (`ok`, `denied`, `error`) and one line of description without secrets. The API cannot change or delete entries: old entries are deleted only by the cleanup by `audit.keepDays` (365 by default). Only the permission `audit:read` reads the log.
 
-### 9.9 Зависимости и поставка
+### 9.9 Dependencies and delivery
 
-- `govulncheck ./...` и `npm audit --omit=dev --audit-level=high` запускаются командой `make audit` в CI. В локальный `make gate` они не входят, потому что требуют сеть.
-- Версии зафиксированы (`go.sum`, `package-lock.json`). Dependabot следит за `go.mod`, npm и базовым образом Docker.
-- Docker-образ: минимальный итоговый образ, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`. Процесс работает не от root, где это возможно (доступ к сокету решается через `group_add`).
-- Релизы публикуются с файлом контрольных сумм (`checksums.txt`).
-- В репозитории лежит `SECURITY.md` с порядком сообщения об уязвимостях.
-
----
-
-## 10. Тесты
-
-Тесты выводятся из критериев приёмки слайса, а не из готового кода. Критерии написаны в разделе 16 до того, как написан код. Тест кодирует критерий и не повторяет реализацию.
-
-Запрещённый вид теста: «записали устройство, прочитали, значения совпали». Такой тест зелёный и на сломанном слиянии по MAC, и на дублях.
-
-На каждый слайс минимум:
-
-- тест на каждый критерий приёмки, где есть проверяемое условие;
-- тест на путь ошибки (цель вне разрешённых диапазонов, таймаут SNMP, отсутствующий Docker-сокет, несуществующий id);
-- тесты чистой логики (парсеры, раскладка, валидация, сортировка IP) без сети и без базы.
-
-Как строить тесты:
-
-- База: `store.Open(":memory:")`, новая на каждый тест. Файл `netscribe.db` тесты не трогают.
-- Сеть: коллекторы принимают интерфейсы (`snmpClient`, `dialer`, `sshRunner`, `dockerAPI`), тесты подставляют фейки. Ответы SNMP берутся из записанного вывода `snmpwalk` в `testdata/`.
-- HTTP: `httptest` поверх `api.NewRouter` с базой в памяти и фейковым сканером.
-- Время: пакеты принимают `clock func() time.Time`, тесты подставляют фиксированное.
-- Рендеры: golden-файлы в `testdata/*.golden` плюс структурные проверки (XML разбирается, число ячеек `mxCell` равно числу устройств, контейнеров и связей плюс две служебные). Golden обновляется флагом `-update` и проверяется глазами на ревью.
-- Права: один тест обходит всю таблицу маршрутов и проверяет для каждого маршрута три случая: без входа - 401, роль без права - 403, роль с правом - ни 401, ни 403. Регистрация маршрута без права паникует, это тоже проверяется.
-- Безопасность: тесты на заголовки (на `/`, `/api/*`, ошибках и экспорте), на атрибуты cookie сессии, на то, что пароли, хеши, токены и community не попадают в логи, ответы API и экспорт.
-- Изоляция и время: тест не пишет в пакетные переменные, которые читают фоновые горутины (подменяемое значение передаётся полем структуры или аргументом). Тест не ждёт «достаточно долго» через `time.Sleep`: он ждёт сигнал из канала или опрос с дедлайном. Пауза допустима только там, где тест проверяет, что событие не произошло.
-- Интеграционные тесты против `deploy/compose.lab.yaml` лежат под build tag `lab` и в гейт не входят.
-- Фронтенд: vitest на чистую логику из `web/src/lib/`. Компоненты проверяются руками по критериям слайса.
+- `govulncheck ./...` and `npm audit --omit=dev --audit-level=high` are run by the command `make audit` in CI. They are not part of the local `make gate`, because they need the network.
+- Versions are pinned (`go.sum`, `package-lock.json`). Dependabot watches `go.mod`, npm and the base Docker image.
+- Docker image: a minimal final image, `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`. The process does not run as root where possible (access to the socket is solved through `group_add`).
+- Releases are published with a checksum file (`checksums.txt`).
+- The repository holds `SECURITY.md` with the procedure for reporting vulnerabilities.
 
 ---
 
-## 11. Проверки и гейт
+## 10. Tests
+
+Tests are derived from the acceptance criteria of a slice, not from ready code. The criteria are written in section 16 before the code is written. A test encodes a criterion and does not repeat the implementation.
+
+A forbidden kind of test: "wrote a device, read it, the values matched". Such a test is green on a broken merge by MAC and on duplicates alike.
+
+At least this for every slice:
+
+- a test for every acceptance criterion that has a checkable condition;
+- a test for the error path (a target outside the allowed ranges, an SNMP timeout, a missing Docker socket, a non-existent id);
+- tests of pure logic (parsers, layout, validation, IP sorting) without network and without a database.
+
+How to build tests:
+
+- Database: `store.Open(":memory:")`, a new one for every test. Tests do not touch the file `netscribe.db`.
+- Network: collectors take interfaces (`snmpClient`, `dialer`, `sshRunner`, `dockerAPI`), and tests substitute fakes. SNMP answers are taken from recorded `snmpwalk` output in `testdata/`.
+- HTTP: `httptest` on top of `api.NewRouter` with an in-memory database and a fake scanner.
+- Time: packages take `clock func() time.Time`, and tests substitute a fixed one.
+- Renderers: golden files in `testdata/*.golden` plus structural checks (the XML parses, the number of `mxCell` cells equals the number of devices, containers and links plus two service ones). Golden files are updated with the flag `-update` and checked by eye in review.
+- Permissions: one test walks the whole route table and checks three cases for each route: without sign-in - 401, a role without the permission - 403, a role with the permission - neither 401 nor 403. Registering a route without a permission panics, and this is checked too.
+- Security: tests for headers (on `/`, `/api/*`, errors and export), for the attributes of the session cookie, and for passwords, hashes, tokens and communities not getting into logs, API answers and exports.
+- Isolation and time: a test does not write to package variables that background goroutines read (a substitutable value is passed as a struct field or an argument). A test does not wait "long enough" with `time.Sleep`: it waits for a signal from a channel or polls with a deadline. A pause is allowed only where the test checks that an event did not happen.
+- Integration tests against `deploy/compose.lab.yaml` live under the build tag `lab` and are not part of the gate.
+- Frontend: vitest for the pure logic from `web/src/lib/`. Components are checked by hand against the criteria of the slice.
+
+---
+
+## 11. Checks and the gate
 
 `Makefile`:
 
 ```
 make fmt     # gofmt -w, prettier --write
-make lint    # gofmt -l (вывод пустой), go vet, golangci-lint, sqlc diff, eslint, prettier --check
+make lint    # gofmt -l (empty output), go vet, golangci-lint, sqlc diff, eslint, prettier --check
 make check   # tsc --noEmit
 make test    # go test -race ./..., vitest run
 make gate    # lint, check, test
-make audit   # govulncheck и npm audit, нужна сеть, запускается в CI, в gate не входит
+make audit   # govulncheck and npm audit, needs the network, runs in CI, not part of gate
 make gen     # sqlc generate
-make dev     # air (бэкенд) и vite (фронтенд) параллельно
-make build   # сборка фронтенда, затем go build в один бинарник
+make dev     # air (backend) and vite (frontend) in parallel
+make build   # build the frontend, then go build into one binary
 ```
 
-`make gate` красный → слайс не закрыт. Правки по гейту делаются в том же заходе.
+`make gate` red → the slice is not closed. Fixes for the gate are made in the same pass.
 
-Что ловит каждая команда:
+What each command catches:
 
-- gofmt и prettier - расхождения форматирования;
-- go vet и golangci-lint (включая gosec) - неиспользуемый код, неотловленные ошибки, подозрительные конструкции, небезопасные вызовы;
-- sqlc diff - сгенерированный код отстал от SQL;
-- eslint - мёртвые импорты, хуки React с неверными зависимостями, a11y-ошибки, `dangerouslySetInnerHTML`;
-- govulncheck и npm audit (в CI, командой `make audit`) - известные уязвимости зависимостей;
-- tsc - типы, в том числе расхождение с типами раздела 4;
-- go test -race - критерии приёмки и гонки;
-- vitest - чистая логика фронтенда.
+- gofmt and prettier - formatting differences;
+- go vet and golangci-lint (including gosec) - unused code, unhandled errors, suspicious constructs, unsafe calls;
+- sqlc diff - the generated code fell behind the SQL;
+- eslint - dead imports, React hooks with wrong dependencies, a11y errors, `dangerouslySetInnerHTML`;
+- govulncheck and npm audit (in CI, by the command `make audit`) - known vulnerabilities of dependencies;
+- tsc - types, including a mismatch with the types of section 4;
+- go test -race - acceptance criteria and races;
+- vitest - the pure logic of the frontend.
 
 ---
 
-## 12. Конвенция текста
+## 12. Text convention
 
-Код, комментарии, коммиты, логи, тексты интерфейса, сообщения валидации, README - по-английски. Этот файл на время черновика на русском, финальная версия переводится на английский.
+Code, comments, commits, logs, interface texts, validation messages and the README are in English. This file was written in Russian during the draft and was translated into English in amendment 33.
 
-Коммиты, Conventional Commits, фиксированный формат:
+Commits, Conventional Commits, a fixed format:
 
 ```
 type(scope): summary
 ```
 
-- `type` из набора `feat|fix|test|refactor|chore|docs`;
-- `scope` из набора `config|store|collector|render|api|web|deploy`;
-- `summary` в императиве, со строчной буквы, без точки, до 50 символов;
-- тело только чтобы объяснить *почему*, не *что*;
-- коммитить по ходу работы маленькими шагами, не одним коммитом в конце. Каждый коммит по возможности проходит `make check`.
+- `type` from the set `feat|fix|test|refactor|chore|docs`;
+- `scope` from the set `config|store|collector|render|api|web|deploy`;
+- `summary` in the imperative, lowercase at the start, no period, up to 50 characters;
+- the body only to explain *why*, not *what*;
+- commit along the way in small steps, not with one commit at the end. Each commit passes `make check` where possible.
 
-Примеры: `feat(collector): add arp warmup sweep`, `test(store): cover mac identity merge`.
+Examples: `feat(collector): add arp warmup sweep`, `test(store): cover mac identity merge`.
 
-Правила письма для всей прозы проекта (коммиты, комментарии, README): активный залог, конкретика вместо общих фраз, без вводных оборотов, без длинного тире, без наречий-усилителей. Комментарий объясняет причину решения, а не пересказывает соседнюю строку. Закомментированный код не оставлять.
-Перед написанием README посмотри [https://docs.github.com/en](https://docs.github.com/en), [https://github.com/matiassingers/awesome-readme](https://github.com/matiassingers/awesome-readme), [https://www.makeareadme.com/](https://www.makeareadme.com/)
+Writing rules for all the prose of the project (commits, comments, README): active voice, specifics instead of general phrases, no introductory turns, no long dash, no intensifying adverbs. A comment explains the reason for a decision and does not retell the neighboring line. Do not leave commented-out code.
+Before you write the README look at [https://docs.github.com/en](https://docs.github.com/en), [https://github.com/matiassingers/awesome-readme](https://github.com/matiassingers/awesome-readme), [https://www.makeareadme.com/](https://www.makeareadme.com/)
 
 ---
 
-## 13. Definition of Done одного слайса
+## 13. Definition of Done of one slice
 
-1. Критерии приёмки слайса из раздела 16 выполнены, проверены руками (в браузере для интерфейса, в терминале для CLI).
-2. Тесты написаны из критериев, `make gate` зелёный.
-3. Новых файлов и абстракций сверх описанных в этом файле нет.
-4. Мёртвого кода нет: неиспользуемых экспортов, компонентов, стилей, SQL-запросов.
-5. Сгенерированный код sqlc актуален (`sqlc diff` пуст).
-6. Коммиты по конвенции раздела 12.
-7. Каждый новый маршрут объявлен в таблице маршрутов с правом, параметры раздела 9, которых касается слайс, выполнены и проверены тестами.
-8. `tech.md` не изменён (изменение контракта идёт отдельно, через раздел 14).
+1. The acceptance criteria of the slice from section 16 are met and checked by hand (in a browser for the interface, in a terminal for the CLI).
+2. Tests are written from the criteria, and `make gate` is green.
+3. There are no new files or abstractions beyond those described in this file.
+4. There is no dead code: no unused exports, components, styles or SQL queries.
+5. The generated sqlc code is current (`sqlc diff` is empty).
+6. Commits follow the convention of section 12.
+7. Every new route is declared in the route table with a permission, and the parameters of section 9 that the slice touches are met and checked by tests.
+8. `tech.md` is not changed (a change of a contract goes separately, through section 14).
 
 ---
 
 ## 14. CONTRACT GAP
 
-Не хватает поля, типа, функции, маршрута или опции конфига - работа останавливается. Выдай блок и жди ответа:
+A field, type, function, route or config option is missing - work stops. Issue the block and wait for an answer:
 
 ```
 CONTRACT GAP
-Что нужно: <поле/тип/функция/маршрут>
-Зачем: <какой критерий приёмки без него не выполняется>
-Предлагаемая форма: <точная сигнатура, колонка с типом или поле JSON>
-Что делаю пока: <заглушка локально в своём слайсе / жду>
+What is needed: <field/type/function/route>
+Why: <which acceptance criterion fails without it>
+Proposed form: <the exact signature, a column with its type, or a JSON field>
+What I do meanwhile: <a local stub inside my slice / wait>
 ```
 
-Код с выдуманным типом не пиши. Схему базы, типы `model`, интерфейсы `Repo`, `AuthRepo` и `Collector`, HTTP-контракт, формат конфига, матрицу прав и параметры раздела 9 сам не расширяй и не ослабляй.
+Do not write code with an invented type. Do not extend or weaken on your own the database schema, the `model` types, the interfaces `Repo`, `AuthRepo` and `Collector`, the HTTP contract, the config format, the permission matrix and the parameters of section 9.
 
 ---
 
-## 15. Правила поведения в сессии
+## 15. Rules of behavior in a session
 
-- Думай до кода: назови допущения, спроси при неоднозначности, покажи варианты вместо молчаливого выбора.
-- Простота: никаких фич сверх запрошенного, никаких абстракций под одноразовый код, никакой обработки ошибок, которых не бывает.
-- Хирургические правки: соседний рабочий код не улучшать и не рефакторить. Каждая изменённая строка следует из текущей задачи.
-- Один слайс за заход. Не выкатывай всё приложение сразу.
-- Сетевой код не запускай против чужих сетей. Все проверки идут против лаборатории (`deploy/compose.lab.yaml`), фикстур или сети владельца проекта.
-- Параметры безопасности из раздела 9 не ослабляй ради удобства. Для разработки `cmd/seed --dev-user` создаёт учётку `dev` с ролью `admin`, пароль берётся из переменной `NETSCRIBE_DEV_PASSWORD`, пароля по умолчанию нет.
-- Ревью идёт вторым заходом, после того как слайс готов, а не в том же сообщении, где написан код.
-- Список «Не делать» запрещает пункты в своём слайсе, а не во всём проекте: то, что реализует более поздний слайс, названо рядом со ссылкой. Пункт из списка нельзя делать «заодно», даже если он выглядит мелким.
-
----
-
-## 16. Стадии и слайсы
-
-Статус: слайсы 0-21 смержены в `main`, план выполнен.
-
-Порядок жёсткий, сверху вниз. Один слайс за один заход сессии. Слайс закрыт, когда выполнен Definition of Done из раздела 13.
-
-Слайс вертикальный: от таблицы в базе или коллектора до экрана или файла экспорта. Половина слайса не закрывается.
-
-- **Стадия 1 - каркас.** Слайс 0. Фичи не начинаются, пока критерии каркаса не зелёные целиком.
-- **Стадия 2 - обнаружение, доступ и первая панель.** Слайсы 1-4: ARP-обнаружение и CLI, аутентификация и роли, API с таблицей устройств, топология на холсте. Аутентификация идёт до API: ни один маршрут не появляется без проверки прав.
-- **Стадия 3 - ручное управление и пользователи.** Слайсы 5-6: ручное добавление и правка устройств, управление пользователями, токены и журнал аудита.
-- **Стадия 4 - обогащение.** Слайсы 7-11: SNMP и LLDP, расширенное обнаружение, сервисы, SSH, Docker-контейнеры.
-- **Стадия 5 - документы.** Слайсы 12-13: Markdown и Draw.io, HTML и PDF.
-- **Стадия 6 - эксплуатация.** Слайсы 14-15: история изменений, расписание и горячая перезагрузка конфига.
-- **Стадия 7 - выпуск.** Слайсы 16-17: упаковка и Docker, полировка интерфейса.
-- **Стадия 8 - распознавание.** Слайс 18: заголовки HTTP, mDNS и SSDP. Он добавлен после первой версии плана и делается после слайса 17 по общему правилу порядка.
+- Think before code: name the assumptions, ask when something is ambiguous, show options instead of a silent choice.
+- Simplicity: no features beyond what was asked, no abstractions for one-off code, no handling of errors that cannot happen.
+- Surgical edits: do not improve or refactor neighboring working code. Every changed line follows from the current task.
+- One slice at a time. Do not roll out the whole application at once.
+- Do not run network code against networks that are not yours. All checks go against the lab (`deploy/compose.lab.yaml`), fixtures, or the network of the project owner.
+- Do not weaken the security parameters of section 9 for convenience. For development `cmd/seed --dev-user` creates an account `dev` with the role `admin`, the password is taken from the variable `NETSCRIBE_DEV_PASSWORD`, and there is no default password.
+- Review goes in a second pass, after the slice is ready, and not in the same message in which the code is written.
+- The "Do not" list forbids items in its own slice, not in the whole project: what a later slice implements is named next to it with a link. An item from the list cannot be done "while at it", even if it looks small.
 
 ---
 
-### Слайс 0 - каркас
+## 16. Stages and slices
 
-**Что собрать:**
+Status: slices 0-23 are merged into `main`, the plan is complete.
 
-- Go-модуль `netscribe`, `Makefile` с целями из раздела 11, `.air.toml`, `.golangci.yml`, `sqlc.yaml`, `.gitignore` (`netscribe.db*`, `web/dist`, `web/node_modules`, `tmp`).
-- `internal/model/model.go` - типы и константы из раздела 4.2.
-- `internal/config` - загрузка YAML, `Validate` по разделу 8, тип `Secret`, `netscribe.example.yaml`.
-- `internal/store/store.go` - `Open(path)`, `ErrNotFound`, подключение `goose`. Миграций таблиц пока нет.
-- `internal/api/router.go` - таблица маршрутов `route(method, path, permission, handler)`: `GET /healthz` помечен публичным, маршрут без права не регистрируется. Раздача встроенного фронтенда с откатом на `index.html`.
-- `cmd/netscribe/main.go` - подкоманда `serve` с флагом `--config`.
-- `web/` - Vite + React + TypeScript strict + Tailwind + shadcn/ui (инициализация), React Router, `web/embed.go`.
-- Каркас интерфейса: боковая панель с названием и ссылками на существующие страницы, страница `/` с `EmptyState` «No scans yet».
-- Прокси Vite на `/api` и `/healthz` в бэкенд для разработки.
+The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
-**Критерии приёмки:**
+A slice is vertical: from a table in the database or a collector to a screen or an export file. Half a slice is not closed.
 
-1. `make gate` зелёный на пустом проекте.
-2. `make dev`: правка `.go` файла перезапускает сервер (air), правка `.tsx` обновляет страницу без перезагрузки (HMR). Проверено руками.
-3. `make build` даёт один бинарник. `./netscribe serve` открывает `/` без ошибок в консоли, `GET /healthz` отвечает 200.
-4. `store.Open(":memory:")` даёт рабочую базу без файла на диске.
-5. `netscribe.example.yaml` проходит `Validate`.
-
-**Тесты:** `internal/config/config_test.go` - валидный конфиг, цель не CIDR, цель шире `/16`, публичная цель без флага, публичная цель с флагом, интервал меньше `1m`, интервал `0`, таймаут SNMP вне диапазона, хост SSH без ключа, `Secret` скрывает значение в `String()`, JSON и `slog`. `internal/store/store_test.go` - `Open(":memory:")` работает. `internal/api/router_test.go` - регистрация маршрута без права паникует, `/healthz` отвечает 200 без входа.
-
-**Не делать:** коллекторы, страницы фич, аутентификацию, Dockerfile, тему оформления.
+- **Stage 1 - skeleton.** Slice 0. Features do not start until the criteria of the skeleton are all green.
+- **Stage 2 - discovery, access and the first panel.** Slices 1-4: ARP discovery and the CLI, authentication and roles, the API with a device table, the topology on a canvas. Authentication goes before the API: no route appears without a permission check.
+- **Stage 3 - manual management and users.** Slices 5-6: manual adding and editing of devices, user management, tokens and the audit log.
+- **Stage 4 - enrichment.** Slices 7-11: SNMP and LLDP, extended discovery, services, SSH, Docker containers.
+- **Stage 5 - documents.** Slices 12-13: Markdown and Draw.io, HTML and PDF.
+- **Stage 6 - operation.** Slices 14-15: change history, the schedule and hot reload of the config.
+- **Stage 7 - release.** Slices 16-17: packaging and Docker, interface polish.
+- **Stage 8 - recognition.** Slice 18: HTTP headers, mDNS and SSDP. It was added after the first version of the plan and is done after slice 17 by the general rule of order.
 
 ---
 
-### Слайс 1 - ARP-обнаружение и CLI
+### Slice 0 - skeleton
 
-**Файлы:** `internal/store/migrations/0001_devices_scans.sql` (таблицы `devices` и `scans`, `devices` без колонок ручного ввода, раздел 4.1), `internal/store/queries/*.sql`, `internal/store/apply.go`, `internal/collector/collector.go`, `arp.go`, `scanner.go`, `cmd/netscribe/main.go` (подкоманды `scan`, `devices`).
+**What to build:**
 
-**Что делает:** `netscribe scan` берёт цели из конфига, шлёт UDP-пакет на порт 9 каждого адреса цели с ограничением в 128 одновременных отправок (ядро выполняет ARP-запрос перед отправкой, права root не нужны), ждёт 2 секунды и читает `/proc/net/arp`. Записи с флагом `0x2` считаются живыми. Для каждого живого адреса выполняется обратный DNS с таймаутом 1 секунда. `netscribe devices` печатает таблицу: IP, MAC, hostname, online. Обнаружение работает для адресов того же L2-сегмента, что и хост netscribe.
+- The Go module `netscribe`, a `Makefile` with the targets of section 11, `.air.toml`, `.golangci.yml`, `sqlc.yaml`, `.gitignore` (`netscribe.db*`, `web/dist`, `web/node_modules`, `tmp`).
+- `internal/model/model.go` - the types and constants of section 4.2.
+- `internal/config` - YAML loading, `Validate` per section 8, the type `Secret`, `netscribe.example.yaml`.
+- `internal/store/store.go` - `Open(path)`, `ErrNotFound`, connecting `goose`. There are no table migrations yet.
+- `internal/api/router.go` - the route table `route(method, path, permission, handler)`: `GET /healthz` is marked public, and a route without a permission is not registered. Serving the embedded frontend with a fallback to `index.html`.
+- `cmd/netscribe/main.go` - the subcommand `serve` with the flag `--config`.
+- `web/` - Vite + React + TypeScript strict + Tailwind + shadcn/ui (initialization), React Router, `web/embed.go`.
+- The interface skeleton: a side panel with the name and links to the existing pages, the page `/` with an `EmptyState` "No scans yet".
+- A Vite proxy of `/api` and `/healthz` to the backend for development.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. `netscribe scan` на сети /24 сохраняет найденные устройства, `netscribe devices` показывает их.
-2. Повторный скан не создаёт дублей. Устройство с тем же MAC и новым IP обновляет строку.
-3. Устройство, которого нет в следующем завершённом скане, получает `online = false` и остаётся в базе.
-4. `netscribe scan 8.8.8.8/32` без `allowPublicTargets` завершается ошибкой `target is outside private ranges`.
-5. Ctrl+C останавливает скан не дольше чем за 2 секунды, статус скана `failed`, ошибка `canceled`, состояние устройств не изменилось.
-6. Hostname из обратного DNS попадает в таблицу, недоступный DNS не замедляет скан дольше таймаута.
+1. `make gate` is green on an empty project.
+2. `make dev`: editing a `.go` file restarts the server (air), editing a `.tsx` file updates the page without a reload (HMR). Checked by hand.
+3. `make build` gives one binary. `./netscribe serve` opens `/` without errors in the console, and `GET /healthz` answers 200.
+4. `store.Open(":memory:")` gives a working database without a file on disk.
+5. `netscribe.example.yaml` passes `Validate`.
 
-**Тесты:** парсер `/proc/net/arp` на фикстуре (полные и неполные записи), `ApplyResult` на базе в памяти (слияние по MAC, смена IP, пометка offline, отмена не меняет состояние), `scanner` с фейковым коллектором (отмена по `ctx`, ошибка обнаружения даёт `failed`), проверка цели из аргумента.
+**Tests:** `internal/config/config_test.go` - a valid config, a target that is not a CIDR, a target wider than `/16`, a public target without the flag, a public target with the flag, an interval below `1m`, an interval `0`, an SNMP timeout out of range, an SSH host without a key, `Secret` hides the value in `String()`, JSON and `slog`. `internal/store/store_test.go` - `Open(":memory:")` works. `internal/api/router_test.go` - registering a route without a permission panics, `/healthz` answers 200 without sign-in.
 
-**Не делать:** ICMP (слайс 8), SNMP (слайс 7), скан портов (слайс 9), HTTP API (слайс 3), определение вида устройства (слайс 8), адреса вне L2-сегмента.
+**Do not:** collectors, feature pages, authentication, a Dockerfile, a visual theme.
 
 ---
 
-### Слайс 2 - аутентификация, роли и сессии
+### Slice 1 - ARP discovery and the CLI
 
-**Файлы:** `internal/store/migrations/NNNN_auth.sql` (таблицы `users`, `sessions`, `audit_log`), `internal/auth/` (`password.go`, `session.go`, `rbac.go`, `ratelimit.go`), реализация `AuthRepo` в `internal/store/`, `internal/api/router.go` (проверка права), `middleware.go`, `auth.go`, `cmd/netscribe/main.go` (подкоманда `user`), `web/src/pages/Login.tsx`, `Account.tsx`, `web/src/components/UserMenu.tsx`, `RequirePermission.tsx`, `web/src/lib/permissions.ts`, `web/src/api/client.ts` (заголовок CSRF, обработка 401).
+**Files:** `internal/store/migrations/0001_devices_scans.sql` (the tables `devices` and `scans`, `devices` without the manual-input columns, section 4.1), `internal/store/queries/*.sql`, `internal/store/apply.go`, `internal/collector/collector.go`, `arp.go`, `scanner.go`, `cmd/netscribe/main.go` (the subcommands `scan`, `devices`).
 
-**Что делает:**
+**What it does:** `netscribe scan` takes the targets from the config, sends a UDP packet to port 9 of every address of the target with a limit of 128 concurrent sends (the kernel performs the ARP request before sending, root rights are not needed), waits 2 seconds and reads `/proc/net/arp`. Entries with the flag `0x2` count as live. For every live address a reverse DNS lookup is done with a timeout of 1 second. `netscribe devices` prints a table: IP, MAC, hostname, online. Discovery works for addresses of the same L2 segment as the netscribe host.
 
-- Подкоманды `netscribe user add <name> --role <role>`, `user list`, `user disable <name>`, `user passwd <name>`. Пароль читается с терминала без эха или из stdin.
+**Acceptance criteria:**
+
+1. `netscribe scan` on a /24 network saves the devices found, and `netscribe devices` shows them.
+2. A repeated scan creates no duplicates. A device with the same MAC and a new IP updates the row.
+3. A device that is not in the next completed scan gets `online = false` and stays in the database.
+4. `netscribe scan 8.8.8.8/32` without `allowPublicTargets` ends with the error `target is outside private ranges`.
+5. Ctrl+C stops a scan within 2 seconds, the scan status is `failed`, the error is `canceled`, and the state of the devices did not change.
+6. A hostname from reverse DNS gets into the table, and an unavailable DNS does not slow a scan down for longer than the timeout.
+
+**Tests:** a parser of `/proc/net/arp` on a fixture (complete and incomplete entries), `ApplyResult` on an in-memory database (merge by MAC, a change of IP, marking offline, a cancel does not change the state), `scanner` with a fake collector (cancel by `ctx`, a discovery error gives `failed`), a check of a target from an argument.
+
+**Do not:** ICMP (slice 8), SNMP (slice 7), a port scan (slice 9), the HTTP API (slice 3), determining the device kind (slice 8), addresses outside the L2 segment.
+
+---
+
+### Slice 2 - authentication, roles and sessions
+
+**Files:** `internal/store/migrations/NNNN_auth.sql` (the tables `users`, `sessions`, `audit_log`), `internal/auth/` (`password.go`, `session.go`, `rbac.go`, `ratelimit.go`), the implementation of `AuthRepo` in `internal/store/`, `internal/api/router.go` (the permission check), `middleware.go`, `auth.go`, `cmd/netscribe/main.go` (the subcommand `user`), `web/src/pages/Login.tsx`, `Account.tsx`, `web/src/components/UserMenu.tsx`, `RequirePermission.tsx`, `web/src/lib/permissions.ts`, `web/src/api/client.ts` (the CSRF header, handling 401).
+
+**What it does:**
+
+- The subcommands `netscribe user add <name> --role <role>`, `user list`, `user disable <name>`, `user passwd <name>`. The password is read from the terminal without echo or from stdin.
 - API `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `PUT /api/auth/password`.
-- Цепочка middleware в таком порядке: заголовки безопасности, лимиты тела и таймауты, аутентификация (сессия, токены доступа добавляет слайс 6), CSRF, проверка права, обработчик, аудит.
-- Проверка права по таблице маршрутов из слайса 0 включается в middleware: маршрут с правом без входа даёт 401, при недостатке прав 403.
-- Интерфейс: страница `/login`, переход на `/login` при ответе 401, `UserMenu` с выходом, `/account` со сменой пароля, `RequirePermission`.
-- Все параметры берутся из раздела 9.
+- The middleware chain in this order: security headers, body limits and timeouts, authentication (a session, access tokens are added by slice 6), CSRF, the permission check, the handler, audit.
+- The permission check by the route table from slice 0 is switched on in middleware: a route with a permission without sign-in gives 401, and with insufficient rights 403.
+- Interface: the page `/login`, a redirect to `/login` on a 401 answer, `UserMenu` with sign-out, `/account` with a password change, `RequirePermission`.
+- All parameters are taken from section 9.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. Пока пользователей нет, все маршруты кроме `/healthz` отвечают 503 с текстом `no users: run "netscribe user add"`.
-2. `netscribe user add` создаёт пользователя. Пароль не принимается аргументом командной строки. В базе лежит хеш argon2id в формате PHC.
-3. Вход с верными данными отвечает 200 и ставит cookie `netscribe_session` с `HttpOnly` и `SameSite=Strict`. Неверный пароль, неизвестный пользователь и заблокированная учётка дают одинаковый ответ 401 `invalid username or password`.
-4. Пятая неудачная попытка подряд с одного IP под одним именем блокирует эту пару на 15 минут (вход с верным паролем в это время тоже даёт 401), успешный вход сбрасывает счётчик пары. Тот же пользователь с другого IP входит свободно. Больше 10 неудачных попыток в минуту с одного IP дают 429 с `Retry-After`, даже если следующий пароль верный. Верные входы лимит не расходуют: любое число успешных входов с одного адреса подряд не даёт 429 и не сбрасывает счётчик неудач.
-5. Запрос без сессии к защищённому маршруту даёт 401, с неверным или истёкшим идентификатором тоже.
-6. Небезопасный метод с сессией и без верного `X-CSRF-Token` даёт 403.
-7. Сессия истекает через 8 часов без активности и через 7 дней абсолютно. Выход и смена пароля отзывают сессии пользователя.
-8. Все ответы (страницы, `/api`, ошибки) содержат заголовки из раздела 9.4.
-9. Пользователь с `must_change_password` может только сменить пароль.
-10. Последнего администратора нельзя отключить, в том числе командой CLI.
-11. Вход, неудачный вход, выход и отказ в доступе (403) пишутся в `audit_log`.
-12. Значения паролей и хешей не попадают в логи и ответы.
+1. While there are no users, all routes except `/healthz` answer 503 with the text `no users: run "netscribe user add"`.
+2. `netscribe user add` creates a user. The password is not accepted as a command-line argument. The database holds an argon2id hash in PHC format.
+3. A sign-in with right data answers 200 and sets the cookie `netscribe_session` with `HttpOnly` and `SameSite=Strict`. A wrong password, an unknown user and a locked account give the same 401 answer `invalid username or password`.
+4. The fifth failed attempt in a row from one IP under one name locks that pair for 15 minutes (a sign-in with the right password during that time also gives 401), and a successful sign-in resets the counter of the pair. The same user from another IP signs in freely. More than 10 failed attempts per minute from one IP give 429 with `Retry-After`, even if the next password is right. Successful sign-ins do not use up the limit: any number of successful sign-ins in a row from one address gives no 429 and does not reset the failure counter.
+5. A request without a session to a protected route gives 401, and so does one with a wrong or expired identifier.
+6. An unsafe method with a session and without the right `X-CSRF-Token` gives 403.
+7. A session expires after 8 hours without activity and after 7 days absolute. Sign-out and a password change revoke the sessions of the user.
+8. All responses (pages, `/api`, errors) carry the headers of section 9.4.
+9. A user with `must_change_password` can only change the password.
+10. The last administrator cannot be disabled, including by a CLI command.
+11. Sign-in, a failed sign-in, sign-out and an access denial (403) are written to `audit_log`.
+12. The values of passwords and hashes do not get into logs and answers.
 
-**Тесты:** `password` (хеш и проверка, параметры, перехеширование), жизненный цикл сессии с подставляемыми часами (простой, абсолютный срок, новый идентификатор при входе), `ratelimit`, цепочка middleware через `httptest`, полнота таблицы маршрутов (см. раздел 10), заголовки безопасности, CSRF, запись в аудит, отсутствие секретов в логах.
+**Tests:** `password` (hash and check, parameters, rehashing), the lifecycle of a session with a substituted clock (idle, absolute lifetime, a new identifier at sign-in), `ratelimit`, the middleware chain through `httptest`, completeness of the route table (see section 10), security headers, CSRF, writing to the audit, no secrets in logs.
 
-**Не делать:** OIDC и LDAP, двухфакторную аутентификацию, самостоятельную регистрацию, восстановление пароля по почте, «запомнить меня», роли сверх трёх.
-
----
-
-### Слайс 3 - API, SSE и таблица устройств
-
-**Файлы:** `internal/api/router.go`, `devices.go`, `scans.go`, `sse.go`, `internal/events/hub.go`, `cmd/netscribe/main.go` (`serve` запускает сканер), `web/src/api/client.ts` (дополняется), `events.ts`, `web/src/pages/Inventory.tsx`, `web/src/lib/` (сортировка IP), компоненты `ScanBar`, `StatusBadge`, `EmptyState`, примитивы `table`, `badge`, `button`, `input`, `skeleton`.
-
-**Что делает:** маршруты `GET /api/devices`, `GET /api/devices/{id}`, `GET /api/scans`, `POST /api/scans`, `GET /api/scans/{id}`, `GET /api/events`. Все маршруты объявлены в таблице с правами `topology:read` (чтение и события) и `scans:run` (`POST /api/scans`). Кнопка запуска скана видна только при праве `scans:run`. Страница `/inventory` показывает таблицу устройств с поиском и фильтром online. `ScanBar` запускает скан и показывает прогресс из SSE. Таблица обновляется по событию `topology.changed`.
-
-**Критерии приёмки:**
-
-1. `POST /api/scans` отвечает 202 и запускает скан. Второй `POST` во время скана отвечает 409.
-2. `/inventory` показывает устройства из базы. После завершения скана таблица обновляется без перезагрузки страницы.
-3. Поиск находит устройство по IP, MAC и hostname без учёта регистра, включая кириллические имена.
-4. Сортировка по IP числовая: `192.168.1.9` идёт выше `192.168.1.10`.
-5. `/api/devices/abc` и `/api/devices/999` отвечают 404.
-6. Пустая база показывает `EmptyState`, для роли с правом `scans:run` с кнопкой запуска первого скана.
-7. Запрос без входа к любому маршруту этого слайса даёт 401. Роль `viewer` получает данные (200), но на `POST /api/scans` получает 403 и не видит кнопку запуска. Роли `operator` и `admin` запускают скан.
-8. Поток `GET /api/events` без входа даёт 401. События скана доходят только до вошедших пользователей.
-
-**Тесты:** обработчики через `httptest` на базе в памяти (критерии 1, 3, 5, 7, 8), `hub` (подписка, публикация, отписка без утечки горутины), `sortByIp` в vitest (критерий 4).
-
-**Не делать:** пагинацию списка устройств (журнал аудита слайса 6 пагинируется), WebSocket, экспорт (слайсы 12-13), график (график числа устройств в слайсе 14).
+**Do not:** OIDC and LDAP, two-factor authentication, self-registration, password recovery by mail, "remember me", roles beyond the three.
 
 ---
 
-### Слайс 4 - топология на холсте
+### Slice 3 - API, SSE and the device table
 
-**Файлы:** `internal/render/layout.go`, `internal/api/topology.go`, `cmd/seed/main.go`, `web/src/pages/Topology.tsx`, компоненты `TopologyCanvas`, `DeviceNode`, `DevicePanel`, примитивы `sheet`, `tooltip`.
+**Files:** `internal/api/router.go`, `devices.go`, `scans.go`, `sse.go`, `internal/events/hub.go`, `cmd/netscribe/main.go` (`serve` starts the scanner), `web/src/api/client.ts` (extended), `events.ts`, `web/src/pages/Inventory.tsx`, `web/src/lib/` (IP sorting), the components `ScanBar`, `StatusBadge`, `EmptyState`, the primitives `table`, `badge`, `button`, `input`, `skeleton`.
 
-**Что делает:** `GET /api/topology` отдаёт устройства, связи и контейнеры (связи и контейнеры пока пустые). Координаты в ответе заполнены всегда: сохранённые `x`, `y` остаются как есть, у остальных устройств их считает `render.Layout`. Раскладка по слоям: ряды по виду (router, firewall, switch, ap, server, nas, printer, camera, iot, host, unknown), внутри ряда порядок по IP, шаг 220 на 140, ряд переносится после 8 узлов. Раскладка детерминирована. Страница `/` рисует узлы на React Flow с зумом, панорамой и мини-картой. Перетаскивание сохраняет позицию через `PUT /api/devices/{id}/position` (право `devices:write`). Для роли без этого права узлы не перетаскиваются. Клик по узлу открывает `DevicePanel`. `cmd/seed` создаёт демо-сеть (роутер, 2 коммутатора, 20 хостов, 4 сервера) и дополняется в слайсах 7 и 11. Флаг `--dev-user` создаёт учётную запись `dev` с ролью `admin` и паролем из `NETSCRIBE_DEV_PASSWORD`.
+**What it does:** the routes `GET /api/devices`, `GET /api/devices/{id}`, `GET /api/scans`, `POST /api/scans`, `GET /api/scans/{id}`, `GET /api/events`. All routes are declared in the table with the permissions `topology:read` (reading and events) and `scans:run` (`POST /api/scans`). The button that starts a scan is visible only with the permission `scans:run`. The page `/inventory` shows a table of devices with search and an online filter. `ScanBar` starts a scan and shows the progress from SSE. The table refreshes on the event `topology.changed`.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. `/` рисует все устройства узлами с именем, IP, иконкой вида и состоянием online или offline.
-2. Перетащенный узел остаётся на месте после перезагрузки страницы.
-3. Новое устройство после скана появляется на холсте. Узлы с сохранёнными координатами не сдвигаются. Положение узлов без сохранённых координат вычисляется при каждом чтении и может сдвинуться: после перетаскивания узел фиксируется.
-4. Клик по узлу открывает панель с данными устройства, закрытие и `Esc` её скрывают. `/?device=<id>` открывает панель при загрузке.
-5. На базе из 200 демо-устройств холст остаётся отзывчивым при панораме и перетаскивании (проверка руками).
-6. `PUT` с нечисловыми или бесконечными координатами отвечает 400, с несуществующим id отвечает 404. Роль `viewer` получает 403, узлы для неё не перетаскиваются.
+1. `POST /api/scans` answers 202 and starts a scan. A second `POST` during a scan answers 409.
+2. `/inventory` shows the devices from the database. After a scan ends the table refreshes without a page reload.
+3. Search finds a device by IP, MAC and hostname without regard to case, including Cyrillic names.
+4. Sorting by IP is numeric: `192.168.1.9` goes above `192.168.1.10`.
+5. `/api/devices/abc` and `/api/devices/999` answer 404.
+6. An empty database shows `EmptyState`, and for a role with the permission `scans:run` with a button to start the first scan.
+7. A request without sign-in to any route of this slice gives 401. The role `viewer` gets the data (200), but gets 403 on `POST /api/scans` and does not see the start button. The roles `operator` and `admin` start a scan.
+8. The stream `GET /api/events` without sign-in gives 401. Scan events reach only signed-in users.
 
-**Тесты:** `layout_test.go` (детерминизм, отсутствие совпадающих позиций, сохранённые координаты не меняются), обработчик `PUT` (критерий 6).
+**Tests:** handlers through `httptest` on an in-memory database (criteria 1, 3, 5, 7, 8), `hub` (subscribe, publish, unsubscribe without a goroutine leak), `sortByIp` in vitest (criterion 4).
 
-**Не делать:** кнопку авто-раскладки, группировку узлов, маршрутизацию рёбер, ручное создание связей (слайс 5).
-
----
-
-### Слайс 5 - ручное добавление и правка устройств и связей
-
-**Файлы:** `internal/store/migrations/NNNN_device_edits.sql` (колонки `manual`, `label`, `notes`, `kind_locked`, `version`, `updated_by`), методы `Repo` (`CreateDevice`, `UpdateDevice`, `DeleteDevice`, `CreateLink`, `DeleteLink`), `internal/store/apply.go` (правила слияния), `internal/api/devices.go` (`POST`, `PATCH`, `DELETE`), `internal/api/links.go`, `web/src/components/DeviceForm.tsx`, режим правки в `DevicePanel`, диалог добавления на `/inventory` и на холсте, примитивы `dialog`, `select`, `textarea`, `alert-dialog`.
-
-**Что делает:** оператор добавляет устройства, которые сеть не показывает (неуправляемый коммутатор, патч-панель, устройство на другой площадке), правит `label`, `notes` и вид (вид фиксируется флагом `kind_locked`), удаляет устройства и ручные связи, соединяет узлы на холсте перетаскиванием с вводом имён портов. Ручное устройство без IP и без MAC допускается. Ручные данные переживают сканы. Ручное устройство, совпавшее с обнаруженным по MAC или IP, сливается с ним в одну запись (правило идентичности из раздела 4.1).
-
-**Критерии приёмки:**
-
-1. Оператор создаёт устройство с `label` и видом без IP и MAC. Оно появляется в списке и на холсте и помечено как ручное.
-2. Скан не помечает ручное устройство offline и не удаляет его.
-3. Устройство, созданное вручную с IP, и устройство, обнаруженное сканом с тем же IP, объединяются в одну строку: ручные поля остаются, MAC и данные скана добавляются.
-4. Правка `label`, `notes` и вида переживает повторный скан. Вид с `kind_locked` скан не меняет.
-5. `PATCH` с устаревшим `version` отвечает 409 и не затирает чужую правку. Интерфейс предлагает загрузить актуальные данные.
-6. Ручная связь создаётся перетаскиванием между узлами, скан её не удаляет, оператор удаляет её вручную. Удаление связи, найденной сканом, отвечает 409.
-7. Роль `viewer` не видит кнопок правки, а прямые запросы `POST`, `PATCH`, `DELETE` от неё отвечают 403.
-8. Создание, правка и удаление пишутся в аудит.
-9. Недопустимые значения (некорректные IP и MAC, слишком длинные поля) отклоняются с 400 и сообщениями из раздела 8.
-
-**Тесты:** слияние ручного и найденного устройства (3), ручные устройства не уходят в offline (2), `kind_locked` (4), конфликт версий (5), права по ролям (7), валидация (9), записи аудита (8).
-
-**Не делать:** импорт CSV, группы и теги, пользовательские поля, историю правок.
+**Do not:** pagination of the device list (the audit log of slice 6 is paginated), WebSocket, export (slices 12-13), a chart (the chart of the number of devices is in slice 14).
 
 ---
 
-### Слайс 6 - пользователи, токены доступа, журнал аудита
+### Slice 4 - topology on a canvas
 
-**Файлы:** `internal/store/migrations/NNNN_api_tokens.sql`, методы `AuthRepo` для администрирования пользователей, токенов и аудита, `internal/auth/session.go` (токены), `internal/api/users.go`, `tokens.go`, `audit.go`, `web/src/pages/Users.tsx`, `Audit.tsx`, `Account.tsx` (раздел токенов), `web/src/components/RoleBadge.tsx`.
+**Files:** `internal/render/layout.go`, `internal/api/topology.go`, `cmd/seed/main.go`, `web/src/pages/Topology.tsx`, the components `TopologyCanvas`, `DeviceNode`, `DevicePanel`, the primitives `sheet`, `tooltip`.
 
-**Что делает:** администратор создаёт, отключает и удаляет пользователей, меняет роли и задаёт временный пароль (`must_change_password`). Каждый пользователь выпускает и отзывает собственные токены доступа для скриптов (`Authorization: Bearer`). Администратор читает журнал аудита с фильтрами по пользователю, действию, результату и периоду. `PruneAudit` вызывается при старте и раз в сутки.
+**What it does:** `GET /api/topology` returns devices, links and containers (links and containers are empty for now). The coordinates in the answer are always filled: the saved `x`, `y` stay as they are, and `render.Layout` computes them for the other devices. A layered layout: rows by kind (router, firewall, switch, ap, server, nas, printer, camera, iot, host, unknown), inside a row the order is by IP, the step is 220 by 140, and a row wraps after 8 nodes. The layout is deterministic. The page `/` draws the nodes on React Flow with zoom, pan and a minimap. Dragging saves the position through `PUT /api/devices/{id}/position` (permission `devices:write`). For a role without this permission the nodes cannot be dragged. A click on a node opens `DevicePanel`. `cmd/seed` creates a demo network (a router, 2 switches, 20 hosts, 4 servers) and is extended in slices 7 and 11. The flag `--dev-user` creates an account `dev` with the role `admin` and the password from `NETSCRIBE_DEV_PASSWORD`.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. Администратор создаёт пользователя с ролью, пользователь входит и видит ровно то, что разрешает его роль (viewer, operator, admin).
-2. Смена роли, отключение, удаление и сброс пароля отзывают активные сессии пользователя.
-3. Последнего администратора нельзя удалить, отключить или понизить (409), в том числе самому себе.
-4. Operator и viewer не открывают `/users` и `/audit` и получают 403 на соответствующие маршруты.
-5. Токен показывается один раз при создании, в списке виден только префикс, в базе лежит только хеш. Токен с областью `read` получает 403 на небезопасных методах. Токен никогда не открывает `users:manage`, `audit:read` и `tokens:manage`, а из `/api/auth/*` ему доступен только `GET /api/auth/me`. Права токена - пересечение его области и текущей роли владельца.
-6. Отозванный и просроченный токены дают 401. Срок по умолчанию 90 дней, максимум 365, бессрочный токен не выдаётся.
-7. Журнал показывает события из раздела 9.8 с фильтрами и пагинацией через `before`. Через API записи нельзя изменить или удалить.
-8. Не больше 20 активных токенов и 10 сессий на пользователя.
-9. Записи старше `audit.keepDays` удаляются.
+1. `/` draws all devices as nodes with a name, an IP, a kind icon and the state online or offline.
+2. A dragged node stays in place after the page reloads.
+3. A new device after a scan appears on the canvas. Nodes with saved coordinates do not move. The position of nodes without saved coordinates is computed at every read and may shift: after dragging a node is fixed.
+4. A click on a node opens a panel with the device data, and closing and `Esc` hide it. `/?device=<id>` opens the panel on load.
+5. On a database of 200 demo devices the canvas stays responsive during pan and drag (a manual check).
+6. `PUT` with non-numeric or infinite coordinates answers 400, with a non-existent id it answers 404. The role `viewer` gets 403, and the nodes cannot be dragged for it.
 
-**Тесты:** матрица ролей на тестовых данных, отзыв сессий, последний администратор, токены (хеш, область, срок, отзыв), фильтры и пагинация аудита, `PruneAudit`.
+**Tests:** `layout_test.go` (determinism, no coinciding positions, saved coordinates do not change), the `PUT` handler (criterion 6).
 
-**Не делать:** группы пользователей, пользовательские роли, права на уровне устройств, сброс пароля по почте, единый вход (SSO).
+**Do not:** an auto-layout button, grouping of nodes, edge routing, manual creation of links (slice 5).
 
 ---
 
-### Слайс 7 - SNMP, интерфейсы и LLDP-связи
+### Slice 5 - manual adding and editing of devices and links
 
-**Файлы:** `internal/store/migrations/0005_interfaces.sql`, `internal/collector/snmp.go`, `lldp.go`, `oui.go`, `oui.csv`, обновление `scanner.go`, `cmd/seed`, `web/src/components/DeviceNode.tsx`, `TopologyCanvas.tsx`, `DevicePanel.tsx`.
+**Files:** `internal/store/migrations/NNNN_device_edits.sql` (the columns `manual`, `label`, `notes`, `kind_locked`, `version`, `updated_by`), the `Repo` methods (`CreateDevice`, `UpdateDevice`, `DeleteDevice`, `CreateLink`, `DeleteLink`), `internal/store/apply.go` (the merge rules), `internal/api/devices.go` (`POST`, `PATCH`, `DELETE`), `internal/api/links.go`, `web/src/components/DeviceForm.tsx`, the edit mode in `DevicePanel`, an add dialog on `/inventory` and on the canvas, the primitives `dialog`, `select`, `textarea`, `alert-dialog`.
 
-**Что делает:** для каждого живого устройства коллектор пробует SNMP v2c с community из конфига и читает `sysName`, `sysDescr`, `sysServices`, таблицы интерфейсов и адресов. LLDP-коллектор читает `lldpLocPortTable` и `lldpRemTable` и строит связи между известными устройствами: удалённый узел сопоставляется по MAC из chassis id или по адресу управления. Неизвестный сосед создаёт устройство с источником `snmp`. Вид устройства определяется по LLDP-возможностям (bridge → switch, router → router, WLAN access point → ap), иначе остаётся прежним. Вендор берётся из встроенной таблицы OUI по MAC. Связи рисуются рёбрами с подписями портов.
+**What it does:** an operator adds devices that the network does not show (an unmanaged switch, a patch panel, a device on another site), edits `label`, `notes` and the kind (the kind is fixed by the flag `kind_locked`), deletes devices and manual links, and connects nodes on the canvas by dragging with the entry of port names. A manual device without an IP and without a MAC is allowed. Manual data survives scans. A manual device that matches a discovered one by MAC or IP is merged with it into one record (the identity rule of section 4.1).
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. Устройство, ответившее по SNMP, получает `hostname = sysName`, `description = sysDescr`, источник `snmp`. Неответившее остаётся как есть, скан не падает.
-2. Интерфейсы сохраняются по устройству, повторный скан не создаёт дублей.
-3. Сосед по LLDP у коммутатора A, являющийся коммутатором B, даёт одну связь A.port - B.port, одна строка, а не две.
-4. Связь с неизвестным соседом создаёт устройство-соседа.
-5. Связь, пропавшая из LLDP-таблицы, удаляется после следующего завершённого скана.
-6. Рёбра рисуются на холсте с подписями портов, вкладка интерфейсов в `DevicePanel` показывает имя, MAC, IP и состояние.
-7. Вендор по OUI виден в панели устройства.
-8. Значения community не появляются в логах, ответах API и выводе CLI.
+1. An operator creates a device with a `label` and a kind without an IP and a MAC. It appears in the list and on the canvas and is marked as manual.
+2. A scan neither marks a manual device offline nor deletes it.
+3. A device created by hand with an IP and a device discovered by a scan with the same IP are merged into one row: the manual fields stay, and the MAC and the scan data are added.
+4. An edit of `label`, `notes` and the kind survives a repeated scan. A kind with `kind_locked` is not changed by a scan.
+5. A `PATCH` with a stale `version` answers 409 and does not overwrite someone else's edit. The interface offers to load the current data.
+6. A manual link is created by dragging between nodes, a scan does not delete it, and an operator deletes it by hand. Deleting a link found by a scan answers 409.
+7. The role `viewer` sees no edit buttons, and direct `POST`, `PATCH`, `DELETE` requests from it answer 403.
+8. Creating, editing and deleting are written to the audit.
+9. Invalid values (incorrect IP and MAC, fields that are too long) are rejected with 400 and the messages of section 8.
 
-**Тесты:** `snmpClient` с фейком на фикстурах `snmpwalk` (критерии 1, 2), нормализация и дедупликация связи (`a_device_id < b_device_id`, критерий 3), создание соседа (4), удаление пропавшей связи (5), определение вида по LLDP-возможностям, `Secret` в логах (8).
+**Tests:** merging a manual and a discovered device (3), manual devices do not go offline (2), `kind_locked` (4), a version conflict (5), permissions by role (7), validation (9), audit entries (8).
 
-**Не делать:** SNMP v3, SNMP SET, счётчики трафика, приём trap, загрузку MIB-файлов (OID задаются числами).
-
----
-
-### Слайс 8 - расширенное обнаружение и классификация
-
-**Файлы:** `internal/collector/snmparp.go`, `probe.go`, `classify.go`, `classify_rules.csv`, обновление `scanner.go`, секция `discovery` конфига, `cmd/seed`.
-
-**Границы обнаружения.** Ни один сканер не находит любое устройство. Устройство, которое молчит и не передаёт трафик, видно только как запись, добавленная вручную (слайс 5).
-
-**Что делает:**
-
-- `snmparp`: у известных маршрутизаторов и коммутаторов, ответивших по SNMP, читает ARP-таблицу (`ipNetToMediaTable`) и таблицу пересылки (`dot1dTpFdbTable`, `dot1qTpFdbTable`). Так находятся устройства из других сегментов и устройства, которые не отвечают на ARP-прогрев, но недавно передавали трафик. Для хоста из FDB создаётся связь с портом коммутатора (источник `fdb`). Порты, у которых есть LLDP-сосед (магистральные), связей `fdb` не создают.
-- `probe` (только при `discovery.probeRoutedTargets: true`): для целей вне L2-сегмента отправляет ICMP echo через непривилегированный ICMP-сокет (нужен `net.ipv4.ping_group_range`) и делает TCP connect на порты 22, 80, 443. Живым считается адрес, ответивший на любую пробу, включая RST. Не больше 128 одновременных проб.
-- `classify`: выставляет вид устройства по правилам в порядке приоритета: LLDP-возможности, SNMP (`sysServices`, ключевые слова `sysDescr`), открытые порты (9100, 515, 631 дают `printer`, 554 даёт `camera`), вендор по OUI. Правила лежат в данных (`classify_rules.csv`), а не в коде. Без совпадений остаётся `unknown`. Вид с `kind_locked` не меняется.
-
-**Критерии приёмки:**
-
-1. Устройство другого сегмента, известное ARP-таблице маршрутизатора, появляется в инвентаре с источником `snmp`.
-2. Устройство, не ответившее на ARP-прогрев, но присутствующее в FDB коммутатора, появляется в инвентаре.
-3. Хост из FDB получает связь с портом коммутатора. Магистральные порты связей не создают.
-4. При `probeRoutedTargets: false` цели вне сегмента не зондируются, в лог пишется причина. При `true` живые адреса находятся ICMP- или TCP-пробой.
-5. Устройство с открытым портом 9100 получает вид `printer`, с портом 554 вид `camera`. Вид с `kind_locked` не меняется.
-6. Правила читаются из `classify_rules.csv`. Устройство без совпадений остаётся `unknown`.
-
-**Тесты:** фикстуры SNMP для ARP и FDB (критерии 1-3), исключение магистральных портов, `probe` с фейковыми ICMP и `dialer`, таблица правил `classify` на тестовом CSV, `kind_locked`.
-
-**Не делать:** DHCP-аренды, mDNS, SSDP и NetBIOS (раздел 18), сканирование за NAT, SYN-скан на raw-сокетах, определение ОС по отпечатку стека.
+**Do not:** CSV import, groups and tags, custom fields, an edit history.
 
 ---
 
-### Слайс 9 - сервисы
+### Slice 6 - users, access tokens, the audit log
 
-**Файлы:** `internal/store/migrations/0006_services.sql`, `internal/collector/services.go`, `web/src/pages/Services.tsx`, вкладка сервисов в `DevicePanel`.
+**Files:** `internal/store/migrations/NNNN_api_tokens.sql`, the `AuthRepo` methods for administering users, tokens and audit, `internal/auth/session.go` (tokens), `internal/api/users.go`, `tokens.go`, `audit.go`, `web/src/pages/Users.tsx`, `Audit.tsx`, `Account.tsx` (the tokens section), `web/src/components/RoleBadge.tsx`.
 
-**Что делает:** для каждого живого устройства коллектор делает TCP connect-скан портов из `scan.ports`: таймаут 500 мс на порт, не больше 256 одновременных соединений за скан. Имя сервиса берётся из встроенной таблицы известных портов (IANA). Страница `/services` показывает сервисы всех устройств с фильтром по имени сервиса.
+**What it does:** an administrator creates, disables and deletes users, changes roles and sets a temporary password (`must_change_password`). Every user issues and revokes their own access tokens for scripts (`Authorization: Bearer`). An administrator reads the audit log with filters by user, action, result and period. `PruneAudit` is called at start and once a day.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. Открытый порт сохраняется как сервис с именем, закрывшийся порт удаляется после следующего завершённого скана.
-2. Скан берёт порты из `scan.ports`. Пустой список отключает этап.
-3. Одновременных соединений за скан не больше 256.
-4. `/services` показывает имя, порт, протокол и устройство. Фильтр по имени работает.
-5. Вкладка сервисов в `DevicePanel` показывает сервисы выбранного устройства.
+1. An administrator creates a user with a role, the user signs in and sees exactly what their role allows (viewer, operator, admin).
+2. A role change, disabling, deleting and a password reset revoke the active sessions of the user.
+3. The last administrator cannot be deleted, disabled or demoted (409), including by themselves.
+4. An operator and a viewer do not open `/users` and `/audit` and get 403 on the matching routes.
+5. A token is shown once at creation, only the prefix is visible in the list, and only the hash is in the database. A token with the scope `read` gets 403 on unsafe methods. A token never opens `users:manage`, `audit:read` and `tokens:manage`, and of `/api/auth/*` only `GET /api/auth/me` is open to it. The rights of a token are the intersection of its scope and the current role of its owner.
+6. A revoked and an expired token give 401. The default lifetime is 90 days, the maximum is 365, and an eternal token is not issued.
+7. The log shows the events of section 9.8 with filters and pagination through `before`. Entries cannot be changed or deleted through the API.
+8. No more than 20 active tokens and 10 sessions per user.
+9. Entries older than `audit.keepDays` are deleted.
 
-**Тесты:** фейковый `dialer` (критерии 1-3, счётчик одновременных соединений), таблица имён портов, фильтр на фронтенде (vitest).
+**Tests:** a role matrix on test data, revoking sessions, the last administrator, tokens (hash, scope, lifetime, revoke), audit filters and pagination, `PruneAudit`.
 
-**Не делать:** чтение баннеров и определение версий (это слайс 18), UDP-скан, проверку уязвимостей, интеграцию с nmap.
-
----
-
-### Слайс 10 - SSH-коллектор
-
-**Файлы:** `internal/collector/ssh.go`, обновление `scanner.go`, секция `ssh` конфига.
-
-**Что делает:** для хостов из `ssh.hosts` коллектор подключается по ключу и выполняет фиксированный набор команд на чтение: `hostname`, `uname -sr`, `ip -o addr`, `ss -H -tln`. По выводу заполняются `hostname`, `description`, интерфейсы с IP и слушающие сервисы. Ключ хоста проверяется по файлу `ssh.knownHosts`. Каждая команда выполняется с таймаутом 10 секунд, вывод ограничен 1 МиБ, подключение с таймаутом 5 секунд.
-
-**Критерии приёмки:**
-
-1. Хост из конфига дополняется: hostname, описание (`uname`), интерфейсы с IP, слушающие сервисы. Источник `ssh`.
-2. Неизвестный или изменившийся ключ хоста: хост пропускается, скан продолжается, предупреждение попадает в лог.
-3. Недоступный хост пропускается после таймаута, скан не падает.
-4. Коллектор выполняет только команды из константного списка. Команд из конфига или из ввода пользователя нет.
-5. Пути к ключам и содержимое ключей не попадают в логи, API и экспорт.
-6. Файл ключа с правами шире `0600` отклоняется: хост пропускается с предупреждением.
-
-**Тесты:** фейковый `sshRunner` на фикстурах (критерии 1, 3), парсеры `ip -o addr` и `ss -H -tln`, политика ключей хоста на `known_hosts` в памяти (критерий 2), тест на то, что выполняются только команды из списка (критерий 4).
-
-**Не делать:** `sudo` и команды от root, интерактивные сессии, вход по паролю, Windows-хосты, разбор CLI сетевого оборудования, бэкап конфигураций.
+**Do not:** user groups, custom roles, device-level permissions, a password reset by mail, single sign-on (SSO).
 
 ---
 
-### Слайс 11 - Docker-контейнеры
+### Slice 7 - SNMP, interfaces and LLDP links
 
-**Файлы:** `internal/store/migrations/NNNN_containers.sql`, `internal/collector/docker.go`, `internal/api/containers.go`, `web/src/pages/Containers.tsx`, обновление `TopologyCanvas`, `DeviceNode`, `layout.go`, `cmd/seed`.
+**Files:** `internal/store/migrations/0005_interfaces.sql`, `internal/collector/snmp.go`, `lldp.go`, `oui.go`, `oui.csv`, the update of `scanner.go`, `cmd/seed`, `web/src/components/DeviceNode.tsx`, `TopologyCanvas.tsx`, `DevicePanel.tsx`.
 
-**Что делает:** коллектор подключается к сокету из `docker.socket`, читает все контейнеры (любые состояния), их порты, сети и метку `com.docker.compose.project`. Хостом контейнеров служит устройство, чей IP совпадает с локальным адресом netscribe. Если его нет в таблице, коллектор создаёт его с источником `local`. Подписка на события Docker (`create`, `start`, `stop`, `die`, `destroy`) обновляет базу между сканами и публикует `topology.changed`. На холсте контейнеры стоят под узлом хоста (по 6 в ряд), от хоста к контейнеру идёт ребро, цвет зависит от состояния. Режим только чтение: запуск, остановка и логи не реализуются. Данные о контейнерах отдаются по праву `topology:read`.
+**What it does:** for every live device the collector tries SNMP v2c with the community from the config and reads `sysName`, `sysDescr`, `sysServices`, and the tables of interfaces and addresses. The LLDP collector reads `lldpLocPortTable` and `lldpRemTable` and builds links between known devices: the remote node is matched by the MAC from the chassis id or by the management address. An unknown neighbor creates a device with the source `snmp`. The device kind is determined by the LLDP capabilities (bridge → switch, router → router, WLAN access point → ap), otherwise it stays as it was. The vendor is taken from the built-in OUI table by MAC. Links are drawn as edges with port labels.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. При доступном сокете `/containers` показывает имя, образ, состояние, порты, сети и compose-проект каждого контейнера.
-2. Запуск или остановка контейнера обновляет страницу не позже чем через 2 секунды без скана.
-3. Сокет недоступен (нет файла или нет прав): сервис работает, страница показывает `EmptyState` с причиной, ошибка в логе записана один раз.
-4. Контейнеры на холсте стоят под узлом хоста, клик открывает панель контейнера.
-5. Удалённый контейнер исчезает из списка и с холста.
-6. `docker.enabled: false` полностью отключает коллектор.
+1. A device that answered over SNMP gets `hostname = sysName`, `description = sysDescr`, the source `snmp`. One that did not answer stays as it is, and the scan does not fail.
+2. Interfaces are saved per device, and a repeated scan creates no duplicates.
+3. An LLDP neighbor of switch A that is switch B gives one link A.port - B.port, one row and not two.
+4. A link with an unknown neighbor creates the neighbor device.
+5. A link that vanished from the LLDP table is deleted after the next completed scan.
+6. Edges are drawn on the canvas with port labels, and the interfaces tab in `DevicePanel` shows the name, MAC, IP and state.
+7. The vendor by OUI is visible in the device panel.
+8. The values of communities do not appear in logs, API answers and CLI output.
 
-**Тесты:** фейковый `dockerAPI` на фикстурах (критерии 1, 5), обработчик событий (2), отсутствие сокета (3), маппинг портов и сетей в JSON, раскладка контейнеров под хостом.
+**Tests:** `snmpClient` with a fake on `snmpwalk` fixtures (criteria 1, 2), normalization and deduplication of a link (`a_device_id < b_device_id`, criterion 3), creating a neighbor (4), deleting a vanished link (5), determining the kind from LLDP capabilities, `Secret` in logs (8).
 
-**Не делать:** Podman и LXD, удалённые Docker-хосты по TCP, `exec`, логи, управление контейнерами.
-
----
-
-### Слайс 12 - экспорт Markdown и Draw.io
-
-**Файлы:** `internal/render/mermaid.go`, `markdown.go`, `drawio.go`, `internal/api/export.go`, `cmd/netscribe/main.go` (подкоманда `export`), `web/src/components/ExportMenu.tsx`, примитив `dropdown-menu`.
-
-**Что делает:** Markdown содержит заголовок, дату генерации, сводку по количеству, топологию в блоке Mermaid (`graph LR`), таблицы устройств (имя, IP, MAC, вид, вендор, состояние), IP по интерфейсам, сервисов и контейнеров. Draw.io - несжатый XML mxGraph: по вершине на устройство и контейнер с координатами из `render.Layout`, по ребру на связь с подписями портов, цвет по виду. `netscribe export --format md|drawio --out <файл>` и `GET /api/export/{format}` дают один и тот же результат. CLI читает локальную базу напрямую, права проверяет ОС (доступ к файлу базы).
-
-**Критерии приёмки:**
-
-1. `GET /api/export/md` отдаёт Markdown с `Content-Disposition` вида `netscribe-<дата>.md`. Блок Mermaid отображается на GitHub (проверка руками).
-2. `GET /api/export/drawio` отдаёт XML, который открывается в diagrams.net без ошибок, позиции совпадают с панелью.
-3. Одно и то же состояние базы даёт одинаковые байты, кроме строки с датой генерации (она берётся из подставляемых часов).
-4. Пустая база даёт документ с пометкой «no devices», а не ошибку.
-5. Символы `<`, `&`, `"`, `|` в hostname экранируются в XML, в таблицах Markdown и в метках Mermaid.
-6. `netscribe export` и API дают одинаковый результат.
-7. `GET /api/export/{format}` без права `export:run` отвечает 403, успешный экспорт пишется в аудит. Файл отдаётся с `Content-Disposition: attachment`.
-
-**Тесты:** golden-файлы на небольшой фикстуре, разбор XML и подсчёт ячеек, тесты экранирования (критерий 5), детерминизм (3), пустая база (4).
-
-**Не делать:** HTML и PDF (слайс 13), пользовательские шаблоны, библиотеки иконок оборудования, слои Draw.io.
+**Do not:** SNMP v3, SNMP SET, traffic counters, receiving traps, loading MIB files (OIDs are given as numbers).
 
 ---
 
-### Слайс 13 - экспорт HTML и PDF
+### Slice 8 - extended discovery and classification
 
-**Файлы:** `internal/render/svg.go`, `html.go`, `pdf.go`, `templates/report.html.tmpl`, обновление `export.go`, `ExportMenu.tsx`.
+**Files:** `internal/collector/snmparp.go`, `probe.go`, `classify.go`, `classify_rules.csv`, the update of `scanner.go`, the config section `discovery`, `cmd/seed`.
 
-**Что делает:** HTML - один самодостаточный файл: встроенные стили, встроенная SVG-диаграмма (те же координаты, что на панели), таблицы устройств, сервисов, контейнеров и изменений, стили для печати (`@media print`, разрывы страниц). Скриптов и внешних запросов нет. PDF создаётся через `chromedp`, который печатает тот же HTML. Chrome или Chromium ищется по `export.chromePath` или в `PATH`.
+**Limits of discovery.** No scanner finds every device. A device that is silent and sends no traffic is visible only as a record added by hand (slice 5).
 
-**Критерии приёмки:**
+**What it does:**
 
-1. HTML открывается офлайн, не делает сетевых запросов и не содержит `<script>`.
-2. SVG показывает те же позиции узлов, что и панель, offline-устройства приглушены.
-3. В предпросмотре печати диаграмма умещается по ширине, строки таблиц не разрываются между страницами (проверка руками).
-4. `GET /api/export/pdf` отдаёт валидный PDF (заголовок `%PDF`) при наличии Chrome. Без Chrome отвечает 503 с понятным текстом.
-5. Hostname вида `<script>` выводится как текст.
-6. `viewBox` SVG вычисляется по границам узлов.
-7. HTML отдаётся как вложение с заголовками из раздела 9.4 (включая собственный `Content-Security-Policy`). PDF-рендер выполняется не более одного за раз и не дольше 60 секунд.
+- `snmparp`: from known routers and switches that answered over SNMP it reads the ARP table (`ipNetToMediaTable`) and the forwarding table (`dot1dTpFdbTable`, `dot1qTpFdbTable`). This finds devices of other segments and devices that do not answer the ARP warm-up but sent traffic recently. For a host from the FDB a link to the switch port is created (source `fdb`). Ports that have an LLDP neighbor (trunk ports) create no `fdb` links.
+- `probe` (only with `discovery.probeRoutedTargets: true`): for targets outside the L2 segment it sends an ICMP echo through an unprivileged ICMP socket (`net.ipv4.ping_group_range` is needed) and does a TCP connect to ports 22, 80, 443. An address that answered any probe, including an RST, counts as live. No more than 128 concurrent probes.
+- `classify`: sets the device kind by rules in priority order: LLDP capabilities, SNMP (`sysServices`, keywords of `sysDescr`), open ports (9100, 515, 631 give `printer`, 554 gives `camera`), the vendor by OUI. The rules live in data (`classify_rules.csv`), not in code. With no match it stays `unknown`. A kind with `kind_locked` does not change.
 
-**Тесты:** HTML без `<script` (1), экранирование (5), границы `viewBox` (6), заголовки и лимит PDF-рендера (7), PDF с пропуском через `t.Skip` без Chrome и ветка 503 с фейковым поиском браузера (4).
+**Acceptance criteria:**
 
-**Не делать:** темы отчёта, логотип и брендинг, графики в отчёте, шифрование PDF.
+1. A device of another segment that the ARP table of a router knows appears in the inventory with the source `snmp`.
+2. A device that did not answer the ARP warm-up but is present in the FDB of a switch appears in the inventory.
+3. A host from the FDB gets a link to the switch port. Trunk ports create no links.
+4. With `probeRoutedTargets: false` targets outside the segment are not probed, and the reason is written to the log. With `true` live addresses are found by an ICMP or TCP probe.
+5. A device with an open port 9100 gets the kind `printer`, with port 554 the kind `camera`. A kind with `kind_locked` does not change.
+6. The rules are read from `classify_rules.csv`. A device with no match stays `unknown`.
 
----
+**Tests:** SNMP fixtures for ARP and FDB (criteria 1-3), excluding trunk ports, `probe` with a fake ICMP and `dialer`, a table of `classify` rules on a test CSV, `kind_locked`.
 
-### Слайс 14 - история сканов и изменения
-
-**Файлы:** `internal/store/migrations/NNNN_changes.sql`, `internal/store/apply.go` (запись `changes`, `PruneScans`), `internal/api/changes.go`, `web/src/pages/Changes.tsx`, секция «Changes» в экспортах.
-
-**Что делает:** `ApplyResult` сравнивает результат скана с предыдущим состоянием и пишет изменения видов из раздела 4.1. Первый завершённый скан изменений не пишет. Страница `/changes` показывает ленту (новые сверху) и линейный график числа устройств по завершённым сканам (Recharts). `history.keepScans` ограничивает число хранимых сканов, старые удаляются вместе с изменениями. Экспорты получают секцию «Changes» по последнему скану.
-
-**Критерии приёмки:**
-
-1. Скан, который добавил, вернул, потерял или изменил устройство, связь или контейнер, пишет изменения с видами из контракта. Скан без отличий не пишет ничего.
-2. Первый завершённый скан не пишет изменений.
-3. Неудавшийся скан не пишет изменений, не помечает устройства offline и не попадает на график.
-4. `/changes` показывает ленту и график. Пустая лента показывает `EmptyState`.
-5. Лишние сканы сверх `history.keepScans` удаляются вместе со своими изменениями.
-6. Экспорты Markdown и HTML содержат секцию «Changes» с изменениями последнего скана.
-
-**Тесты:** по одному тесту на каждый вид изменения на базе в памяти, первый скан без изменений, неудавшийся скан, `PruneScans`.
-
-**Не делать:** уведомления (email, webhook), сравнение произвольных сканов, откат состояния.
+**Do not:** DHCP leases, mDNS, SSDP and NetBIOS (section 18), scanning behind NAT, a SYN scan on raw sockets, OS detection by stack fingerprint.
 
 ---
 
-### Слайс 15 - расписание и горячая перезагрузка конфига
+### Slice 9 - services
 
-**Файлы:** `internal/config/watch.go`, `internal/collector/scanner.go` (планировщик), `internal/events/hub.go` (события `config.*`), тост в `web/src/main.tsx`.
+**Files:** `internal/store/migrations/0006_services.sql`, `internal/collector/services.go`, `web/src/pages/Services.tsx`, the services tab in `DevicePanel`.
 
-**Что делает:** планировщик запускает скан каждые `scan.interval`. Файл конфига отслеживается через `fsnotify` (наблюдение за каталогом, чтобы ловить атомарную замену файла редактором, задержка 200 мс) и по `SIGHUP`. Корректный конфиг подменяется атомарно, публикуется `config.reloaded`. Некорректный конфиг отбрасывается, работает прежний, публикуется `config.error` с текстом ошибки. Применяются на лету: `scan.*`, `snmp.*`, `ssh.*`, `docker.*`, `history.*`, `export.*`. Поля `listen` и `database` требуют перезапуска, в лог пишется предупреждение.
+**What it does:** for every live device the collector does a TCP connect scan of the ports from `scan.ports`: a timeout of 500 ms per port, no more than 256 concurrent connections per scan. The service name comes from a built-in table of known ports (IANA). The page `/services` shows the services of all devices with a filter by service name.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. Смена `scan.interval` в файле применяется со следующего тика без перезапуска.
-2. Смена целей применяется к следующему скану, идущий скан завершается со старыми настройками.
-3. Битый YAML или ошибка валидации оставляют прежний конфиг, интерфейс показывает тост с текстом ошибки, сервис работает.
-4. Сохранение файла через замену (vim, `mv`) подхватывается.
-5. `SIGHUP` вызывает перезагрузку.
-6. Планировщик не запускает второй скан во время идущего, тик пропускается с записью в лог.
-7. Смена `docker.socket` или `docker.enabled` переподключает Docker-коллектор.
-8. События `config.reloaded` и `config.error` получают только пользователи с правом `users:manage`, остальные их не видят. Текст ошибки не содержит значений секретов. Перезагрузка и ошибка перезагрузки пишутся в аудит.
+1. An open port is saved as a service with a name, and a port that closed is deleted after the next completed scan.
+2. A scan takes the ports from `scan.ports`. An empty list turns the stage off.
+3. No more than 256 concurrent connections per scan.
+4. `/services` shows the name, port, protocol and device. The filter by name works.
+5. The services tab in `DevicePanel` shows the services of the selected device.
 
-**Тесты:** планировщик с подставляемыми часами (1, 6), перезагрузка корректного и некорректного конфига (2, 3), замена файла во временном каталоге (4), переподключение Docker-коллектора с фейком (7), доставка событий по ролям (8).
+**Tests:** a fake `dialer` (criteria 1-3, a counter of concurrent connections), the table of port names, the filter on the frontend (vitest).
 
-**Не делать:** веб-редактор конфига, расписание по устройствам, cron-выражения, перезагрузку `listen` на лету.
+**Do not:** reading banners and detecting versions (that is slice 18), a UDP scan, vulnerability checks, nmap integration.
 
 ---
 
-### Слайс 16 - упаковка и Docker
+### Slice 10 - SSH collector
 
-**Файлы:** `deploy/Dockerfile`, `deploy/compose.yaml`, `deploy/compose.lab.yaml`, `deploy/lab/`, `.goreleaser.yaml`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `README.md`, `LICENSE`, `SECURITY.md`, `.github/dependabot.yml`, интеграционный тест под build tag `lab`.
+**Files:** `internal/collector/ssh.go`, the update of `scanner.go`, the config section `ssh`.
 
-**Что делает:**
+**What it does:** for the hosts from `ssh.hosts` the collector connects by key and runs a fixed set of read commands: `hostname`, `uname -sr`, `ip -o addr`, `ss -H -tln`. The output fills `hostname`, `description`, interfaces with IPs and listening services. The host key is checked against the file `ssh.knownHosts`. Each command runs with a timeout of 10 seconds, the output is limited to 1 MiB, and the connection has a timeout of 5 seconds.
 
-- `Dockerfile`: многоступенчатая сборка (фронтенд, статический бинарник Go), минимальный итоговый образ.
-- `compose.yaml`: один сервис `netscribe`, `network_mode: host`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, `read_only: true`, том для базы, конфиг только на чтение, Docker-сокет только на чтение (в README описан риск доступа к сокету и вариант с `docker-socket-proxy`).
-- `compose.lab.yaml`: сеть-мост с фиксированными адресами и контейнеры `snmpd`, `sshd` и `nginx` для проверки ARP, SNMP, SSH и сервисов.
-- `goreleaser`: статические бинарники linux/amd64 и linux/arm64.
-- CI: `make gate` и `make audit` на каждый pull request, релиз по тегу.
-- `SECURITY.md` с порядком сообщения об уязвимостях и `.github/dependabot.yml` для go, npm и docker.
-- README по правилам раздела 12: описание, скриншот, установка (бинарник и Docker), создание первого пользователя (`docker compose exec netscribe netscribe user add`), конфиг, TLS и обратный прокси, безопасность (риск Docker-сокета, SNMP v2c открытым текстом), примеры экспорта.
+**Acceptance criteria:**
 
-**Критерии приёмки:**
+1. A host from the config is completed: hostname, description (`uname`), interfaces with IPs, listening services. The source is `ssh`.
+2. An unknown or changed host key: the host is skipped, the scan continues, and a warning goes to the log.
+3. An unreachable host is skipped after the timeout, and the scan does not fail.
+4. The collector runs only commands from a constant list. There are no commands from the config or from user input.
+5. Key paths and key contents do not get into logs, the API and exports.
+6. A key file with permissions wider than `0600` is rejected: the host is skipped with a warning.
 
-1. `docker compose -f deploy/compose.yaml up --build` из чистого клона поднимает сервис, `GET /healthz` отвечает 200. Остальные маршруты отвечают 503, пока `docker compose exec netscribe netscribe user add` не создаст первого пользователя.
-2. `compose.lab.yaml` поднимает лабораторию, скан находит её контейнеры, SNMP-данные от `snmpd`, сервисы от `nginx` и `sshd`.
-3. `goreleaser build --snapshot --clean` даёт бинарники linux/amd64 и linux/arm64, `ldd` сообщает, что файл не динамический.
-4. CI запускает `make gate` и `make audit` на pull request.
-5. README содержит разделы: что это, установка, первый пользователь, конфигурация, безопасность, экспорт. В репозитории есть `SECURITY.md` и `.github/dependabot.yml`.
+**Tests:** a fake `sshRunner` on fixtures (criteria 1, 3), parsers of `ip -o addr` and `ss -H -tln`, the host key policy on an in-memory `known_hosts` (criterion 2), a test that only commands from the list are run (criterion 4).
 
-**Тесты:** интеграционный тест под tag `lab` запускает скан против лаборатории и проверяет число найденных устройств и сервисов. В гейт он не входит.
-
-**Не делать:** Helm и Kubernetes, сборки для Windows и macOS, автообновление, телеметрию.
+**Do not:** `sudo` and commands as root, interactive sessions, password sign-in, Windows hosts, parsing the CLI of network equipment, config backup.
 
 ---
 
-### Слайс 17 - полировка интерфейса
+### Slice 11 - Docker containers
 
-**Файлы:** `web/src/` (тема, состояния загрузки и ошибок), `index.html`, `web/public/theme-init.js`, `web/src/lib/theme.ts`, конфиг eslint (`jsx-a11y`).
+**Files:** `internal/store/migrations/NNNN_containers.sql`, `internal/collector/docker.go`, `internal/api/containers.go`, `web/src/pages/Containers.tsx`, the update of `TopologyCanvas`, `DeviceNode`, `layout.go`, `cmd/seed`.
 
-**Что делает:** светлая, тёмная и системная тема: класс на `<html>` и значение в `localStorage`, внешний синхронный скрипт `web/public/theme-init.js` в `<head>` ставит класс до отрисовки (inline-скрипты запрещены политикой CSP из раздела 9.4). Состояния загрузки (`skeleton`), ошибки (граница ошибок с кнопкой повтора) и пустоты есть на каждой странице. Клавиша `/` фокусирует поиск на странице инвентаря. Фокус-кольца, `aria`-подписи у узлов и кнопок. Боковая панель сворачивается на узком экране.
+**What it does:** the collector connects to the socket from `docker.socket`, reads all containers (any state), their ports, networks and the label `com.docker.compose.project`. The container host is the device whose IP equals the local address of netscribe. If it is not in the table, the collector creates it with the source `local`. A subscription to Docker events (`create`, `start`, `stop`, `die`, `destroy`) updates the database between scans and publishes `topology.changed`. On the canvas containers stand under the host node (6 per row), an edge goes from the host to the container, and the color depends on the state. Read-only mode: starting, stopping and logs are not implemented. Container data is served under the permission `topology:read`.
 
-**Критерии приёмки:**
+**Acceptance criteria:**
 
-1. Выбранная тема применяется без мигания при перезагрузке страницы.
-2. Режим «системная» следует настройке ОС и реагирует на её смену.
-3. Каждая страница имеет состояния загрузки, пустоты и ошибки.
-4. Клавиша `/` на `/inventory` фокусирует поле поиска.
-5. `eslint-plugin-jsx-a11y` проходит без ошибок.
-6. Интерфейс пригоден для работы при ширине 1280 и 390 пикселей (проверка руками).
-7. В `index.html` и в собранных страницах нет inline-скриптов, консоль браузера не показывает нарушений CSP.
+1. With an available socket `/containers` shows the name, image, state, ports, networks and compose project of every container.
+2. Starting or stopping a container updates the page within 2 seconds without a scan.
+3. The socket is unavailable (no file or no permissions): the service works, the page shows an `EmptyState` with the reason, and the error is written to the log once.
+4. Containers on the canvas stand under the host node, and a click opens the container panel.
+5. A deleted container disappears from the list and from the canvas.
+6. `docker.enabled: false` turns the collector off completely.
 
-**Тесты:** функция определения темы (`theme.ts`) в vitest.
+**Tests:** a fake `dockerAPI` on fixtures (criteria 1, 5), the event handler (2), a missing socket (3), the mapping of ports and networks to JSON, the layout of containers under a host.
 
-**Не делать:** i18n, брендинг, анимации сверх простых переходов.
-
----
-
-### Слайс 18 - распознавание по HTTP, mDNS и SSDP
-
-**Файлы:** `internal/store/migrations/NNNN_service_banner.sql` (колонка `services.banner`), `internal/collector/httpbanner.go`, `mdns.go`, `ssdp.go`, обновление `classify.go`, `classify_rules.csv`, `scanner.go`, `web/src/components/ServicesTable.tsx`, `web/src/pages/Services.tsx`.
-
-**Что делает:** три источника сведений о том, что за устройство, для тех, кто молчит по SNMP и LLDP.
-
-- **HTTP.** Для каждого устройства с открытым портом 80, 443 или 8080 из результата слайса 9 один запрос `HEAD /`. Из ответа берутся `Server`, `X-Powered-By` и `realm` из `WWW-Authenticate`. Строка сохраняется в `services.banner` (до 200 символов). Для HTTPS читается то же самое, плюс CN сертификата.
-- **mDNS.** Один запрос PTR на `_services._dns-sd._udp.local` на `224.0.0.251:5353` с каждого локального интерфейса, окно ответа 3 секунды. Из ответов берутся имя хоста (`.local`) и типы сервисов (`_ipp._tcp`, `_airplay._tcp` и другие). Имя хоста заполняет `hostname`, только если он пуст.
-- **SSDP.** Один `M-SEARCH` с `ST: ssdp:all` на `239.255.255.250:1900`, окно 3 секунды. Из ответов берутся `SERVER` и `ST`. Адрес из `LOCATION` не запрашивается.
-- **Классификация.** В `classify_rules.csv` появляются поля `http` (подстрока баннера), `mdns` (тип сервиса) и `ssdp` (подстрока `SERVER` или `ST`). Порядок полей: `descr`, `http`, `mdns`, `ssdp`, `services`, `port`, `vendor`. Правила в данных, не в коде.
-
-**Критерии приёмки:**
-
-1. Устройство с веб-портом получает в `services.banner` значение `Server`, длина не больше 200 символов, без управляющих символов.
-2. Сборщик HTTP читает только заголовки: тело ответа не читается, редиректы не выполняются, на запрос уходит не больше 2 секунд и 8 КиБ.
-3. Устройство, которое молчит по SNMP, но объявляет в mDNS сервис `_ipp._tcp`, получает вид `printer`. Вид из LLDP и `kind_locked` не меняются.
-4. Имя `.local` из mDNS заполняет пустой `hostname`, не заменяет уже известный.
-5. Адрес из `LOCATION` в ответе SSDP нигде не запрашивается.
-6. `discovery.httpHeaders`, `discovery.mdns` и `discovery.ssdp` включаются по отдельности, выключенный источник не отправляет ни одного пакета.
-7. Ответ длиннее лимита, битый пакет и ответ с мусором вместо UTF-8 пропускаются без падения скана.
-8. Страница `/services` и вкладка сервисов показывают баннер.
-
-**Тесты:** `httptest` для HTTP и HTTPS (критерии 1, 2), разбор пакетов mDNS и ответов SSDP на собранных в тесте байтах (критерии 3-5, 7), фейковый транспорт multicast (критерий 6), правила классификации на тестовом CSV, фильтр баннера на фронтенде (vitest).
-
-**Не делать:** запросы с учётными данными, `GET` с телом, переходы по редиректам, загрузку `LOCATION` и описаний устройств UPnP, пассивное прослушивание, NetBIOS, определение версий по отпечаткам, проверку уязвимостей.
+**Do not:** Podman and LXD, remote Docker hosts over TCP, `exec`, logs, container management.
 
 ---
 
-### Слайс 19 - Nmap: определение ОС и управление из панели
+### Slice 12 - Markdown and Draw.io export
 
-Доработка необязательного источника Nmap (правка 20). Источник по-прежнему выключен по умолчанию и запускается только для устройств, которые не опознали другие источники.
+**Files:** `internal/render/mermaid.go`, `markdown.go`, `drawio.go`, `internal/api/export.go`, `cmd/netscribe/main.go` (the subcommand `export`), `web/src/components/ExportMenu.tsx`, the primitive `dropdown-menu`.
 
-Файлы: `internal/collector/nmap.go`, `internal/store/migrations/0010_device_os_guess.sql`, `internal/api/scans.go`, `internal/api/router.go`, `web/src/components/ScanBar.tsx`, `web/src/pages/Inventory.tsx`, `web/src/components/DevicePanel.tsx`, `deploy/Dockerfile` (цель `nmap`), `deploy/compose.nmap.yaml`.
+**What it does:** the Markdown holds a title, the generation date, a summary of the counts, the topology in a Mermaid block (`graph LR`), and tables of devices (name, IP, MAC, kind, vendor, state), IPs by interface, services and containers. Draw.io is an uncompressed mxGraph XML: a vertex per device and container with coordinates from `render.Layout`, an edge per link with port labels, and a color by kind. `netscribe export --format md|drawio --out <file>` and `GET /api/export/{format}` give the same result. The CLI reads the local database directly, and the OS checks the rights (access to the database file).
 
-- Название ОС из лучшей догадки Nmap (точность не ниже 85 процентов) сохраняется в `devices.os_guess` (до 100 символов), показывается в панели устройства как «System (Nmap)». Скан без Nmap или без догадки старое значение не стирает. Источник `nmap` не меняет источник устройства, имя и описание.
-- `POST /api/scans` принимает необязательное тело `{"nmap": true}`: этот скан идёт с Nmap, что бы ни стояло в `discovery.nmap`. Ответ 400, если Nmap не найден или сканер его не поддерживает. В аудите запись `scan_start` получает пометку `with nmap`.
-- `GET /api/nmap` (право `scans:run`) возвращает `{available, enabled, reason}`. Панель показывает рядом с «Run scan» флажок «Identify unknown devices with Nmap», только если Nmap найден; при `discovery.nmap: true` флажок включён и заблокирован.
-- Образ Docker с Nmap: цель `nmap` в `deploy/Dockerfile` (Alpine, `setcap` на `nmap`), файл `deploy/compose.nmap.yaml` возвращает контейнеру `NET_RAW`, `NET_ADMIN`, `NET_BIND_SERVICE` и не ставит `no-new-privileges`, потому что ядро не применяет file capabilities при этой опции. Образ по умолчанию остаётся distroless без Nmap.
+**Acceptance criteria:**
 
-Критерии приёмки.
-1. Скан с `--nmap` или с флажком сохраняет догадку ОС для устройства без вида, и панель её показывает.
-2. Без Nmap или без прав скан завершается, в логе одно предупреждение, флажок скрыт.
-3. Реальный Nmap проверен в CI на lab (`NETSCRIBE_LAB_NMAP=1 go test -tags lab`) и в образе `nmap` под пользователем `nonroot`.
+1. `GET /api/export/md` returns Markdown with a `Content-Disposition` of the form `netscribe-<date>.md`. The Mermaid block renders on GitHub (a manual check).
+2. `GET /api/export/drawio` returns XML that opens in diagrams.net without errors, and the positions match the panel.
+3. The same database state gives the same bytes, except for the line with the generation date (it comes from a substituted clock).
+4. An empty database gives a document with the note "no devices", not an error.
+5. The characters `<`, `&`, `"`, `|` in a hostname are escaped in XML, in Markdown tables and in Mermaid labels.
+6. `netscribe export` and the API give the same result.
+7. `GET /api/export/{format}` without the permission `export:run` answers 403, and a successful export is written to the audit. The file is served with `Content-Disposition: attachment`.
 
-### Слайс 20 - Nmap и логика обнаружения
+**Tests:** golden files on a small fixture, XML parsing and cell counting, escaping tests (criterion 5), determinism (3), an empty database (4).
 
-Доводит Nmap и обнаружение до рабочего состояния после проверки слайса 19 на реальном Nmap. Источник по-прежнему выключен по умолчанию.
-
-Файлы: `internal/collector/nmap.go`, `internal/collector/classify.go`, `internal/collector/classify_rules.csv`, `internal/collector/scanner.go`, `internal/config/config.go`, `internal/store/manual.go`, `internal/api/devices.go`, `internal/api/router.go`, `cmd/netscribe/main.go`, `web/src/components/DevicePanel.tsx`, `web/src/api/client.ts`.
-
-- **Только устройства с открытым портом.** Определению ОС нужны один открытый и один закрытый TCP-порт. Nmap запускается только для устройств, у которых порт-сканер или проба нашли хотя бы один открытый TCP-порт. Для остальных он не запускается, чтобы не ждать таймаут устройства (до 90 секунд).
-- **Семейство ОС как факт.** Из `osclass` берётся `osfamily` и добавляется факт `family=<семейство в нижнем регистре>`. В `classify_rules.csv` правила `nmap,family=windows,host`, `family=mac os x` (так Nmap называет macOS) и `family=android` дают вид `host`. Nmap называет одним именем `iOS` и Apple iOS, и Cisco IOS, поэтому семейство Apple определяется по производителю класса и записывается как `family=apple ios` (правило даёт `host`), а Cisco остаётся `family=ios` без правила. Семейство Linux вид не задаёт. Правила `type=` стоят в файле раньше правил `family=` и побеждают.
-- **Охват.** Ключ `discovery.nmapScope`: `untyped` (по умолчанию) спрашивает только устройства без вида, `all` спрашивает все устройства с открытым портом, чтобы заполнить строку ОС и у типизированных. Другое значение не проходит проверку конфига.
-- **Одно устройство из панели.** `POST /api/devices/{id}/identify` (право `scans:run`) запускает Nmap для одного устройства в фоне и отвечает 202. Ответ 404, если устройства нет, 409, если уже идёт скан или другое определение, 400, если Nmap недоступен или у устройства нет IP. Результат: строка ОС записывается в `devices.os_guess`, вид меняется только если он `unknown` и не закреплён вручную (`kind_locked`). Аудит `device_identify`, по завершении событие `topology.changed`. В панели устройства кнопка «Identify with Nmap» видна, когда Nmap найден и у пользователя есть право `scans:run`.
-
-Критерии приёмки.
-1. Устройство без открытых портов в скане с Nmap не вызывает запуск Nmap.
-2. Устройство с догадкой семейства Windows получает вид `host`, а с типом `router` - `router`, даже если семейство тоже названо.
-3. `nmapScope: all` заполняет строку ОС у устройства, у которого вид уже известен, а `untyped` нет.
-4. Кнопка в панели определяет ОС одного устройства, не трогает закреплённый вручную вид и пишет запись аудита.
-
-### Слайс 21 - проверка кода, порт и установка
-
-Исправляет находки ревью и доводит запуск и поставку до состояния, в котором Netscribe ставится на любой дистрибутив Linux.
-
-Файлы: `cmd/netscribe/main.go`, `cmd/netscribe/listen.go`, `internal/config/config.go`, `internal/store/queries/scans.sql`, `internal/store/devices.go`, `internal/auth/session.go`, `internal/api/sse.go`, `internal/api/middleware.go`, `scripts/`, `deploy/netscribe.service`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/`, `README.md`, `.goreleaser.yaml`.
-
-- **Порт.** `serve` занимает порт до запуска любых воркеров. Если порт занят, сервер предупреждает и на терминале спрашивает другой порт (`auto` берёт следующий свободный), с флагом `--auto-port` берёт следующий свободный без вопроса, без терминала завершается с понятной ошибкой. Флаг `--listen` заменяет `listen` из конфига. Выбранный порт в конфиг не пишется.
-- **`listen` в `Validate`.** Нужны `host:port` и порт от 1 до 65535.
-- **Незавершённые сканы.** При старте `serve` закрывает сканы в состоянии `running` как `failed`: такой скан остаётся только после остановки процесса.
-- **Поток событий.** Каждые 25 секунд поток проверяет учётные данные заново (`Service.Recheck` не обновляет таймер простоя). Выход, отключённая учётка, смена пароля и отозванный токен завершают поток.
-- **Установка.** `scripts/install.sh` ставит релиз, пользователя `netscribe`, конфиг и юнит systemd, при необходимости Nmap и Chromium через менеджер пакетов (apt, dnf, yum, zypper, pacman, apk, xbps). `scripts/install-build-deps.sh` ставит git, make, Go и Node.js для сборки из исходников. Юнит входит в архив релиза.
-
-Критерии приёмки.
-1. Занятый порт без терминала и без `--auto-port` завершает `serve` ошибкой, база при этом не открыта и воркеры не запущены.
-2. С `--auto-port` сервер слушает следующий свободный порт, на терминале вводимый порт или `auto` дают рабочий слушатель, пустой ответ завершает команду.
-3. `listen: 8080` и порт 0 или 65536 отклоняются при загрузке конфига.
-4. Скан, оставшийся в `running`, после старта `serve` имеет статус `failed`, завершённые сканы не меняются.
-5. Поток событий закрывается в течение одного интервала после отключения учётки и остаётся открытым, пока она включена.
-6. Установщик отклоняет архив с неверной суммой, не перезаписывает существующий конфиг и ставит файлы с правами 0600 для конфига.
-
-### Слайс 22 - установщик с мастером настройки
-
-Второй установщик к классическому `install.sh`: команда `netscribe`, в которой идут установка, настройка, рекомендации и проверки по каждому пункту.
-
-Файлы: `scripts/get.sh`, `scripts/install.sh`, `cmd/netscribe/setup.go`, `cmd/netscribe/main.go`, `internal/setup/`, `docs/installation.md`, `README.md`, `AGENTS.md`.
-
-- **`scripts/get.sh`.** Ставит релиз через `install.sh --no-service` (проверка суммы там же), затем делает `exec netscribe setup`. Опции `--version`, `--prefix`, `--base-url` уходят в `install.sh`, остальные в `setup`. Запущенный через `curl | sh`, читает ответы с `/dev/tty`, если не заданы `--yes` или `--password-stdin`.
-- **`netscribe setup`.** Девять шагов: система, команда `netscribe`, учётка сервиса, возможности (Nmap, Chromium, Docker), конфиг, ICMP, первый администратор, сервис, итог. Каждый шаг печатает находки с уровнем и исправлением. Флаги: `--config`, `--yes`, `--dry-run`, `--no-service`, `--admin`, `--password-stdin`, `--targets`, `--listen`.
-- **Конфиг.** Существующий конфиг не перезаписывается. Невалидный останавливает установку. Новый содержит только `listen`, `database`, `scan.targets`, `scan.interval`, `docker`, `discovery.nmap`, остальное по умолчанию, режим 0600, владелец учётка сервиса, запись атомарная. Цели берутся с интерфейсов: только частные IPv4, сеть шире /24 сужается до /24 адреса, интерфейсы контейнеров и виртуальных машин пропускаются.
-- **Права сервиса.** Группа сокета Docker и права Nmap (`CAP_NET_RAW`, `CAP_NET_ADMIN`) идут в drop-in `netscribe.service.d/10-setup.conf`, основной юнит не правится. `net.ipv4.ping_group_range` меняется, только когда ICMP выключен для всех групп (`1 0`): чужой непустой диапазон мастер не заменяет.
-- **Первый администратор.** Мастер запускает `netscribe user add` от имени учётки сервиса, иначе база окажется у root. Пароль вводится в самой команде, мастер его не видит. При слабом пароле спрашивает, повторить ли.
-- **Выбор адреса.** `127.0.0.1:порт` (рекомендуется), адрес интерфейса, `0.0.0.0:порт`, свой адрес. Вне loopback спрашивается защита: прокси (`trustedProxies`, в форме CIDR: голый адрес получает `/32`), TLS (сертификат и ключ проверяются на парность, пишутся в `tls`), либо обычный HTTP после явного «да». В режиме флагов то же задают `--tls-cert/--tls-key`, `--trusted-proxy`, `--plain-http`; без них адрес вне loopback отклоняется.
-- **Консоль.** `netscribe` без аргументов в терминале и `netscribe console`: наблюдатель, проверки, настройки, учётки (команды `user` от имени учётки сервиса), сервис (status, start, stop, restart, reload по SIGHUP, автозапуск, журнал), повторный `setup`. Без терминала голая команда печатает usage и выходит с 2, как раньше.
-- **`netscribe watch`.** Раз в `--interval` (2 с, не меньше 200 мс) снимает состояние: `systemctl show`, `/proc/PID` (память, потоки, файлы, CPU по разности тиков), `/healthz` с задержкой и графиком, размер базы и журнала WAL, свободное место, нагрузка и память хоста, валидность и время конфига, последние строки журнала. Показывает события между выборками (сервис упал или перезапустился, панель перестала отвечать, конфиг не грузится, мало места, рост памяти) и звонит в терминал при плохом событии. `--once` печатает одну выборку и выходит с 1, если сервис не работает.
-- **`netscribe config`.** Группы: доступ к панели, сканирование, обнаружение, Docker, SNMP, история и аудит, политика входа, экспорт. У каждой настройки значение, пояснение, значение по умолчанию (сверяется тестом с `internal/config`) и признак, применяется ли она без перезапуска (как `mergeHot`). Запись: правка YAML-дерева с сохранением комментариев, проверка всего конфига `config.Load` на временном файле, копия `.bak` (0600), атомарная замена с прежним владельцем. Сообщества SNMP вводятся без эха и не печатаются; через аргументы командной строки их задать нельзя. Подкоманды: `show` (секреты скрыты), `get`, `set`, `edit` (редактор из `$VISUAL`/`$EDITOR`, результат проверяется перед сохранением).
-- **`netscribe doctor`.** Те же проверки, ничего не меняет, код выхода 1 при `Fail`.
-- **Проверки.** Платформа, root, systemd, место на диске, команда `netscribe`, учётка, каталог состояния, валидность конфига и владелец файла, адрес прослушивания без TLS, занятый порт, цели вне сетей хоста, ICMP, Nmap и его права, браузер для PDF, сокет Docker и группа, сообщество SNMP `public`, юнит, состояние сервиса, ответ `/healthz`, наличие учёток.
-
-Не делать: правку основного юнита и чужого конфига, смену `ping_group_range`, когда им пользуются другие группы, запись пароля в аргументы процесса, TLS-сертификаты (выпуск остаётся за владельцем).
-
-Критерии приёмки.
-1. `setup --dry-run` ничего не меняет: ни файлов, ни учёток, ни служб.
-2. `setup --yes --admin alice --password-stdin` на чистой машине даёт работающую панель, конфиг 0600 у учётки сервиса, юнит с путями этой установки и администратора alice.
-3. Повторный запуск не меняет ничего: конфиг, юнит и учётка остаются, администратор не создаётся второй раз.
-4. Существующий конфиг не перезаписывается, невалидный останавливает установку с сообщением.
-5. Без root и без терминала (и без `--yes`) `setup` завершается с понятной ошибкой.
-6. Сеть контейнеров не попадает в предложенные цели, сеть шире /24 сужается до /24.
-7. `doctor` на сломанной установке показывает исправление к каждой находке уровня `Warn` и `Fail` и завершается кодом 1 при `Fail`.
-8. Копия юнита в `internal/setup` равна `deploy/netscribe.service`.
-9. Выбор адреса: loopback по умолчанию, интерфейсы без мостов контейнеров, для адреса вне loopback без TLS и прокси в режиме флагов установка отказывает, прокси записывается в CIDR.
-10. `config set` с невалидным значением ничего не меняет и не оставляет `.bak`; удачная правка сохраняет комментарии и режим 0600 и делает копию.
-11. `watch --once` выходит с 1, когда сервис не работает или панель не отвечает; события перечисляют падение, перезапуск, потерю ответа и порчу конфига.
-12. Секреты (сообщества SNMP) не попадают ни в вывод `config show/get`, ни в аргументы процесса, ни в журнал.
-
-### Слайс 23 - дизайн интерфейса
-
-Цель: интерфейс выглядит как дорогая консоль управления, а не как набор компонентов из библиотеки. Ориентир задал владелец: тёмный минимализм, тонкие границы, глубина, дозированный синий акцент, атмосферная сеть точек на фоне.
-
-Файлы: `web/src/index.css`, `web/src/lib/particles.ts`, `web/src/lib/spotlight.ts`, `web/src/components/AmbientBackground.tsx`, `web/src/components/Brand.tsx`, `web/src/App.tsx`, `web/src/pages/Login.tsx`, примитивы в `web/src/components/ui/`, `web/public/theme-init.js`, `web/src/lib/theme.ts`.
-
-- **Токены.** Роль, а не цвет: `background`, `card`, `popover`, `muted`, `accent`, `primary`, `brand`, `border`, `input`, `ring`, `sidebar`, `glow`. Компонент называет роль (`bg-card`, `text-muted-foreground`), цвет в компонентах не пишется. Тёмная тема: фон `#060607`, карточки `#111113`, линии белым 8 процентов, основной текст `#f4f4f5`, второй текст `#8d9098` (контраст на карточке не ниже 5,9). Акцент `#4059f5` для кнопок (белый текст, контраст 5,3) и `#8095ff` для значков и текста на тёмном (контраст 6,7). Светлая тема той же структуры.
-- **Поверхность.** Класс `.surface`: матовый градиент, светлая линия по верхней кромке, многослойная мягкая тень, радиус 2xl, под курсором лёгкое пятно акцента (`--mx`, `--my` пишет `spotlight.ts` раз за кадр одним слушателем на страницу). `.surface-lift` поднимает карточку на 2 пикселя. Карточки, таблицы, панели сканирования и связей, узлы топологии, полотно топологии сделаны ею. Меню, диалоги, подсказки, листы используют `popover`.
-- **Каркас.** Постоянный сайдбар с маркой, группами «Workspace» и «Administration», пунктом с индикатором и свечением, карточкой пользователя с аватаром внизу. Верхняя полоса: на узком экране круглая кнопка меню и марка, на широком капсула с названием страницы, справа круглая кнопка темы. Страница входа: марка, карточка по центру.
-- **Фон.** `AmbientBackground`: canvas на всё окно, до 110 точек (число от площади), около половины рождаются группами, которые дрейфуют вместе, тонкие линии между близкими точками, мерцание, три световых импульса по линиям, реакция на курсор (свечение и линии к ближайшим точкам, сдвиг по глубине). Яркость низкая, рисуется позади содержимого, `aria-hidden`, `pointer-events: none`, останавливается в скрытой вкладке, при `prefers-reduced-motion` рисует один кадр. Расчёт точек вынесен в `particles.ts` и проверяется тестами без canvas. Два мягких пятна света позади всего дрейфуют CSS-анимацией на компоновщике.
-- **Движение.** Появление страницы: страница проявляется, её секции поднимаются по очереди (задержка 70 мс на секцию, 700 мс на подъём, кривая quint). Микровзаимодействия 150-300 мс: кнопки, пункты меню, значки, строки таблиц, меню и подсказки (короткое появление). Анимируются `transform` и `opacity`, пересчёта раскладки нет.
-- **Тема по умолчанию тёмная** (см. правку 32).
-
-Не делать: WebGL и three.js (canvas 2D хватает, зависимость и риск для слабых устройств лишние), кричащий неон, полностью стеклянные поверхности, эмодзи вместо значков, анимацию, которая не даёт обратной связи.
-
-Критерии приёмки.
-1. Ни один компонент не пишет цвет: цвета только через токены, обе темы читаются, контраст основного и второго текста не ниже 4,5.
-2. Нет внешних запросов: шрифты и скрипты с того же origin, CSP не менялся, консоль браузера без ошибок на всех страницах.
-3. При `prefers-reduced-motion: reduce` нет ни дрейфа точек, ни появления секций.
-4. На 1440, 1024 и 390 пикселях нет горизонтальной прокрутки страницы, текст не обрезается и элементы не накладываются (таблицы прокручиваются внутри своей карточки).
-5. Фон не мешает чтению: яркость точек и линий низкая, содержимое всегда сверху.
-6. Все существующие тесты страниц проходят без правки их ожиданий, кроме тем (по умолчанию `dark`).
+**Do not:** HTML and PDF (slice 13), custom templates, libraries of equipment icons, Draw.io layers.
 
 ---
 
-## 17. Ревью после каждого слайса
+### Slice 13 - HTML and PDF export
 
-Отдельным заходом, после того как слайс готов и гейт зелёный. Задача захода - искать проблемы, а не хвалить написанное.
+**Files:** `internal/render/svg.go`, `html.go`, `pdf.go`, `templates/report.html.tmpl`, the update of `export.go`, `ExportMenu.tsx`.
 
-Чек-лист:
+**What it does:** the HTML is one self-contained file: built-in styles, a built-in SVG diagram (the same coordinates as in the panel), tables of devices, services, containers and changes, and print styles (`@media print`, page breaks). There are no scripts and no external requests. The PDF is created through `chromedp`, which prints the same HTML. Chrome or Chromium is looked up by `export.chromePath` or in `PATH`.
 
-1. SQL только в `internal/store/migrations` и `internal/store/queries`. В других пакетах строк с SQL нет.
-2. `collector` не импортирует `store`, `render` не импортирует `collector` и `api`, компоненты не вызывают `fetch`.
-3. Имена таблиц, полей, типов и маршрутов совпадают с разделами 4, 5 и 7.
-4. Запросов к базе в цикле нет. Список и связанные данные берутся одним запросом или одной транзакцией.
-5. Каждая горутина завершается по `ctx`. Нет горутин без выхода, нет записи в закрытый канал.
-6. Ошибки возвращаются или логируются, ни одна не игнорируется молча (`_ =` без причины в комментарии).
-7. Секреты не попадают в логи, ответы API, экспорт и сообщения об ошибках.
-8. Сетевой код уважает границы безопасности из разделов 1 и 9.6: частные диапазоны, режим только чтение, фиксированные команды SSH.
-9. Тесты проверяют критерии приёмки, а не повторяют реализацию. На каждый критерий с отказом есть тест на отказ.
-10. Использованы компоненты из раздела 6, самописных кнопок и полей в страницах нет.
-11. Мёртвого кода нет: неиспользуемые экспорты, SQL-запросы, компоненты, стили.
-12. Файлов и абстракций сверх раздела 3 не появилось.
-13. Каждый новый маршрут объявлен в таблице маршрутов с правом, прямой регистрации нет, есть тесты на 401 и 403.
-14. Данные из сети (hostname, `sysDescr`, имена контейнеров) нормализуются при записи и экранируются при выводе, `dangerouslySetInnerHTML` не используется.
-15. Параметры раздела 9 (cookie, заголовки, лимиты, таймауты, сроки сессий и токенов) не ослаблены.
+**Acceptance criteria:**
 
-Находки правятся в том же заходе, потом гейт прогоняется заново.
+1. The HTML opens offline, makes no network requests and contains no `<script>`.
+2. The SVG shows the same node positions as the panel, and offline devices are dimmed.
+3. In the print preview the diagram fits the width and table rows do not break across pages (a manual check).
+4. `GET /api/export/pdf` returns a valid PDF (the header `%PDF`) when Chrome is present. Without Chrome it answers 503 with a clear text.
+5. A hostname of the form `<script>` is shown as text.
+6. The SVG `viewBox` is computed from the bounds of the nodes.
+7. The HTML is served as an attachment with the headers of section 9.4 (including its own `Content-Security-Policy`). A PDF render runs at most one at a time and no longer than 60 seconds.
+
+**Tests:** HTML without `<script` (1), escaping (5), the `viewBox` bounds (6), the headers and the limit of PDF rendering (7), the PDF with a skip through `t.Skip` without Chrome and the 503 branch with a fake browser lookup (4).
+
+**Do not:** report themes, a logo and branding, charts in the report, PDF encryption.
 
 ---
 
-## 18. Открытые вопросы (удалить после финализации)
+### Slice 14 - scan history and changes
 
-1. ~~Имя проекта~~ Закрыт: Netscribe.
-2. **Язык интерфейса.** В черновике интерфейс на английском без i18n. Альтернатива: сразу русский и английский через i18n.
-3. **Раскладка топологии.** В черновике одна детерминированная раскладка по слоям на Go, её используют панель и все экспорты. Альтернатива: `elkjs` в интерфейсе для красивой авто-раскладки по кнопке, тогда координаты сохраняются в базе и экспорты берут их оттуда.
-4. **PDF.** В черновике через `chromedp` и внешний Chrome. Альтернатива: только стили печати в HTML, без зависимости от браузера. Если Chrome нужен в Docker-образе, образ становится заметно больше, возможен отдельный тег.
-5. **Лицензия.** MIT, Apache-2.0 или AGPL. Влияет на репозиторий и README.
-6. **SNMP v3.** В черновике только v2c, community идёт открытым текстом (раздел 9.6). SNMP v3 добавляет аутентификацию и шифрование, но усложняет конфиг и хранение секретов. Для чувствительных сетей v3 стоит включить в v1.
-7. **Внешняя аутентификация и второй фактор.** В черновике только локальные пользователи с паролем. Варианты: OIDC (единый вход), LDAP, TOTP как второй фактор.
-8. ~~Проверка паролей~~ Закрыт: длина, запрет совпадения с именем и встроенный список частых паролей (правка 27).
-9. **Шифрование данных в покое.** База и секреты конфига не шифруются, защита файловыми правами. Варианты: SQLCipher, шифрование секретов мастер-ключом.
-10. **Объектные права.** Все пользователи видят всю сеть. Вариант: доступ по сегментам или группам устройств.
-11. **Источники обнаружения.** Не вошли: DHCP-аренды (зависят от модели роутера), пассивное прослушивание (в слайсе 18 только один активный запрос mDNS и SSDP за скан), NetBIOS, импорт устройств из CSV.
-12. **Забывание устройств.** Offline-устройства остаются навсегда. Вариант: `history.forgetAfterDays`.
-13. **Графики во времени.** В v1 число устройств по сканам. Трафик интерфейсов (счётчики SNMP) и аптайм вынесены за v1.
-14. **PostgreSQL.** В v1 только SQLite. Интерфейсы `Repo` и `AuthRepo` оставляют место для второго бэкенда.
-15. **Платформы.** В v1 только Linux.
-16. **Подпись релизов.** В v1 файл контрольных сумм. Вариант: подпись `cosign` и SBOM.
+**Files:** `internal/store/migrations/NNNN_changes.sql`, `internal/store/apply.go` (writing `changes`, `PruneScans`), `internal/api/changes.go`, `web/src/pages/Changes.tsx`, the section "Changes" in the exports.
+
+**What it does:** `ApplyResult` compares a scan result with the previous state and writes the kinds of changes from section 4.1. The first completed scan writes no changes. The page `/changes` shows the feed (newest on top) and a line chart of the number of devices per completed scan (Recharts). `history.keepScans` limits the number of stored scans, and old ones are deleted together with their changes. The exports get a section "Changes" for the last scan.
+
+**Acceptance criteria:**
+
+1. A scan that added, returned, lost or changed a device, a link or a container writes changes with the kinds from the contract. A scan without differences writes nothing.
+2. The first completed scan writes no changes.
+3. A failed scan writes no changes, marks no devices offline and does not get onto the chart.
+4. `/changes` shows the feed and the chart. An empty feed shows an `EmptyState`.
+5. Extra scans beyond `history.keepScans` are deleted together with their changes.
+6. The Markdown and HTML exports hold a section "Changes" with the changes of the last scan.
+
+**Tests:** one test per kind of change on an in-memory database, the first scan without changes, a failed scan, `PruneScans`.
+
+**Do not:** notifications (email, webhook), comparing arbitrary scans, rolling the state back.
+
+---
+
+### Slice 15 - schedule and hot reload of the config
+
+**Files:** `internal/config/watch.go`, `internal/collector/scanner.go` (the scheduler), `internal/events/hub.go` (the `config.*` events), a toast in `web/src/main.tsx`.
+
+**What it does:** the scheduler starts a scan every `scan.interval`. The config file is watched through `fsnotify` (watching the directory, to catch an atomic replacement of the file by an editor, with a delay of 200 ms) and by `SIGHUP`. A correct config is swapped atomically, and `config.reloaded` is published. An incorrect config is dropped, the old one keeps working, and `config.error` is published with the text of the error. These apply on the fly: `scan.*`, `snmp.*`, `ssh.*`, `docker.*`, `history.*`, `export.*`. The fields `listen` and `database` need a restart, and a warning is written to the log.
+
+**Acceptance criteria:**
+
+1. A change of `scan.interval` in the file applies from the next tick without a restart.
+2. A change of targets applies to the next scan, and a running scan finishes with the old settings.
+3. Broken YAML or a validation error leaves the old config, the interface shows a toast with the text of the error, and the service keeps working.
+4. Saving the file through a replacement (vim, `mv`) is picked up.
+5. `SIGHUP` triggers a reload.
+6. The scheduler does not start a second scan while one is running, and the tick is skipped with a log entry.
+7. A change of `docker.socket` or `docker.enabled` reconnects the Docker collector.
+8. The events `config.reloaded` and `config.error` are received only by users with the permission `users:manage`, and the others do not see them. The text of the error contains no secret values. A reload and a failed reload are written to the audit.
+
+**Tests:** the scheduler with a substituted clock (1, 6), a reload of a correct and an incorrect config (2, 3), a file replacement in a temporary directory (4), reconnecting the Docker collector with a fake (7), event delivery by role (8).
+
+**Do not:** a web editor of the config, a per-device schedule, cron expressions, reloading `listen` on the fly.
+
+---
+
+### Slice 16 - packaging and Docker
+
+**Files:** `deploy/Dockerfile`, `deploy/compose.yaml`, `deploy/compose.lab.yaml`, `deploy/lab/`, `.goreleaser.yaml`, `.github/workflows/ci.yml`, `.github/workflows/release.yml`, `README.md`, `LICENSE`, `SECURITY.md`, `.github/dependabot.yml`, an integration test under the build tag `lab`.
+
+**What it does:**
+
+- `Dockerfile`: a multi-stage build (the frontend, a static Go binary), a minimal final image.
+- `compose.yaml`: one service `netscribe`, `network_mode: host`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, `read_only: true`, a volume for the database, the config read-only, the Docker socket read-only (the README describes the risk of socket access and a variant with `docker-socket-proxy`).
+- `compose.lab.yaml`: a bridge network with fixed addresses and the containers `snmpd`, `sshd` and `nginx` for checking ARP, SNMP, SSH and services.
+- `goreleaser`: static linux/amd64 and linux/arm64 binaries.
+- CI: `make gate` and `make audit` on every pull request, a release by tag.
+- `SECURITY.md` with the procedure for reporting vulnerabilities and `.github/dependabot.yml` for go, npm and docker.
+- The README by the rules of section 12: a description, a screenshot, installation (binary and Docker), creating the first user (`docker compose exec netscribe netscribe user add`), the config, TLS and a reverse proxy, security (the Docker socket risk, SNMP v2c in clear text), export examples.
+
+**Acceptance criteria:**
+
+1. `docker compose -f deploy/compose.yaml up --build` from a clean clone brings the service up, and `GET /healthz` answers 200. The other routes answer 503 until `docker compose exec netscribe netscribe user add` creates the first user.
+2. `compose.lab.yaml` brings the lab up, and a scan finds its containers, the SNMP data from `snmpd`, and the services from `nginx` and `sshd`.
+3. `goreleaser build --snapshot --clean` gives linux/amd64 and linux/arm64 binaries, and `ldd` reports that the file is not dynamic.
+4. CI runs `make gate` and `make audit` on a pull request.
+5. The README has the sections: what it is, installation, the first user, configuration, security, export. The repository has `SECURITY.md` and `.github/dependabot.yml`.
+
+**Tests:** an integration test under the tag `lab` runs a scan against the lab and checks the number of devices and services found. It is not part of the gate.
+
+**Do not:** Helm and Kubernetes, builds for Windows and macOS, auto-update, telemetry.
+
+---
+
+### Slice 17 - interface polish
+
+**Files:** `web/src/` (the theme, loading and error states), `index.html`, `web/public/theme-init.js`, `web/src/lib/theme.ts`, the eslint config (`jsx-a11y`).
+
+**What it does:** a light, a dark and a system theme: a class on `<html>` and a value in `localStorage`, and an external synchronous script `web/public/theme-init.js` in `<head>` sets the class before the first paint (inline scripts are forbidden by the CSP of section 9.4). Loading states (`skeleton`), error states (an error boundary with a retry button) and empty states exist on every page. The key `/` focuses the search on the inventory page. Focus rings, `aria` labels on nodes and buttons. The side panel collapses on a narrow screen.
+
+**Acceptance criteria:**
+
+1. The chosen theme applies without a flash when the page reloads.
+2. The "system" mode follows the OS setting and reacts to its change.
+3. Every page has loading, empty and error states.
+4. The key `/` on `/inventory` focuses the search field.
+5. `eslint-plugin-jsx-a11y` passes without errors.
+6. The interface is usable at a width of 1280 and 390 pixels (a manual check).
+7. There are no inline scripts in `index.html` and in the built pages, and the browser console shows no CSP violations.
+
+**Tests:** the theme detection function (`theme.ts`) in vitest.
+
+**Do not:** i18n, branding, animations beyond simple transitions.
+
+---
+
+### Slice 18 - recognition by HTTP, mDNS and SSDP
+
+**Files:** `internal/store/migrations/NNNN_service_banner.sql` (the column `services.banner`), `internal/collector/httpbanner.go`, `mdns.go`, `ssdp.go`, the update of `classify.go`, `classify_rules.csv`, `scanner.go`, `web/src/components/ServicesTable.tsx`, `web/src/pages/Services.tsx`.
+
+**What it does:** three sources of information about what kind of device it is, for devices that are silent over SNMP and LLDP.
+
+- **HTTP.** For every device with an open port 80, 443 or 8080 from the result of slice 9, one `HEAD /` request. From the answer it takes `Server`, `X-Powered-By` and the `realm` from `WWW-Authenticate`. The line is saved in `services.banner` (up to 200 characters). For HTTPS it reads the same, plus the CN of the certificate.
+- **mDNS.** One PTR query for `_services._dns-sd._udp.local` to `224.0.0.251:5353` from every local interface, with an answer window of 3 seconds. From the answers it takes the host name (`.local`) and the service types (`_ipp._tcp`, `_airplay._tcp` and others). The host name fills `hostname` only if it is empty.
+- **SSDP.** One `M-SEARCH` with `ST: ssdp:all` to `239.255.255.250:1900`, a window of 3 seconds. From the answers it takes `SERVER` and `ST`. The address from `LOCATION` is not requested.
+- **Classification.** The fields `http` (a substring of the banner), `mdns` (a service type) and `ssdp` (a substring of `SERVER` or `ST`) appear in `classify_rules.csv`. The field order is `descr`, `http`, `mdns`, `ssdp`, `services`, `port`, `vendor`. The rules are in data, not in code.
+
+**Acceptance criteria:**
+
+1. A device with a web port gets the value of `Server` in `services.banner`, not longer than 200 characters, without control characters.
+2. The HTTP collector reads only headers: the response body is not read, redirects are not followed, and a request takes no more than 2 seconds and 8 KiB.
+3. A device that is silent over SNMP but announces the service `_ipp._tcp` in mDNS gets the kind `printer`. A kind from LLDP and `kind_locked` do not change.
+4. A `.local` name from mDNS fills an empty `hostname` and does not replace one already known.
+5. The address from `LOCATION` in an SSDP answer is not requested anywhere.
+6. `discovery.httpHeaders`, `discovery.mdns` and `discovery.ssdp` are switched on separately, and a source that is off sends no packet.
+7. An answer longer than the limit, a broken packet and an answer with garbage instead of UTF-8 are skipped without the scan failing.
+8. The page `/services` and the services tab show the banner.
+
+**Tests:** `httptest` for HTTP and HTTPS (criteria 1, 2), parsing mDNS packets and SSDP answers on bytes assembled in the test (criteria 3-5, 7), a fake multicast transport (criterion 6), classification rules on a test CSV, the banner filter on the frontend (vitest).
+
+**Do not:** requests with credentials, a `GET` with a body, following redirects, loading `LOCATION` and UPnP device descriptions, passive listening, NetBIOS, version detection by fingerprints, vulnerability checks.
+
+---
+
+### Slice 19 - Nmap: OS detection and control from the panel
+
+A refinement of the optional Nmap source (amendment 20). The source is still off by default and runs only for devices that the other sources did not identify.
+
+Files: `internal/collector/nmap.go`, `internal/store/migrations/0010_device_os_guess.sql`, `internal/api/scans.go`, `internal/api/router.go`, `web/src/components/ScanBar.tsx`, `web/src/pages/Inventory.tsx`, `web/src/components/DevicePanel.tsx`, `deploy/Dockerfile` (the target `nmap`), `deploy/compose.nmap.yaml`.
+
+- The OS name from the best Nmap guess (accuracy of at least 85 percent) is saved in `devices.os_guess` (up to 100 characters) and shown in the device panel as "System (Nmap)". A scan without Nmap or without a guess does not erase the old value. The source `nmap` does not change the source, the name or the description of a device.
+- `POST /api/scans` accepts an optional body `{"nmap": true}`: this scan runs with Nmap whatever `discovery.nmap` says. The answer is 400 if Nmap is not found or the scanner does not support it. In the audit the entry `scan_start` gets the mark `with nmap`.
+- `GET /api/nmap` (permission `scans:run`) returns `{available, enabled, reason}`. The panel shows the checkbox "Identify unknown devices with Nmap" next to "Run scan" only if Nmap is found; with `discovery.nmap: true` the checkbox is on and locked.
+- A Docker image with Nmap: the target `nmap` in `deploy/Dockerfile` (Alpine, `setcap` on `nmap`), and the file `deploy/compose.nmap.yaml` gives the container `NET_RAW`, `NET_ADMIN`, `NET_BIND_SERVICE` back and does not set `no-new-privileges`, because the kernel does not apply file capabilities with that option. The default image stays distroless without Nmap.
+
+Acceptance criteria.
+1. A scan with `--nmap` or with the checkbox saves the OS guess for a device without a kind, and the panel shows it.
+2. Without Nmap or without rights the scan finishes, the log has one warning, and the checkbox is hidden.
+3. A real Nmap is checked in CI on the lab (`NETSCRIBE_LAB_NMAP=1 go test -tags lab`) and in the `nmap` image under the user `nonroot`.
+
+### Slice 20 - Nmap and the discovery logic
+
+Brings Nmap and discovery to a working state after slice 19 was checked against a real Nmap. The source is still off by default.
+
+Files: `internal/collector/nmap.go`, `internal/collector/classify.go`, `internal/collector/classify_rules.csv`, `internal/collector/scanner.go`, `internal/config/config.go`, `internal/store/manual.go`, `internal/api/devices.go`, `internal/api/router.go`, `cmd/netscribe/main.go`, `web/src/components/DevicePanel.tsx`, `web/src/api/client.ts`.
+
+- **Only devices with an open port.** OS detection needs one open and one closed TCP port. Nmap runs only for devices for which the port scanner or the probe found at least one open TCP port. It does not run for the others, so as not to wait for the device timeout (up to 90 seconds).
+- **The OS family as a fact.** From `osclass` the `osfamily` is taken and a fact `family=<family in lowercase>` is added. In `classify_rules.csv` the rules `nmap,family=windows,host`, `family=mac os x` (the name Nmap gives macOS) and `family=android` give the kind `host`. Nmap uses one name, `iOS`, for both Apple iOS and Cisco IOS, so the Apple family is told apart by the vendor of the class and written as `family=apple ios` (the rule gives `host`), while Cisco stays `family=ios` without a rule. The Linux family sets no kind. The `type=` rules stand earlier in the file than the `family=` rules and win.
+- **Scope.** The key `discovery.nmapScope`: `untyped` (the default) asks only about devices without a kind, `all` asks about all devices with an open port, to fill the OS line for typed ones too. Another value fails config validation.
+- **One device from the panel.** `POST /api/devices/{id}/identify` (permission `scans:run`) runs Nmap for one device in the background and answers 202. The answer is 404 if there is no such device, 409 if a scan or another identification is running, 400 if Nmap is unavailable or the device has no IP. The result: the OS line is written to `devices.os_guess`, and the kind changes only if it is `unknown` and not locked by hand (`kind_locked`). Audit `device_identify`, and when it finishes the event `topology.changed`. In the device panel the button "Identify with Nmap" is visible when Nmap is found and the user has the permission `scans:run`.
+
+Acceptance criteria.
+1. A device without open ports in a scan with Nmap does not cause Nmap to run.
+2. A device with a guess of the Windows family gets the kind `host`, and one with the type `router` gets `router`, even if the family is named too.
+3. `nmapScope: all` fills the OS line of a device whose kind is already known, and `untyped` does not.
+4. The button in the panel identifies the OS of one device, does not touch a kind locked by hand and writes an audit entry.
+
+### Slice 21 - code review, port and installation
+
+Fixes the findings of the review and brings startup and delivery to a state in which Netscribe installs on any Linux distribution.
+
+Files: `cmd/netscribe/main.go`, `cmd/netscribe/listen.go`, `internal/config/config.go`, `internal/store/queries/scans.sql`, `internal/store/devices.go`, `internal/auth/session.go`, `internal/api/sse.go`, `internal/api/middleware.go`, `scripts/`, `deploy/netscribe.service`, `AGENTS.md`, `CONTRIBUTING.md`, `docs/`, `README.md`, `.goreleaser.yaml`.
+
+- **Port.** `serve` takes the port before starting any workers. If the port is busy, the server warns and on a terminal asks for another port (`auto` takes the next free one), with the flag `--auto-port` it takes the next free one without asking, and without a terminal it exits with a clear error. The flag `--listen` replaces `listen` from the config. The chosen port is not written to the config.
+- **`listen` in `Validate`.** `host:port` is required, with a port from 1 to 65535.
+- **Unfinished scans.** At start `serve` closes scans in the state `running` as `failed`: such a scan remains only after the process was stopped.
+- **Event stream.** Every 25 seconds the stream checks the credentials again (`Service.Recheck` does not renew the idle timer). A sign-out, a disabled account, a password change and a revoked token end the stream.
+- **Installation.** `scripts/install.sh` installs the release, the user `netscribe`, the config and the systemd unit, and when needed Nmap and Chromium through the package manager (apt, dnf, yum, zypper, pacman, apk, xbps). `scripts/install-build-deps.sh` installs git, make, Go and Node.js for building from source. The unit is part of the release archive.
+
+Acceptance criteria.
+1. A busy port without a terminal and without `--auto-port` ends `serve` with an error, the database is not open and no workers are started.
+2. With `--auto-port` the server listens on the next free port, on a terminal the entered port or `auto` gives a working listener, and an empty answer ends the command.
+3. `listen: 8080` and port 0 or 65536 are rejected when the config loads.
+4. A scan left in `running` has the status `failed` after `serve` starts, and completed scans do not change.
+5. The event stream closes within one interval after an account is disabled and stays open while it is enabled.
+6. The installer rejects an archive with a wrong sum, does not overwrite an existing config and installs the config with permissions 0600.
+
+### Slice 22 - the installer with a setup wizard
+
+A second installer next to the classic `install.sh`: the `netscribe` command, in which installation, configuration, recommendations and checks go item by item.
+
+Files: `scripts/get.sh`, `scripts/install.sh`, `cmd/netscribe/setup.go`, `cmd/netscribe/main.go`, `internal/setup/`, `docs/installation.md`, `README.md`, `AGENTS.md`.
+
+- **`scripts/get.sh`.** Installs the release through `install.sh --no-service` (the checksum is checked there), then does `exec netscribe setup`. The options `--version`, `--prefix` and `--base-url` go to `install.sh`, the others to `setup`. Run through `curl | sh`, it reads the answers from `/dev/tty` unless `--yes` or `--password-stdin` is given.
+- **`netscribe setup`.** Nine steps: the system, the `netscribe` command, the service account, features (Nmap, Chromium, Docker), the config, ICMP, the first administrator, the service, the result. Each step prints its findings with a level and a fix. Flags: `--config`, `--yes`, `--dry-run`, `--no-service`, `--admin`, `--password-stdin`, `--targets`, `--listen`.
+- **Config.** An existing config is not overwritten. An invalid one stops the installation. A new one holds only `listen`, `database`, `scan.targets`, `scan.interval`, `docker`, `discovery.nmap`, the rest is default, mode 0600, the owner is the service account, and the write is atomic. Targets are taken from the interfaces: only private IPv4, a network wider than /24 is narrowed to the /24 of the address, and interfaces of containers and virtual machines are skipped.
+- **Service rights.** The group of the Docker socket and the Nmap rights (`CAP_NET_RAW`, `CAP_NET_ADMIN`) go into the drop-in `netscribe.service.d/10-setup.conf`, and the main unit is not edited. `net.ipv4.ping_group_range` is changed only when ICMP is off for all groups (`1 0`): the wizard does not replace someone else's non-empty range.
+- **First administrator.** The wizard runs `netscribe user add` as the service account, otherwise the database would belong to root. The password is typed into the command itself, and the wizard never sees it. On a weak password it asks whether to try again.
+- **Address choice.** `127.0.0.1:port` (recommended), an interface address, `0.0.0.0:port`, your own address. Beyond loopback the protection is asked: a proxy (`trustedProxies`, in CIDR form: a bare address gets `/32`), TLS (the certificate and key are checked to be a pair and written to `tls`), or plain HTTP after an explicit "yes". In flag mode the same is set by `--tls-cert/--tls-key`, `--trusted-proxy` and `--plain-http`; without them an address beyond loopback is rejected.
+- **Console.** `netscribe` without arguments in a terminal, and `netscribe console`: Watch, Check, Scan (the networks of the config, with Nmap, or networks you name), Devices, Export (Markdown, HTML, PDF, Draw.io into a file that belongs to the person behind sudo), Settings, Accounts (the `user` commands as the service account), Service (status, start, stop, restart, reload by SIGHUP, start at boot, log), Setup again, and Commands (the list of commands). Without a terminal the bare command prints the usage and exits with 2, as before. **A way out and a yes.** `q`, `quit`, `exit` or the end of input leave the program from any question of the console, the wizard and the settings, and `b` goes back from any submenu that has a Back item. Every action that changes something asks first and names what it will do: each change of the wizard (the account, the directories, the config, each unit file), starting a scan, writing an export (and replacing an existing file), start, stop, restart and reload of the service, start at boot, adding, resetting and disabling an account, saving a setting (with the old and the new value), the SSH hosts, restoring the config and running the setup again. A no changes nothing; in the wizard it stops the run before that change, with the step named and the words that what was done stays done. Reading asks nothing. `--yes` and `--dry-run` do not ask, as before.
+- **`netscribe watch`.** Once per `--interval` (2 s, not less than 200 ms) it takes the state: `systemctl show`, `/proc/PID` (memory, threads, files, CPU from the difference of ticks), `/healthz` with the latency and a chart, the size of the database and of the WAL journal, free space, the load and memory of the host, the validity and time of the config, the last lines of the journal. It shows the events between samples (the service fell or restarted, the panel stopped answering, the config does not load, low space, memory growth) and rings the terminal bell on a bad event. `--once` prints one sample and exits with 1 if the service is not running.
+- **`netscribe config`.** Groups: panel access, scanning, discovery, Docker, SNMP, history and audit, sign-in policy, export, SSH. Every setting has a value, an explanation, a default value (checked by a test against `internal/config`) and a mark of whether it applies without a restart (like `mergeHot`). SSH hosts are added and removed in their own submenu. A write: an edit of the YAML tree that keeps the comments, a check of the whole config by `config.Load` on a temporary file, a copy `.bak` (0600), and an atomic replacement with the previous owner. "Restore the previous config" swaps the file and its `.bak` through the same check. SNMP communities are typed without echo and are not printed; they cannot be set through command-line arguments. Subcommands: `show` (secrets hidden), `get`, `set`, `edit` (the editor from `$VISUAL`/`$EDITOR`, the result is checked before saving).
+- **`netscribe doctor`.** The same checks, changes nothing, exit code 1 on `Fail`.
+- **Checks.** The platform, root, systemd, disk space, the `netscribe` command, the account, the state directory, the validity of the config and the owner of the file, a listen address without TLS, a busy port, targets outside the host's networks, ICMP, Nmap and its rights, a browser for PDF, the Docker socket and group, the SNMP community `public`, the unit, the state of the service, the answer of `/healthz`, the presence of accounts.
+
+Do not: edit the main unit and someone else's config, change `ping_group_range` when other groups use it, put a password into process arguments, TLS certificates (issuing them stays with the owner).
+
+Acceptance criteria.
+1. `setup --dry-run` changes nothing: no files, no accounts, no services.
+2. `setup --yes --admin alice --password-stdin` on a clean machine gives a working panel, a config 0600 owned by the service account, a unit with the paths of this installation and the administrator alice.
+3. A repeated run changes nothing: the config, the unit and the account stay, and the administrator is not created a second time.
+4. An existing config is not overwritten, and an invalid one stops the installation with a message.
+5. Without root and without a terminal (and without `--yes`) `setup` ends with a clear error.
+6. The container network does not get into the proposed targets, and a network wider than /24 is narrowed to /24.
+7. `doctor` on a broken installation shows a fix for every finding of level `Warn` and `Fail` and exits with code 1 on `Fail`.
+8. The copy of the unit in `internal/setup` equals `deploy/netscribe.service`.
+9. Address choice: loopback by default, interfaces without container bridges, and for an address beyond loopback without TLS and a proxy in flag mode the installation refuses; a proxy is written as a CIDR.
+10. `config set` with an invalid value changes nothing and leaves no `.bak`; a successful edit keeps the comments and the mode 0600 and makes a copy.
+11. `watch --once` exits with 1 when the service is not running or the panel does not answer; the events list the fall, the restart, the loss of the answer and the corruption of the config.
+12. Secrets (SNMP communities) get into neither the output of `config show/get`, nor process arguments, nor the log.
+13. `q`, `quit` and `exit` stop the wizard at any question with the step named, and nothing after that step is done. A no to the confirmation of an account, a directory, the config or a unit file stops the wizard before that change.
+14. In the console every submenu with a Back item leaves on `b` without running anything, and `q` leaves the whole console from inside a submenu.
+15. Scan, export, service start/stop/restart/reload/boot, account add/reset/disable, saving a setting, SSH host add/remove, restoring the config and running the setup again do nothing after a no, and ask before they do anything after a yes. An existing export file is replaced only after a separate yes.
+16. Restoring the previous config puts the replaced config in `.bak`, and without a `.bak` it reports that there is no previous config.
+
+### Slice 23 - interface design
+
+The goal: the interface looks like an expensive control console, not like a set of components from a library. The reference was set by the owner: dark minimalism, thin borders, depth, a dosed blue accent, an atmospheric network of dots in the background.
+
+Files: `web/src/index.css`, `web/src/lib/particles.ts`, `web/src/lib/spotlight.ts`, `web/src/components/AmbientBackground.tsx`, `web/src/components/Brand.tsx`, `web/src/App.tsx`, `web/src/pages/Login.tsx`, the primitives in `web/src/components/ui/`, `web/public/theme-init.js`, `web/src/lib/theme.ts`.
+
+- **Tokens.** A role, not a color: `background`, `card`, `popover`, `muted`, `accent`, `primary`, `brand`, `border`, `input`, `ring`, `sidebar`, `glow`. A component names a role (`bg-card`, `text-muted-foreground`), and no color is written in components. Dark theme: the background `#060607`, cards `#111113`, lines in white at 8 percent, the main text `#f4f4f5`, the second text `#8d9098` (contrast on a card at least 5.9). The accent `#4059f5` for buttons (white text, contrast 5.3) and `#8095ff` for icons and text on dark (contrast 6.7). The light theme has the same structure.
+- **Surface.** The class `.surface`: a matte gradient, a light line on the top edge, a multilayer soft shadow, the radius 2xl, and under the cursor a light spot of the accent (`--mx`, `--my` are written by `spotlight.ts` once per frame by one listener per page). `.surface-lift` raises a card by 2 pixels. Cards, tables, the scan and link bars, the topology nodes and the topology canvas are made with it. Menus, dialogs, tooltips and sheets use `popover`.
+- **Frame.** A permanent sidebar with the brand, the groups "Workspace" and "Administration", an item with an indicator and a glow, and a user card with an avatar at the bottom. The top bar: on a narrow screen a round menu button and the brand, on a wide one a capsule with the page title, and on the right a round theme button. The sign-in page: the brand and a card in the center.
+- **Background.** `AmbientBackground`: a canvas over the whole window, up to 110 dots (the number depends on the area), about half are born in groups that drift together, thin lines between close dots, twinkling, three light pulses along the lines, a reaction to the cursor (a glow and lines to the nearest dots, a shift by depth). The brightness is low, it is drawn behind the content, with `aria-hidden` and `pointer-events: none`, it stops in a hidden tab, and under `prefers-reduced-motion` it draws one frame. The dot computation is moved into `particles.ts` and checked by tests without a canvas. Two soft spots of light behind everything drift by a CSS animation on the compositor.
+- **Motion.** Page appearance: the page fades in and its sections rise one after another (a delay of 70 ms per section, 700 ms for the rise, a quint curve). Micro-interactions of 150-300 ms: buttons, menu items, icons, table rows, menus and tooltips (a short appearance). `transform` and `opacity` are animated, and there is no layout recalculation.
+- **The default theme is dark** (see amendment 32).
+
+Do not: WebGL and three.js (canvas 2D is enough, and the dependency and the risk for weak devices are unneeded), loud neon, fully glass surfaces, emoji instead of icons, an animation that gives no feedback.
+
+Acceptance criteria.
+1. No component writes a color: colors only through tokens, both themes are readable, and the contrast of the main and the second text is at least 4.5.
+2. There are no external requests: fonts and scripts come from the same origin, the CSP did not change, and the browser console has no errors on all pages.
+3. Under `prefers-reduced-motion: reduce` there is neither dot drift nor section appearance.
+4. At 1440, 1024 and 390 pixels there is no horizontal page scroll, text is not cut off and elements do not overlap (tables scroll inside their own card).
+5. The background does not interfere with reading: the brightness of dots and lines is low, and the content is always on top.
+6. All existing page tests pass without changing their expectations, except for the themes (`dark` by default).
+
+---
+
+## 17. Review after each slice
+
+A separate pass, after the slice is ready and the gate is green. The task of the pass is to look for problems, not to praise what was written.
+
+Checklist:
+
+1. SQL only in `internal/store/migrations` and `internal/store/queries`. There are no SQL strings in other packages.
+2. `collector` does not import `store`, `render` does not import `collector` and `api`, components do not call `fetch`.
+3. The names of tables, fields, types and routes match sections 4, 5 and 7.
+4. There are no database queries in a loop. A list and the related data come in one query or one transaction.
+5. Every goroutine ends on `ctx`. There are no goroutines without an exit and no writes to a closed channel.
+6. Errors are returned or logged, and none is ignored silently (`_ =` without a reason in a comment).
+7. Secrets do not get into logs, API answers, exports and error messages.
+8. Network code respects the security boundaries of sections 1 and 9.6: private ranges, read-only mode, fixed SSH commands.
+9. Tests check the acceptance criteria and do not repeat the implementation. For every criterion with a refusal there is a test of the refusal.
+10. The components of section 6 are used, and there are no self-made buttons and fields in pages.
+11. There is no dead code: unused exports, SQL queries, components, styles.
+12. No files and abstractions beyond section 3 appeared.
+13. Every new route is declared in the route table with a permission, there is no direct registration, and there are tests for 401 and 403.
+14. Data from the network (hostname, `sysDescr`, container names) is normalized when written and escaped when shown, and `dangerouslySetInnerHTML` is not used.
+15. The parameters of section 9 (cookies, headers, limits, timeouts, session and token lifetimes) are not weakened.
+
+The findings are fixed in the same pass, then the gate is run again.
+
+---
+
+## 18. Open questions (delete after finalization)
+
+1. ~~Project name~~ Closed: Netscribe.
+2. **Interface language.** In the draft the interface is in English without i18n. An alternative: Russian and English at once through i18n.
+3. **Topology layout.** In the draft there is one deterministic layered layout in Go, used by the panel and all exports. An alternative: `elkjs` in the interface for a nice auto-layout on a button, and then the coordinates are saved in the database and the exports take them from there.
+4. **PDF.** In the draft through `chromedp` and an external Chrome. An alternative: only print styles in the HTML, with no dependency on a browser. If Chrome is needed in the Docker image, the image becomes noticeably larger, and a separate tag is possible.
+5. **License.** MIT, Apache-2.0 or AGPL. It affects the repository and the README.
+6. **SNMP v3.** In the draft only v2c, and the community goes in clear text (section 9.6). SNMP v3 adds authentication and encryption but complicates the config and the storage of secrets. For sensitive networks v3 is worth including in v1.
+7. **External authentication and a second factor.** In the draft only local users with a password. Options: OIDC (single sign-on), LDAP, TOTP as a second factor.
+8. ~~Password check~~ Closed: length, a ban on equality with the username and a built-in list of common passwords (amendment 27).
+9. **Encryption of data at rest.** The database and the secrets of the config are not encrypted, and the protection is file permissions. Options: SQLCipher, encrypting secrets with a master key.
+10. **Object permissions.** All users see the whole network. An option: access by segments or groups of devices.
+11. **Discovery sources.** Not included: DHCP leases (they depend on the router model), passive listening (slice 18 has only one active mDNS and SSDP query per scan), NetBIOS, importing devices from CSV.
+12. **Forgetting devices.** Offline devices stay forever. An option: `history.forgetAfterDays`.
+13. **Charts over time.** In v1 the number of devices per scan. Interface traffic (SNMP counters) and uptime are left outside v1.
+14. **PostgreSQL.** In v1 only SQLite. The interfaces `Repo` and `AuthRepo` leave room for a second backend.
+15. **Platforms.** In v1 only Linux.
+16. **Release signing.** In v1 a checksum file. An option: a `cosign` signature and an SBOM.
