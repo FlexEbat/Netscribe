@@ -1,5 +1,7 @@
 # Troubleshooting
 
+**English** · [Русский](troubleshooting.ru.md)
+
 ## The port is already in use
 
 At start the server takes its port before anything else. When another program holds it,
@@ -32,6 +34,8 @@ stays the same.
 | `parse config: ... field ... not found` | A key is misspelled. Unknown keys are errors on purpose. |
 | `load tls certificate` | `tls.certFile` and `tls.keyFile` do not match or cannot be read by the user of the service. |
 | `no users: run "netscribe user add"` (HTTP 503) | Create the first administrator, see the README. |
+
+`sudo netscribe doctor` finds most of these and prints the fix for each.
 
 ## A scan shows as running after a restart
 
