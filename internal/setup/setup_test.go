@@ -90,13 +90,17 @@ func TestSetupAnswersQuestionsOnATerminal(t *testing.T) {
 	o := f.opts()
 	input := strings.Join([]string{
 		"y",     // copy the binary
+		"y",     // create the service account
+		"y",     // create the directories
 		"n",     // nmap
 		"n",     // chromium
 		"",      // networks: the marked ones
 		"",      // listen address
 		"30m",   // interval
+		"y",     // write the config
 		"",      // allow ICMP
 		"alice", // administrator
+		"y",     // write the unit
 		"",      // start the panel
 	}, "\n") + "\n"
 	if err := Setup(context.Background(), f.env(input), o, "netscribe test"); err != nil {
@@ -290,7 +294,7 @@ func TestSetupWritesTheDropInForDockerAndNmap(t *testing.T) {
 func TestSetupOffersNmapOnATerminal(t *testing.T) {
 	f := newFake(t)
 	o := f.opts()
-	input := strings.Join([]string{"y", "y", "n", "", "", "", "", "alice", ""}, "\n") + "\n"
+	input := strings.Join([]string{"y", "y", "y", "y", "n", "", "", "", "y", "", "alice", "y", "y", ""}, "\n") + "\n"
 	if err := Setup(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}

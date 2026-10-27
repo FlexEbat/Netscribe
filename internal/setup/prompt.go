@@ -11,6 +11,34 @@ import (
 
 var errInput = errors.New("input closed before the question was answered")
 
+// errQuit is the answer of a person who typed q, quit or exit at a question. It stops
+// whatever is running and unwinds to the top of the program, which leaves quietly.
+var errQuit = errors.New("you chose to quit")
+
+// errDeclined is the answer no to the confirmation of an action the run cannot go on without.
+var errDeclined = errors.New("you declined an action")
+
+// isExit tells whether the person wants out: the terminal closed or q was typed.
+func isExit(err error) bool { return errors.Is(err, errInput) || errors.Is(err, errQuit) }
+
+// isQuitWord is true for the words that leave the program from any question.
+func isQuitWord(s string) bool {
+	switch strings.ToLower(s) {
+	case "q", "quit", "exit":
+		return true
+	}
+	return false
+}
+
+// isBackWord is true for the words that return to the menu above.
+func isBackWord(s string) bool {
+	switch strings.ToLower(s) {
+	case "b", "back":
+		return true
+	}
+	return false
+}
+
 // prompter asks the questions of the setup. With yes set it answers every question with
 // its default and prints the answer, so a log shows what was chosen.
 type prompter struct {
@@ -24,7 +52,11 @@ func (p *prompter) line() (string, error) {
 	if err != nil && (!errors.Is(err, io.EOF) || s == "") {
 		return "", errInput
 	}
-	return strings.TrimSpace(s), nil
+	s = strings.TrimSpace(s)
+	if isQuitWord(s) {
+		return "", errQuit
+	}
+	return s, nil
 }
 
 func yesNo(b bool) string {
@@ -35,9 +67,9 @@ func yesNo(b bool) string {
 }
 
 func (p *prompter) confirm(question string, def bool) (bool, error) {
-	hint := "[y/N]"
+	hint := "[y/N/q]"
 	if def {
-		hint = "[Y/n]"
+		hint = "[Y/n/q]"
 	}
 	if p.yes {
 		p.ui.printf("  %s %s %s %s\n", p.ui.paint("36", "?"), question, hint, p.ui.dim("→ "+yesNo(def)))
@@ -57,7 +89,7 @@ func (p *prompter) confirm(question string, def bool) (bool, error) {
 		case "n", "no":
 			return false, nil
 		}
-		p.ui.printf("    answer y or n\n")
+		p.ui.printf("    answer y or n, or q to quit\n")
 	}
 }
 
@@ -73,9 +105,9 @@ func (p *prompter) ask(question, def string, valid func(string) error) (string, 
 		return def, nil
 	}
 	for {
-		suffix := ""
+		suffix := " " + p.ui.dim("(q quits)")
 		if def != "" {
-			suffix = " " + p.ui.dim("["+def+"]")
+			suffix = " " + p.ui.dim("["+def+"], q quits")
 		}
 		p.ui.printf("  %s %s%s ", p.ui.paint("36", "?"), question, suffix)
 		s, err := p.line()
@@ -110,7 +142,7 @@ func (p *prompter) choose(question string, options []string, def []bool) ([]bool
 		return def, nil
 	}
 	for {
-		p.ui.printf("    numbers, all, none, or Enter for the marked ones: ")
+		p.ui.printf("    numbers, all, none, Enter for the marked ones, q to quit: ")
 		s, err := p.line()
 		if err != nil {
 			return nil, err
@@ -162,14 +194,23 @@ func (p *prompter) pick(question string, options []string, def int) (int, error)
 	if p.yes {
 		return def, nil
 	}
+	back := len(options) - 1
+	canBack := strings.HasPrefix(options[back], "Back")
+	hint := "q quits"
+	if canBack {
+		hint = "b goes back, q quits"
+	}
 	for {
-		p.ui.printf("    number [%d]: ", def+1)
+		p.ui.printf("    number [%d], %s: ", def+1, hint)
 		s, err := p.line()
 		if err != nil {
 			return 0, err
 		}
 		if s == "" {
 			return def, nil
+		}
+		if canBack && isBackWord(s) {
+			return back, nil
 		}
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 1 || n > len(options) {

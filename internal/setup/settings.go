@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -74,6 +75,8 @@ var settingGroups = []group{
 		{path: p("discovery.ssdp"), label: "SSDP", kind: kBool, def: "on", help: "One M-SEARCH in each local segment."},
 		{path: p("discovery.httpHeaders"), label: "HTTP banners", kind: kBool, def: "on", help: "A HEAD / request on the open web ports."},
 		{path: p("discovery.routerTables"), label: "Router tables over SNMP", kind: kBool, def: "on", help: "Reads ARP and bridge tables of routers and switches."},
+		{path: p("discovery.nmapPath"), label: "Path of nmap", kind: kText, def: "found in PATH",
+			help: "An absolute path of the nmap program. Empty means look for nmap in PATH."},
 	}},
 	{name: "Docker", hint: "the container view", items: []setting{
 		{path: p("docker.enabled"), label: "Read containers from Docker", kind: kBool, hot: true, def: "off",
@@ -99,6 +102,10 @@ var settingGroups = []group{
 	{name: "Export", hint: "reports", items: []setting{
 		{path: p("export.chromePath"), label: "Browser for PDF export", kind: kText, hot: true, def: "found in PATH",
 			help: "The path of chromium or chrome. Empty means look for one in PATH."},
+	}},
+	{name: "SSH", hint: "reading hosts over SSH (the hosts themselves: SSH hosts)", items: []setting{
+		{path: p("ssh.knownHosts"), label: "known_hosts file", kind: kText, hot: true, def: "~/.ssh/known_hosts",
+			help: "Strict: a host that is not listed, or whose key changed, is skipped. Fill it with ssh-keyscan and check the fingerprint."},
 	}},
 }
 
@@ -196,6 +203,12 @@ func (s *session) commit(ctx context.Context, doc *yamlDoc, hot bool) error {
 		return err
 	}
 	s.ui.done("saved " + s.o.ConfigPath + " (the old file is " + filepath.Base(s.o.ConfigPath) + ".bak)")
+	return s.afterSave(ctx, hot)
+}
+
+// afterSave tells whether the running service takes the change by itself, and offers the
+// restart when it does not.
+func (s *session) afterSave(ctx context.Context, hot bool) error {
 	if !hasSystemd(s.env) || !s.serviceActive(ctx) {
 		return nil
 	}
@@ -406,13 +419,20 @@ func ConfigEdit(ctx context.Context, env Env, o Options) error {
 			s.ui.note("no change")
 			return nil
 		}
-		if err := s.saveConfig(edited); err == nil {
-			s.ui.done("saved " + o.ConfigPath)
-			s.ui.note("keys under scan, snmp, ssh, docker, history and export apply by themselves, the others need: sudo systemctl restart netscribe")
-			return nil
+		verr := s.validate(edited)
+		if verr == nil {
+			if err := s.approve("Save your changes to "+o.ConfigPath+"? The old file is kept as .bak.", true); err != nil {
+				return err
+			}
+			if verr = s.saveConfig(edited); verr == nil {
+				s.ui.done("saved " + o.ConfigPath)
+				s.ui.note("keys under scan, snmp, ssh, docker, history and export apply by themselves, the others need: sudo systemctl restart netscribe")
+				return nil
+			}
 		} else {
-			s.ui.printf("  %s %v\n", s.ui.paint("31", "✗"), err)
+			verr = fmt.Errorf("the config would not be valid, nothing was saved: %w", verr)
 		}
+		s.ui.printf("  %s %v\n", s.ui.paint("31", "✗"), verr)
 		again, err := s.p.confirm("Edit the file again?", true)
 		if err != nil || !again {
 			return err
@@ -445,7 +465,8 @@ func Configure(ctx context.Context, env Env, o Options, version string) error {
 		for _, g := range settingGroups {
 			labels = append(labels, fmt.Sprintf("%-17s %s", g.name, s.ui.dim(g.hint)))
 		}
-		labels = append(labels, "Edit the file in your editor", "Show the file, secrets hidden", "Back")
+		labels = append(labels, "SSH hosts        "+s.ui.dim(fmt.Sprintf("%d set", count(doc.find(p("ssh.hosts"))))),
+			"Edit the file in your editor", "Show the file, secrets hidden", "Restore the previous config", "Back")
 		i, err := s.p.pick("What do you want to change?", labels, len(labels)-1)
 		if err != nil {
 			return err
@@ -456,14 +477,21 @@ func Configure(ctx context.Context, env Env, o Options, version string) error {
 		case i <= len(settingGroups):
 			err = s.editGroup(ctx, settingGroups[i-1])
 		case i == len(settingGroups)+1:
-			err = ConfigEdit(ctx, env, o)
+			err = s.editSSHHosts(ctx)
 		case i == len(settingGroups)+2:
+			err = ConfigEdit(ctx, env, o)
+		case i == len(settingGroups)+3:
 			err = ConfigShow(env, o)
+		case i == len(settingGroups)+4:
+			err = s.restoreBackup(ctx)
 		default:
 			return nil
 		}
-		if errors.Is(err, errInput) {
+		if isExit(err) {
 			return err
+		}
+		if errors.Is(err, errDeclined) {
+			continue
 		}
 		if err != nil {
 			s.ui.printf("  %s %v\n", s.ui.paint("31", "✗"), err)
@@ -494,6 +522,9 @@ func (s *session) editAccess(ctx context.Context, doc *yamlDoc) error {
 	}
 	choice, err := s.pickListen(current, s.serviceActive(ctx))
 	if err != nil {
+		return err
+	}
+	if err := s.approve("Change the panel address from "+current+" to "+choice.Listen+"?", true); err != nil {
 		return err
 	}
 	if err := doc.set(p("listen"), strNode(choice.Listen)); err != nil {
@@ -534,8 +565,11 @@ func (s *session) editGroup(ctx context.Context, g group) error {
 			return err
 		}
 		if err := s.editSetting(ctx, doc, g.items[i]); err != nil {
-			if errors.Is(err, errInput) {
+			if isExit(err) {
 				return err
+			}
+			if errors.Is(err, errDeclined) {
+				continue
 			}
 			s.ui.printf("  %s %v\n", s.ui.paint("31", "✗"), err)
 		}
@@ -590,12 +624,18 @@ func (s *session) editSetting(ctx context.Context, doc *yamlDoc, st setting) err
 			return err
 		}
 		if text == "" {
+			if err := s.approve("Set "+st.label+" back to its default?", true); err != nil {
+				return err
+			}
 			doc.remove(st.path)
 			return s.commit(ctx, doc, st.hot)
 		}
 		if n, err = node(st, []string{text}); err != nil {
 			return err
 		}
+	}
+	if err := s.approve(fmt.Sprintf("Save %s: %s → %s?", st.label, display(doc, st), value(n)), true); err != nil {
+		return err
 	}
 	if err := doc.set(st.path, n); err != nil {
 		return err
@@ -616,6 +656,9 @@ func (s *session) editSecrets(ctx context.Context, doc *yamlDoc, st setting) err
 		return err
 	}
 	if i == 2 {
+		if err := s.approve("Remove every community? Devices that need one stop answering.", false); err != nil {
+			return err
+		}
 		doc.remove(st.path)
 		return s.commit(ctx, doc, st.hot)
 	}
@@ -626,6 +669,9 @@ func (s *session) editSecrets(ctx context.Context, doc *yamlDoc, st setting) err
 	}
 	if strings.TrimSpace(secret) == "" {
 		return errors.New("a community cannot be empty")
+	}
+	if err := s.approve("Save the community? It is stored in the config, mode 0600.", true); err != nil {
+		return err
 	}
 	var items []string
 	if i == 0 {
@@ -665,7 +711,7 @@ func (s *session) syncDropIn(ctx context.Context) error {
 	if err != nil || !ok {
 		return err
 	}
-	if err := s.do("write "+path, func() error {
+	if err := s.doConfirmed("write "+path, func() error {
 		if err := s.env.MkdirAll(filepath.Dir(path), 0o755, nil); err != nil { //nolint:gosec // systemd directories are readable by everyone
 			return err
 		}
@@ -680,4 +726,127 @@ func (s *session) syncDropIn(ctx context.Context) error {
 		return s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"restart", "netscribe"}})
 	}
 	return nil
+}
+
+// restoreBackup swaps the config with the .bak that the last save left, after the same
+// check as any save. The file it replaces becomes the new .bak, so the swap can be undone.
+func (s *session) restoreBackup(ctx context.Context) error {
+	bak := s.o.ConfigPath + ".bak"
+	old, err := s.env.ReadFile(bak)
+	if err != nil {
+		s.ui.note("there is no previous config: %s does not exist", bak)
+		return nil
+	}
+	if err := s.approve("Replace the config with the previous one from "+bak+"? The config now in use becomes the .bak.", false); err != nil {
+		return err
+	}
+	if err := s.saveConfig(old); err != nil {
+		return err
+	}
+	s.ui.done("restored the previous config; the one replaced is " + filepath.Base(bak))
+	return s.afterSave(ctx, false)
+}
+
+// editSSHHosts lists, adds and removes the hosts that the SSH collector reads.
+func (s *session) editSSHHosts(ctx context.Context) error {
+	path := p("ssh.hosts")
+	for {
+		doc, err := s.openConfig()
+		if err != nil {
+			return err
+		}
+		var labels []string
+		if n := doc.find(path); n != nil {
+			for _, h := range n.Content {
+				labels = append(labels, value(child(h, "user"))+"@"+value(child(h, "address")))
+			}
+		}
+		s.ui.section("SSH hosts")
+		if len(labels) == 0 {
+			s.ui.note("no host is set: the SSH collector reads nothing")
+		}
+		for _, l := range labels {
+			s.ui.printf("      %s\n", l)
+		}
+		i, err := s.p.pick("SSH hosts", []string{"Add a host", "Remove a host", "Back"}, 2)
+		if err != nil || i == 2 {
+			return err
+		}
+		if i == 0 {
+			err = s.addSSHHost(ctx, doc)
+		} else {
+			err = s.removeSSHHost(ctx, doc, labels)
+		}
+		if isExit(err) {
+			return err
+		}
+		if err != nil && !errors.Is(err, errDeclined) {
+			s.ui.printf("  %s %v\n", s.ui.paint("31", "✗"), err)
+		}
+	}
+}
+
+func (s *session) addSSHHost(ctx context.Context, doc *yamlDoc) error {
+	s.ui.note("Use an account that can only read: the scan runs hostname, uname -sr, ip -o addr and ss -H -tln.")
+	address, err := s.p.ask("Address of the host, with :port when it is not 22", "", func(v string) error {
+		if _, err := netip.ParseAddr(v); err == nil {
+			return nil
+		}
+		if _, err := netip.ParseAddrPort(v); err != nil {
+			return errors.New("use an IP address, such as 192.168.1.10 or 192.168.1.10:2222")
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	notEmpty := func(v string) error {
+		if strings.TrimSpace(v) == "" {
+			return errors.New("this cannot be empty")
+		}
+		return nil
+	}
+	user, err := s.p.ask("User to sign in as", "audit", notEmpty)
+	if err != nil {
+		return err
+	}
+	key, err := s.p.ask("Private key file (keys only, mode 0600, no passphrase)", "~/.ssh/netscribe_ed25519", notEmpty)
+	if err != nil {
+		return err
+	}
+	if err := s.approve(fmt.Sprintf("Add the SSH host %s@%s with the key %s?", user, address, key), true); err != nil {
+		return err
+	}
+	host := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+		strNode("address"), strNode(address), strNode("user"), strNode(user), strNode("keyFile"), strNode(key),
+	}}
+	seq := doc.find(p("ssh.hosts"))
+	if seq == nil || seq.Kind != yaml.SequenceNode {
+		if err := doc.set(p("ssh.hosts"), &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}); err != nil {
+			return err
+		}
+		seq = doc.find(p("ssh.hosts"))
+	}
+	seq.Content = append(seq.Content, host)
+	return s.commit(ctx, doc, true)
+}
+
+func (s *session) removeSSHHost(ctx context.Context, doc *yamlDoc, labels []string) error {
+	if len(labels) == 0 {
+		s.ui.note("no host to remove")
+		return nil
+	}
+	i, err := s.p.pick("Which host?", append(append([]string{}, labels...), "Back"), len(labels))
+	if err != nil || i == len(labels) {
+		return err
+	}
+	if err := s.approve("Remove the SSH host "+labels[i]+"? It is not read any more.", false); err != nil {
+		return err
+	}
+	seq := doc.find(p("ssh.hosts"))
+	seq.Content = append(seq.Content[:i], seq.Content[i+1:]...)
+	if len(seq.Content) == 0 {
+		doc.remove(p("ssh.hosts"))
+	}
+	return s.commit(ctx, doc, true)
 }

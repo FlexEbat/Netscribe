@@ -48,6 +48,7 @@ var example = map[string]string{
 	"snmp.timeout": "3s", "history.keepScans": "50", "audit.keepDays": "30",
 	"auth.minPasswordLength": "14", "auth.maxFailedLogins": "4", "auth.lockoutDuration": "20m",
 	"auth.sessionIdleTimeout": "20m", "auth.sessionMaxAge": "8h", "export.chromePath": "/usr/bin/chromium",
+	"discovery.nmapPath": "/usr/bin/nmap", "ssh.knownHosts": "/etc/ssh/ssh_known_hosts",
 }
 
 func TestEverySettingIsAKeyOfTheConfigAndLoads(t *testing.T) {
@@ -204,7 +205,7 @@ func menu(lines ...string) string { return strings.Join(lines, "\n") + "\n" }
 func TestConfigureChangesASettingThroughTheMenu(t *testing.T) {
 	f, o := installed(t)
 	// Scanning, "Scan every", the new value, Back, Back
-	input := menu("2", "2", "45m", "6", "11")
+	input := menu("2", "2", "45m", "y", "6", "14")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -226,7 +227,7 @@ func TestConfigureToggleEnumAndSecrets(t *testing.T) {
 	f.secrets = []string{"another-community"}
 	// Discovery: Nmap off->on? Use the mDNS toggle (item 3): answer n. Then the scope enum (item 2): all.
 	// SNMP (menu 5): Communities (item 1): add one.
-	input := menu("3", "3", "n", "2", "2", "7", "5", "1", "1", "3", "11")
+	input := menu("3", "3", "n", "y", "2", "2", "y", "8", "5", "1", "1", "y", "3", "14")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -246,7 +247,7 @@ func TestConfigureAccessWritesTLSAndDropsTheProxyList(t *testing.T) {
 	f, o := installed(t)
 	cert, key := writeKeyPair(t)
 	// Panel access: every interface (3), TLS (2), the paths. The restart question is not asked: the service is stopped.
-	input := menu("1", "3", "2", cert, key, "11")
+	input := menu("1", "3", "2", cert, key, "y", "14")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -263,7 +264,7 @@ func TestEnablingNmapOffersTheCapabilityDropIn(t *testing.T) {
 	f, o := installed(t)
 	f.bins["nmap"] = true
 	// Discovery (3), Nmap (1): yes, then the drop-in question: yes
-	input := menu("3", "1", "y", "y", "7", "11")
+	input := menu("3", "1", "y", "y", "y", "8", "14")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -279,7 +280,7 @@ func TestEnablingNmapOffersTheCapabilityDropIn(t *testing.T) {
 func TestConfigEditChecksTheResultAndLetsThePersonFixIt(t *testing.T) {
 	f, o := installed(t)
 	f.vars["EDITOR"] = "myeditor"
-	env := f.env("y\n") // after the first, broken edit: edit again
+	env := f.env("y\ny\n") // after the first, broken edit: edit again, then save
 	attempts := 0
 	env.Run = func(_ context.Context, c Command) ([]byte, error) {
 		if c.Name != "myeditor" {
