@@ -12,6 +12,7 @@ const allPermissions: Record<Role, Permission[]> = {
     "devices:write",
     "audit:read",
     "users:manage",
+    "system:manage",
   ],
 }
 

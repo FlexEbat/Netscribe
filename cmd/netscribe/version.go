@@ -13,9 +13,9 @@ var (
 	commit  = ""
 )
 
-// versionLine describes this build for a bug report.
-func versionLine() string {
-	v, c := version, commit
+// buildVersion is the version and the commit of this build.
+func buildVersion() (v, c string) {
+	v, c = version, commit
 	if info, ok := debug.ReadBuildInfo(); ok {
 		if v == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
 			v = info.Main.Version
@@ -28,6 +28,12 @@ func versionLine() string {
 			}
 		}
 	}
+	return v, c
+}
+
+// versionLine describes this build for a bug report.
+func versionLine() string {
+	v, c := buildVersion()
 	if len(c) > 7 {
 		c = c[:7]
 	}

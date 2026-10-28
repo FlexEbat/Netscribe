@@ -8,6 +8,7 @@ export type Permission =
   | "tokens:manage"
   | "audit:read"
   | "users:manage"
+  | "system:manage"
 
 export interface User {
   id: number

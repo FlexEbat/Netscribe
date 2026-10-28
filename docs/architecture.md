@@ -16,7 +16,7 @@ finds in SQLite and serves a web panel from the same binary.
 | Package | Job |
 | --- | --- |
 | `cmd/netscribe` | The commands `serve`, `scan`, `devices`, `export`, `user`, `setup`, `console`, `watch`, `config` and `doctor`. It wires the packages together and owns startup and shutdown. |
-| `internal/setup` | The guided installer, the console, the watcher, the settings editor and the checks. It imports only `config` and reaches the machine through `setup.Env`, so tests never touch `/etc`. It runs the other commands as the service account instead of opening the database itself. |
+| `internal/setup` | The guided installer, the console, the watcher, the settings editor and the checks. It imports only `config` and `update` and reaches the machine through `setup.Env`, so tests never touch `/etc`. It runs the other commands as the service account instead of opening the database itself. |
 | `internal/config` | Loads and validates the YAML file, holds the `Secret` type and reloads the file on change or `SIGHUP`. |
 | `internal/collector` | One collector per source: ARP, probes, SNMP, LLDP, router tables, services, HTTP, mDNS, SSDP, SSH, Docker and Nmap. A collector returns a result and never touches the database. `scanner` runs them and keeps the schedule. |
 | `internal/store` | SQLite access: migrations (goose), queries (sqlc), merging a scan result into the database and writing the change feed. |

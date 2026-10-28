@@ -107,6 +107,10 @@ var settingGroups = []group{
 		{path: p("ssh.knownHosts"), label: "known_hosts file", kind: kText, hot: true, def: "~/.ssh/known_hosts",
 			help: "Strict: a host that is not listed, or whose key changed, is skipped. Fill it with ssh-keyscan and check the fingerprint."},
 	}},
+	{name: "Updates", hint: "newer releases", items: []setting{
+		{path: p("updates.check"), label: "Look for new releases", kind: kBool, hot: true, def: "on",
+			help: "Asks GitHub every few hours whether a newer release exists. Nothing about this host is sent. Off hides the update notice."},
+	}},
 }
 
 func findSetting(key string) (setting, bool) {

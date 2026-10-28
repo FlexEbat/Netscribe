@@ -19,7 +19,7 @@ import (
 func runSetup(args []string, e streams) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	o := setup.DefaultOptions()
+	o := baseOptions()
 	fs.StringVar(&o.ConfigPath, "config", o.ConfigPath, "path of the config file the setup writes or keeps")
 	fs.BoolVar(&o.Yes, "yes", false, "take the recommended answer to every question")
 	fs.BoolVar(&o.DryRun, "dry-run", false, "print what the setup would do and change nothing")
@@ -51,7 +51,7 @@ func runSetup(args []string, e streams) error {
 func runDoctor(args []string, e streams) error {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	o := setup.DefaultOptions()
+	o := baseOptions()
 	fs.StringVar(&o.ConfigPath, "config", o.ConfigPath, "path of the config file to check")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -71,7 +71,7 @@ func setupEnv(e streams) setup.Env {
 func runConsole(args []string, e streams) error {
 	fs := flag.NewFlagSet("console", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	o := setup.DefaultOptions()
+	o := baseOptions()
 	fs.StringVar(&o.ConfigPath, "config", o.ConfigPath, "path of the config file")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -90,7 +90,7 @@ func runConsole(args []string, e streams) error {
 func runWatch(args []string, e streams) error {
 	fs := flag.NewFlagSet("watch", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	o := setup.DefaultOptions()
+	o := baseOptions()
 	fs.StringVar(&o.ConfigPath, "config", o.ConfigPath, "path of the config file")
 	fs.DurationVar(&o.WatchEvery, "interval", o.WatchEvery, "time between two samples")
 	fs.BoolVar(&o.Once, "once", false, "print one sample and exit with 1 when the service is not up")
@@ -121,7 +121,7 @@ const configUsage = `usage: netscribe config [--config FILE] [command]
 func runConfig(args []string, e streams) error {
 	fs := flag.NewFlagSet("config", flag.ContinueOnError)
 	fs.SetOutput(e.err)
-	o := setup.DefaultOptions()
+	o := baseOptions()
 	fs.StringVar(&o.ConfigPath, "config", o.ConfigPath, "path of the config file")
 	if err := fs.Parse(interspersedFirst(args)); err != nil {
 		return err

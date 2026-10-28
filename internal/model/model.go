@@ -143,6 +143,9 @@ const (
 	PermDevicesWrite Permission = "devices:write"
 	PermAuditRead    Permission = "audit:read"
 	PermUsersManage  Permission = "users:manage"
+	// PermSystemManage covers the settings page, the update and the restart of the service.
+	// Only an administrator holds it, and no token ever does.
+	PermSystemManage Permission = "system:manage"
 )
 
 type User struct {

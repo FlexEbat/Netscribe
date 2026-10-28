@@ -37,7 +37,7 @@ A machine without the toolchain can install Go and Node.js with
   `scanner` stores it through `Repo.ApplyResult`.
 - `internal/render` imports neither `collector` nor `api`.
 - `internal/api` holds no SQL and calls no collector directly.
-- `internal/setup` imports only `config`. It reaches the machine through `setup.Env`, and a
+- `internal/setup` imports only `config` and `update`. It reaches the machine through `setup.Env`, and a
   test never touches `/etc`.
 - `internal/auth` imports neither `api` nor `store`. It reaches the data through `AuthRepo`.
 - SQL lives only in `internal/store/migrations` and `internal/store/queries`.

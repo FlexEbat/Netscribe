@@ -39,8 +39,8 @@ var (
 )
 
 // tokenScopeRights is what a scope may do at most. Neither scope holds users:manage,
-// audit:read or tokens:manage: a stolen token cannot read the log, manage accounts or
-// mint more tokens.
+// audit:read, tokens:manage or system:manage: a stolen token cannot read the log, manage
+// accounts, mint more tokens, change the settings or start an update.
 var tokenScopeRights = map[string][]model.Permission{
 	ScopeRead:  {model.PermTopologyRead, model.PermExportRun},
 	ScopeWrite: {model.PermTopologyRead, model.PermExportRun, model.PermScansRun, model.PermDevicesWrite},

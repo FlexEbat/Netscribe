@@ -31,6 +31,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
+	"github.com/FlexEbat/Netscribe/internal/update"
 	"github.com/FlexEbat/Netscribe/web"
 )
 
@@ -47,6 +48,7 @@ commands:
   watch     live view of the service, the panel and the host; --once for monitors
   config    change the configuration: interactively, with get, set, show or edit
   doctor    check an install and say what to fix
+  update    look for a newer release and install it (--check only looks)
   version   print the version of this build
 
 run "netscribe <command> -h" for the flags of a command`
@@ -86,6 +88,8 @@ func run(args []string, e streams) int {
 		"console": runConsole,
 		"watch":   runWatch,
 		"config":  runConfig,
+		"update":  runUpdate,
+		"helper":  runHelper,
 	}
 	if cmd, ok := commands[args[0]]; ok {
 		if err := cmd(args[1:], e); err != nil {
@@ -223,7 +227,11 @@ func serve(args []string, e streams) error {
 	hub := events.NewHub()
 	scanner := collector.NewScanner(db, cfg, logger)
 	scanner.SetEvents(hub)
+	updates := &update.Checker{}
+	go updates.Run(ctx, func() bool { return live.Current().Updates.Check }, func(err error) { logger.Warn("update check", "err", err) })
 	router := api.NewRouter(api.Options{
+		Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
+		Helper: newHelperClient(cfg.Database), Settings: newSettingsEditor(*flags.configPath),
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},

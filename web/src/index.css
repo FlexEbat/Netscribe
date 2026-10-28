@@ -352,3 +352,32 @@ body[data-scroll-locked] {
   overflow: hidden !important;
   overscroll-behavior: contain;
 }
+
+/* The version in the corner glows while a newer release waits. The glow is a shadow, so it
+   stays visible without motion; the pulse is added only when motion is welcome. */
+.update-glow {
+  border-color: color-mix(in oklab, var(--brand) 60%, var(--border));
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--brand) 35%, transparent),
+    0 0 18px 2px var(--glow);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .update-glow {
+    animation: update-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes update-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--brand) 35%, transparent),
+      0 0 10px 0 var(--glow);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--brand) 60%, transparent),
+      0 0 26px 6px var(--glow);
+  }
+}

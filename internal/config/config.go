@@ -74,6 +74,7 @@ type Config struct {
 	TrustedProxies     []string        `yaml:"trustedProxies"`
 	Discovery          DiscoveryConfig `yaml:"discovery"`
 	Export             ExportConfig    `yaml:"export"`
+	Updates            UpdatesConfig   `yaml:"updates"`
 }
 
 type ScanConfig struct {
@@ -146,6 +147,12 @@ type ExportConfig struct {
 	ChromePath string `yaml:"chromePath"`
 }
 
+// UpdatesConfig controls the check for a newer release. The check asks one fixed GitHub
+// address and sends nothing about this installation.
+type UpdatesConfig struct {
+	Check bool `yaml:"check"`
+}
+
 // defaults returns the values used for every key the file leaves out.
 // The auth block must be complete, because Validate enforces minimums on it.
 func defaults() Config {
@@ -170,6 +177,7 @@ func defaults() Config {
 			Argon2:             Argon2Config{MemoryKiB: 65536, Iterations: 3, Parallelism: 2},
 		},
 		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true, NmapScope: "untyped"},
+		Updates:   UpdatesConfig{Check: true},
 	}
 }
 

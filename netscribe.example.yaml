@@ -63,3 +63,6 @@ discovery:
 
 export:
   chromePath: "" # empty: look for chromium and google-chrome in PATH
+
+updates:
+  check: true # ask GitHub once in a while whether a newer release exists; nothing about this host is sent

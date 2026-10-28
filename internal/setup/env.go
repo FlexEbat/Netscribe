@@ -25,6 +25,8 @@ import (
 	"time"
 
 	"golang.org/x/term"
+
+	"github.com/FlexEbat/Netscribe/internal/update"
 )
 
 // Level ranks a finding. A failure means the install does not work, a warning means it
@@ -115,6 +117,10 @@ type Env struct {
 	// CopyExecutable copies a program to its place, replacing a running copy safely.
 	CopyExecutable func(src, dst string) error
 	Remove         func(path string) error
+	// LatestRelease asks GitHub for the newest release of Netscribe.
+	LatestRelease func(ctx context.Context) (update.Release, error)
+	// InstallRelease downloads the release tag, checks its checksum and replaces the program at dst.
+	InstallRelease func(ctx context.Context, tag, dst string) error
 	// ReadSecret reads a line without showing it, for a community string. Without a
 	// terminal it reads an ordinary line.
 	ReadSecret func() (string, error)
@@ -148,6 +154,10 @@ func NewEnv(in io.Reader, out io.Writer, interactive, color bool) Env {
 		MkdirAll:       mkdirAll,
 		CopyExecutable: copyExecutable,
 		Remove:         os.Remove,
+		LatestRelease:  update.Latest,
+	}
+	e.InstallRelease = func(ctx context.Context, tag, dst string) error {
+		return update.Installer{GOARCH: e.GOARCH}.Install(ctx, tag, dst)
 	}
 	e.ReadSecret = func() (string, error) { return readSecret(e.In, interactive) }
 	return e

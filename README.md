@@ -18,6 +18,7 @@ packets only to the targets you configure and sends no telemetry. Linux only (am
 - [Install](#install)
 - [First user](#first-user)
 - [Configuration](#configuration)
+- [Updates and settings in the panel](#updates-and-settings-in-the-panel)
 - [Identify devices with Nmap](#identify-devices-with-nmap)
 - [Export](#export)
 - [TLS and reverse proxy](#tls-and-reverse-proxy)
@@ -225,6 +226,25 @@ scan keeps the settings it started with. A change to `listen`, `database`, `auth
 `audit`, `discovery`, `trustedProxies` or `allowPublicTargets` needs a restart, and the log
 says so. A file that fails validation leaves the running config in place, and administrators
 see the error in the panel. `netscribe config` tells you which case a change is.
+
+## Updates and settings in the panel
+
+The running version sits in the bottom-right corner of every page. When a newer release
+exists the version glows; a click shows what is new, links to the release and to all
+releases, and asks whether to update. Nothing happens before you answer.
+
+- The check asks one fixed GitHub address every few hours and sends nothing about the host.
+  Turn it off with `updates.check: false`.
+- An administrator can update from the panel on an install made by `netscribe setup` or the
+  install script: a small root helper (`netscribe-helper.path`) installs the newest release
+  after checking its SHA-256 sum, and restarts the service. Other installs (Docker, or an
+  install from before this feature) show the command instead of a button.
+- On the server: `sudo netscribe` and choose Update, or `sudo netscribe update` (`--check`
+  only looks, `--yes` does not ask).
+- **Settings** (administrators) edits the same settings as `netscribe config`, as one checked
+  change with a `.bak`. The listen address, TLS, trusted proxies and SSH hosts are changed
+  only on the server, so a mistake in the panel cannot lock you out. SNMP communities can be
+  replaced but are never shown.
 
 ## Identify devices with Nmap
 

@@ -22,7 +22,7 @@ var rolePermissions = map[model.Role][]model.Permission{
 	model.RoleAdmin: {
 		model.PermTopologyRead, model.PermExportRun, model.PermTokensManage,
 		model.PermScansRun, model.PermDevicesWrite,
-		model.PermAuditRead, model.PermUsersManage,
+		model.PermAuditRead, model.PermUsersManage, model.PermSystemManage,
 	},
 }
 

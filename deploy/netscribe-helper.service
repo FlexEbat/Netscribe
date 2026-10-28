@@ -1,0 +1,32 @@
+[Unit]
+Description=Netscribe helper: updates and restarts the service when the panel asks
+Documentation=https://github.com/FlexEbat/Netscribe
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Started by netscribe-helper.path when the panel leaves a request. The helper does two
+# things only: install the newest release, and restart netscribe. The request file holds
+# one word, and nothing else from it is used.
+Type=oneshot
+ExecStart=/usr/local/bin/netscribe helper --request /var/lib/netscribe/helper.request
+RuntimeDirectory=netscribe-helper
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+TimeoutStartSec=15min
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/usr/local/bin /etc/systemd/system /var/lib/netscribe
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native

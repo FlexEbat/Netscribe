@@ -470,3 +470,93 @@ export async function listAudit(query: AuditQuery = {}): Promise<AuditEntry[]> {
   const body = await api<{ entries: AuditEntry[] }>("GET", `/api/audit${suffix}`)
   return body.entries
 }
+
+export interface UpdateRelease {
+  tag: string
+  version: string
+  url: string
+  notes: string
+  publishedAt: string
+}
+
+export interface UpdateStatus {
+  current: string
+  latest: UpdateRelease | null
+  available: boolean
+  checking: boolean
+  checkedAt: string
+  error?: string
+  releasesUrl: string
+  changelogUrl: string
+}
+
+export interface HelperState {
+  available: boolean
+  /** idle, waiting, running, done or failed. */
+  state: string
+  action: string
+  message: string
+  at: string | null
+}
+
+export interface VersionInfo {
+  version: string
+  update: UpdateStatus
+  helper: HelperState
+}
+
+export function getVersion(): Promise<VersionInfo> {
+  return api<VersionInfo>("GET", "/api/version")
+}
+
+/** Asks GitHub now, which the server allows once in 30 seconds. */
+export function checkForUpdate(): Promise<VersionInfo> {
+  return api<VersionInfo>("POST", "/api/update/check")
+}
+
+/** Asks the helper to install the newest release. The service restarts when it is done. */
+export function startUpdate(): Promise<VersionInfo> {
+  return api<VersionInfo>("POST", "/api/update")
+}
+
+export function restartService(): Promise<VersionInfo> {
+  return api<VersionInfo>("POST", "/api/system/restart")
+}
+
+export type SettingType =
+  "bool" | "int" | "duration" | "text" | "list" | "ports" | "enum" | "secrets"
+
+export interface Setting {
+  key: string
+  label: string
+  help: string
+  type: SettingType
+  /** A boolean, a number, text or a list of text. Null for secrets, which are never sent. */
+  value: boolean | number | string | string[] | null
+  default: string
+  choices?: string[]
+  /** A running service applies a change by itself. */
+  hot: boolean
+  /** Secrets: how many are set. */
+  count?: number
+}
+
+export interface SettingsGroup {
+  name: string
+  hint: string
+  settings: Setting[]
+}
+
+export interface SettingsSaved {
+  saved: string[]
+  needRestart: string[]
+}
+
+export async function getSettings(): Promise<SettingsGroup[]> {
+  const data = await api<{ groups: SettingsGroup[] }>("GET", "/api/settings")
+  return data.groups
+}
+
+export function saveSettings(changes: Record<string, unknown>): Promise<SettingsSaved> {
+  return api<SettingsSaved>("PUT", "/api/settings", { body: { changes } })
+}
