@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/FlexEbat/Netscribe/internal/config"
 )
 
 func newTestServices(dial dialer) *Services {
@@ -158,5 +160,45 @@ func TestMergePorts(t *testing.T) {
 	}
 	if got := mergePorts(nil, nil); len(got) != 0 {
 		t.Errorf("merged = %v", got)
+	}
+}
+
+func TestServicesTakesTheTimeoutAndTheLimitFromTheConfig(t *testing.T) {
+	var cur, peak atomic.Int32
+	var mu sync.Mutex
+	var got time.Duration
+	c := newTestServices(func(ctx context.Context, _, _ string) (net.Conn, error) {
+		n := cur.Add(1)
+		for {
+			p := peak.Load()
+			if n <= p || peak.CompareAndSwap(p, n) {
+				break
+			}
+		}
+		if d, ok := ctx.Deadline(); ok {
+			mu.Lock()
+			got = time.Until(d)
+			mu.Unlock()
+		}
+		select {
+		case <-time.After(3 * time.Millisecond):
+		case <-ctx.Done():
+		}
+		cur.Add(-1)
+		return nil, errors.New("closed")
+	})
+	in := servicesInput([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, "10.0.0.1", "10.0.0.2", "10.0.0.3")
+	in.Config.Scan.PortTimeout = config.Duration(4 * time.Second)
+	in.Config.Scan.Concurrency = 3
+	if _, err := c.Collect(context.Background(), in); err != nil {
+		t.Fatal(err)
+	}
+	if peak.Load() > 3 || peak.Load() < 2 {
+		t.Errorf("peak = %d, want between 2 and the configured 3", peak.Load())
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if got <= time.Second || got > 4*time.Second {
+		t.Errorf("deadline in %v, want the configured 4s and not the default half second", got)
 	}
 }

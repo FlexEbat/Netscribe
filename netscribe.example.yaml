@@ -8,6 +8,9 @@ scan:
   targets: [192.168.1.0/24]
   interval: 15m # 0 turns the schedule off, the minimum is 1m
   ports: [22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100] # an empty list turns the port scan off
+  portTimeout: 500ms # how long one TCP connection may take before the port counts as closed, 100ms to 10s
+  concurrency: 256 # TCP connections held open at once by the port scan, 1 to 512
+  retryAfter: 0 # wait before a failed scheduled scan is tried again, 1m to 24h; 0 turns the retry off
 
 snmp:
   communities: [public] # use a read-only community and restrict it by ACL on the device

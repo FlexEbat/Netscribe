@@ -57,8 +57,10 @@ type Scanner struct {
 	scanCfg config.Config
 
 	// wake tells Schedule that scan.interval changed. timer is replaced in tests.
-	wake  chan struct{}
-	timer func(time.Duration) (<-chan time.Time, func() bool)
+	wake chan struct{}
+	// failed tells Schedule that a scheduled scan failed, so it can retry after scan.retryAfter.
+	failed chan struct{}
+	timer  func(time.Duration) (<-chan time.Time, func() bool)
 
 	// enrichers run after the discovery stage, in order: SNMP first, because LLDP uses
 	// what it learned. An error of an enricher is logged, the scan goes on.
@@ -98,7 +100,7 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	}
 	return &Scanner{
 		store: store, discovery: NewARP(), resolver: net.DefaultResolver, cfg: cfg, log: log, dnsWait: dnsTimeout,
-		wake: make(chan struct{}, 1),
+		wake: make(chan struct{}, 1), failed: make(chan struct{}, 1),
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
 		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services, httpBanner, mdns, ssdp},
@@ -229,15 +231,17 @@ func (s *Scanner) Run(ctx context.Context, targets []netip.Prefix) (model.Scan, 
 // Start records the scan and returns it while the scan continues in the background
 // until it ends or ctx is canceled. ErrBusy means a scan is already running.
 func (s *Scanner) Start(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
-	return s.start(ctx, targets, false)
+	return s.start(ctx, targets, false, false)
 }
 
 // StartWithNmap is Start with nmap switched on for this scan, whatever discovery.nmap says.
 func (s *Scanner) StartWithNmap(ctx context.Context, targets []netip.Prefix) (model.Scan, error) {
-	return s.start(ctx, targets, true)
+	return s.start(ctx, targets, true, false)
 }
 
-func (s *Scanner) start(ctx context.Context, targets []netip.Prefix, withNmap bool) (model.Scan, error) {
+// start begins a scan in the background. scheduled marks a scan the schedule started: only
+// its failure is retried after scan.retryAfter, a failed scan that a person started is not.
+func (s *Scanner) start(ctx context.Context, targets []netip.Prefix, withNmap, scheduled bool) (model.Scan, error) {
 	scan, err := s.begin(ctx, targets, withNmap)
 	if err != nil {
 		return model.Scan{}, err
@@ -253,7 +257,12 @@ func (s *Scanner) start(ctx context.Context, targets []netip.Prefix, withNmap bo
 			}
 		}()
 		// execute records its own failure in the log and in the scan row.
-		_, _ = s.execute(ctx, scan, targets)
+		if _, err := s.execute(ctx, scan, targets); err != nil && scheduled && ctx.Err() == nil {
+			select {
+			case s.failed <- struct{}{}:
+			default: // a retry is already waiting
+			}
+		}
 	}()
 	return scan, nil
 }
@@ -284,7 +293,29 @@ func (s *Scanner) Schedule(ctx context.Context, targets func(config.Config) ([]n
 			stop()
 		case <-tick:
 			s.scheduled(ctx, targets)
+		case <-s.failed:
+			stop()
+			s.retryAfterFailure(ctx, targets, newTimer)
 		}
+	}
+}
+
+// retryAfterFailure waits scan.retryAfter and starts the scheduled scan again. It ends early
+// when the config changes the schedule or ctx ends. A retry that fails asks for the next one.
+func (s *Scanner) retryAfterFailure(ctx context.Context, targets func(config.Config) ([]netip.Prefix, error), newTimer func(time.Duration) (<-chan time.Time, func() bool)) {
+	wait := s.config().Scan.RetryAfter.Std()
+	if wait <= 0 {
+		return
+	}
+	s.log.Info("the scheduled scan failed, trying again", "after", wait.String())
+	tick, stop := newTimer(wait)
+	select {
+	case <-ctx.Done():
+		stop()
+	case <-s.wake:
+		stop()
+	case <-tick:
+		s.scheduled(ctx, targets)
 	}
 }
 
@@ -294,7 +325,7 @@ func (s *Scanner) scheduled(ctx context.Context, targets func(config.Config) ([]
 		s.log.Warn("scheduled scan not started", "err", err)
 		return
 	}
-	_, err = s.Start(ctx, list)
+	_, err = s.start(ctx, list, false, true)
 	switch {
 	case err == nil:
 	case errors.Is(err, ErrBusy):

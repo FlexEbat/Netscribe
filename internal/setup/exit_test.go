@@ -273,7 +273,7 @@ func TestConsoleExportAsksBeforeItReplacesAFile(t *testing.T) {
 func TestConfigureAsksBeforeItSavesAndANoChangesNothing(t *testing.T) {
 	f, o := installed(t)
 	before := readFile(t, o.ConfigPath)
-	if err := Configure(context.Background(), f.env(menu("2", "2", "45m", "n", "6", "15")), o, "v"); err != nil {
+	if err := Configure(context.Background(), f.env(menu("2", "2", "45m", "n", "9", "15")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if readFile(t, o.ConfigPath) != before || exists(o.ConfigPath+".bak") {

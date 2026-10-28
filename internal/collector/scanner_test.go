@@ -366,6 +366,7 @@ func startSchedule(t *testing.T, s *Scanner, targets func(config.Config) ([]neti
 	clock := &fakeClock{}
 	s.timer = clock.timer
 	s.wake = make(chan struct{}, 1)
+	s.failed = make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
@@ -593,5 +594,80 @@ func TestMergeServicesKeepsTheNameAndTheBannerOfOneService(t *testing.T) {
 func TestCleanHostnameDropsBidiOverrides(t *testing.T) {
 	if got := cleanHostname("print\u202eer.lan."); got != "printer.lan" {
 		t.Errorf("cleanHostname = %q, want the override gone", got)
+	}
+}
+
+func failingCollector() *fakeCollector {
+	return &fakeCollector{run: func(context.Context) error { return errors.New("the network is down") }}
+}
+
+func TestScheduleRetriesAFailedScanAfterRetryAfter(t *testing.T) {
+	st := &fakeStore{}
+	s := newTestScanner(st, failingCollector(), &fakeResolver{})
+	s.cfg = scheduleConfig(time.Hour)
+	s.cfg.Scan.RetryAfter = config.Duration(5 * time.Minute)
+	clock := startSchedule(t, s, lanTargets)
+	lastWait := func() time.Duration {
+		w := clock.requested()
+		if len(w) == 0 {
+			return 0
+		}
+		return w[len(w)-1]
+	}
+
+	waitUntil(t, "the first timer", func() bool { return len(clock.requested()) == 1 })
+	clock.fire()
+	waitUntil(t, "the scheduled scan", func() bool { return startedScans(st) == 1 })
+	waitUntil(t, "the retry timer", func() bool { return lastWait() == 5*time.Minute })
+	clock.fire()
+	waitUntil(t, "the retried scan", func() bool { return startedScans(st) == 2 })
+	// The retry failed too, so another retry is waiting.
+	waitUntil(t, "a second retry timer", func() bool {
+		n := 0
+		for _, w := range clock.requested() {
+			if w == 5*time.Minute {
+				n++
+			}
+		}
+		return n == 2 && lastWait() == 5*time.Minute
+	})
+}
+
+func TestScheduleDoesNotRetryWhenRetryAfterIsZero(t *testing.T) {
+	st := &fakeStore{}
+	s := newTestScanner(st, failingCollector(), &fakeResolver{})
+	s.cfg = scheduleConfig(time.Hour)
+	clock := startSchedule(t, s, lanTargets)
+
+	waitUntil(t, "the first timer", func() bool { return len(clock.requested()) == 1 })
+	clock.fire()
+	waitUntil(t, "the scheduled scan", func() bool { return startedScans(st) == 1 })
+	waitUntil(t, "the next timer", func() bool { return len(clock.requested()) >= 2 })
+	time.Sleep(30 * time.Millisecond)
+	for i, w := range clock.requested() {
+		if w != time.Hour {
+			t.Errorf("wait %d = %v, want only the interval of 1h and no retry", i, w)
+		}
+	}
+	if n := startedScans(st); n != 1 {
+		t.Errorf("%d scans started, want 1", n)
+	}
+}
+
+func TestAFailedScanThatAPersonStartedIsNotRetried(t *testing.T) {
+	st := &fakeStore{}
+	s := newTestScanner(st, failingCollector(), &fakeResolver{})
+	s.cfg = scheduleConfig(time.Hour)
+	s.cfg.Scan.RetryAfter = config.Duration(5 * time.Minute)
+	clock := startSchedule(t, s, lanTargets)
+	waitUntil(t, "the first timer", func() bool { return len(clock.requested()) == 1 })
+
+	if _, err := s.Start(context.Background(), []netip.Prefix{netip.MustParsePrefix("192.168.1.0/24")}); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, "the manual scan", func() bool { return startedScans(st) == 1 })
+	time.Sleep(50 * time.Millisecond)
+	if n := len(clock.requested()); n != 1 {
+		t.Errorf("%d timers: a failed manual scan must not start a retry", n)
 	}
 }

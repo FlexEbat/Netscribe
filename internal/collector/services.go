@@ -12,6 +12,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
+// The defaults of scan.portTimeout and scan.concurrency, used when a config leaves them out.
 const (
 	servicesTimeout     = 500 * time.Millisecond // per port
 	servicesConcurrency = 256                    // connections at one moment, for the whole scan
@@ -30,7 +31,7 @@ type Services struct {
 // NewServices returns a scanner that opens plain TCP connections.
 func NewServices(log *slog.Logger) *Services {
 	return &Services{
-		dial:  (&net.Dialer{Timeout: servicesTimeout}).DialContext,
+		dial:  (&net.Dialer{}).DialContext, // the context of every connection carries scan.portTimeout
 		log:   log,
 		ports: map[string][]int{},
 	}
@@ -52,11 +53,18 @@ func (c *Services) Collect(ctx context.Context, in Input) (Result, error) {
 		return Result{}, nil
 	}
 
+	timeout, limit := in.Config.Scan.PortTimeout.Std(), in.Config.Scan.Concurrency
+	if timeout <= 0 {
+		timeout = servicesTimeout
+	}
+	if limit <= 0 {
+		limit = servicesConcurrency
+	}
 	var (
 		wg  sync.WaitGroup
 		mu  sync.Mutex
 		res Result
-		sem = make(chan struct{}, servicesConcurrency)
+		sem = make(chan struct{}, limit)
 	)
 	open := map[string][]int{}
 loop:
@@ -75,7 +83,7 @@ loop:
 			go func(d model.Device, port int) {
 				defer wg.Done()
 				defer func() { <-sem }()
-				cctx, cancel := context.WithTimeout(ctx, servicesTimeout)
+				cctx, cancel := context.WithTimeout(ctx, timeout)
 				conn, err := c.dial(cctx, "tcp", net.JoinHostPort(d.IP, strconv.Itoa(port)))
 				cancel()
 				if err != nil {
