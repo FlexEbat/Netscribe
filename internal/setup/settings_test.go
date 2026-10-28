@@ -41,6 +41,7 @@ func dirOf(p string) string { return p[:strings.LastIndex(p, "/")] }
 // example is a valid value for each kind of setting.
 var example = map[string]string{
 	"scan.targets": "10.0.0.0/24", "scan.interval": "30m", "scan.ports": "22,80,443",
+	"scan.portTimeout": "1s", "scan.concurrency": "64", "scan.retryAfter": "10m",
 	"allowPublicTargets": "true", "discovery.probeRoutedTargets": "true",
 	"discovery.nmap": "false", "discovery.nmapScope": "all", "discovery.mdns": "false", "discovery.ssdp": "false",
 	"discovery.httpHeaders": "false", "discovery.routerTables": "false",
@@ -206,7 +207,7 @@ func menu(lines ...string) string { return strings.Join(lines, "\n") + "\n" }
 func TestConfigureChangesASettingThroughTheMenu(t *testing.T) {
 	f, o := installed(t)
 	// Scanning, "Scan every", the new value, Back, Back
-	input := menu("2", "2", "45m", "y", "6", "15")
+	input := menu("2", "2", "45m", "y", "9", "15")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}

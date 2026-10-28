@@ -81,6 +81,12 @@ type ScanConfig struct {
 	Targets  []string `yaml:"targets"`
 	Interval Duration `yaml:"interval"`
 	Ports    []int    `yaml:"ports"`
+	// PortTimeout is how long one TCP connection to a port may take before the port counts as closed.
+	PortTimeout Duration `yaml:"portTimeout"`
+	// Concurrency is how many TCP connections the port scan holds open at one moment.
+	Concurrency int `yaml:"concurrency"`
+	// RetryAfter is the wait before a scheduled scan that failed is tried again. 0 turns the retry off.
+	RetryAfter Duration `yaml:"retryAfter"`
 }
 
 type SNMPConfig struct {
@@ -162,6 +168,9 @@ func defaults() Config {
 		Scan: ScanConfig{
 			Interval: Duration(15 * time.Minute),
 			Ports:    []int{22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100},
+
+			PortTimeout: Duration(500 * time.Millisecond),
+			Concurrency: 256,
 		},
 		SNMP:    SNMPConfig{Timeout: Duration(2 * time.Second)},
 		SSH:     SSHConfig{KnownHosts: "~/.ssh/known_hosts"},
@@ -235,6 +244,9 @@ var (
 	errTargetPublic = errors.New("target is outside private ranges")
 	errInterval     = errors.New("scan interval is below 1m")
 	errSNMPTimeout  = errors.New("snmp timeout is out of range")
+	errPortTimeout  = errors.New("scan.portTimeout must be between 100ms and 10s")
+	errConcurrency  = errors.New("scan.concurrency must be between 1 and 512")
+	errRetryAfter   = errors.New("scan.retryAfter must be 0 or between 1m and 24h")
 	errSSHKey       = errors.New("ssh host has no key file")
 	errSession      = errors.New("session timeout is out of range")
 	errArgon2       = errors.New("argon2 parameters are below the minimum")
@@ -276,6 +288,15 @@ func (c Config) Validate() error {
 	}
 	if iv := c.Scan.Interval.Std(); iv != 0 && iv < time.Minute {
 		fail("scan.interval", errInterval)
+	}
+	if t := c.Scan.PortTimeout.Std(); t < 100*time.Millisecond || t > 10*time.Second {
+		fail("scan.portTimeout", errPortTimeout)
+	}
+	if n := c.Scan.Concurrency; n < 1 || n > 512 {
+		fail("scan.concurrency", errConcurrency)
+	}
+	if r := c.Scan.RetryAfter.Std(); r != 0 && (r < time.Minute || r > 24*time.Hour) {
+		fail("scan.retryAfter", errRetryAfter)
 	}
 	if t := c.SNMP.Timeout.Std(); t < time.Second || t > 30*time.Second {
 		fail("snmp.timeout", errSNMPTimeout)
