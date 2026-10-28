@@ -9,6 +9,7 @@ import {
   Moon,
   Network,
   ScrollText,
+  SlidersHorizontal,
   Sun,
   UserRound,
   Users as UsersIcon,
@@ -22,6 +23,7 @@ import { RequireSession } from "@/components/RequireSession"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { UserMenu } from "@/components/UserMenu"
+import { VersionBadge } from "@/components/VersionBadge"
 import { can, type Permission, type User } from "@/lib/permissions"
 import { setTheme, useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -33,6 +35,7 @@ import { Login } from "@/pages/Login"
 import { Changes } from "@/pages/Changes"
 import { Containers } from "@/pages/Containers"
 import { Services } from "@/pages/Services"
+import { Settings } from "@/pages/Settings"
 import { Topology } from "@/pages/Topology"
 
 // Pages are added here as slices deliver them.
@@ -76,6 +79,13 @@ const navItems: NavItem[] = [
   },
   { to: "/users", label: "Users", icon: UsersIcon, permission: "users:manage", group: "admin" },
   { to: "/audit", label: "Audit log", icon: ScrollText, permission: "audit:read", group: "admin" },
+  {
+    to: "/settings",
+    label: "Settings",
+    icon: SlidersHorizontal,
+    permission: "system:manage",
+    group: "admin",
+  },
 ]
 
 const groupLabels = { workspace: "Workspace", admin: "Administration" } as const
@@ -257,6 +267,7 @@ function Layout() {
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between border-r bg-sidebar/80 p-4 backdrop-blur-xl md:flex">
         <Sidebar user={user} permissions={permissions} onSignOut={onSignOut} />
       </aside>
+      <VersionBadge permissions={permissions} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           pathname={location.pathname}
@@ -339,6 +350,14 @@ export const routes: RouteObject[] = [
         element: (
           <RequirePermission permission="audit:read">
             <Audit />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: "settings",
+        element: (
+          <RequirePermission permission="system:manage">
+            <Settings />
           </RequirePermission>
         ),
       },
