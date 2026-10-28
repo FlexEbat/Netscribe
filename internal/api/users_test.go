@@ -58,7 +58,7 @@ func TestAdminCreatesUsersWhoSeeExactlyWhatTheirRoleAllows(t *testing.T) {
 		if got.User.Role != role || !got.User.MustChangePassword {
 			t.Errorf("%s: me = %+v", role, got.User)
 		}
-		want := map[model.Role]int{model.RoleViewer: 3, model.RoleOperator: 5, model.RoleAdmin: 7}[role]
+		want := map[model.Role]int{model.RoleViewer: 3, model.RoleOperator: 5, model.RoleAdmin: 8}[role]
 		if len(got.Permissions) != want {
 			t.Errorf("%s holds %d rights %v, want %d", role, len(got.Permissions), got.Permissions, want)
 		}
