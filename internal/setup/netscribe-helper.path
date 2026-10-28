@@ -1,0 +1,10 @@
+[Unit]
+Description=Netscribe helper: waits for a request from the panel
+Documentation=https://github.com/FlexEbat/Netscribe
+
+[Path]
+PathExists=/var/lib/netscribe/helper.request
+Unit=netscribe-helper.service
+
+[Install]
+WantedBy=multi-user.target

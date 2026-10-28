@@ -99,7 +99,7 @@ func TestConsoleBackWordLeavesASubmenuWithoutAnAction(t *testing.T) {
 	f, o := installed(t)
 	f.active = "active"
 	for _, entry := range []string{"7", "8", "6", "3", "5"} { // accounts, service, settings, scan, export
-		if err := Console(context.Background(), f.env(menu(entry, "b", "11")), o, "v"); err != nil {
+		if err := Console(context.Background(), f.env(menu(entry, "b", "12")), o, "v"); err != nil {
 			t.Fatalf("menu %s: %v\n%s", entry, err, f.out.String())
 		}
 	}
@@ -124,7 +124,7 @@ func TestConsoleServiceActionsAskAndANoChangesNothing(t *testing.T) {
 	f, o := installed(t)
 	f.active = "active"
 	// stop (3): no; restart (4): no; disable at boot (7): no; leave
-	if err := Console(context.Background(), f.env(menu("8", "3", "n", "4", "n", "7", "n", "9", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("8", "3", "n", "4", "n", "7", "n", "9", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"systemctl stop", "systemctl restart", "systemctl disable"} {
@@ -143,7 +143,7 @@ func TestConsoleAccountsAskBeforeTheyChangeAnything(t *testing.T) {
 		t.Fatal(err)
 	}
 	// add bob as viewer: no; disable bob: no
-	if err := Console(context.Background(), f.env(menu("7", "2", "bob", "1", "n", "4", "bob", "n", "5", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("7", "2", "bob", "1", "n", "4", "bob", "n", "5", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(f.ran(), "user add") || strings.Contains(f.ran(), "user disable") {
@@ -153,7 +153,7 @@ func TestConsoleAccountsAskBeforeTheyChangeAnything(t *testing.T) {
 
 func TestConsoleRunsAScanAfterConfirmation(t *testing.T) {
 	f, o := installed(t)
-	if err := Console(context.Background(), f.env(menu("3", "1", "y", "4", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("3", "1", "y", "4", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	var scan Command
@@ -172,7 +172,7 @@ func TestConsoleRunsAScanAfterConfirmation(t *testing.T) {
 
 func TestConsoleScanWithNmapAndOtherNetworks(t *testing.T) {
 	f, o := installed(t)
-	if err := Console(context.Background(), f.env(menu("3", "2", "y", "3", "10.1.0.0/24, 10.2.0.0/24", "y", "4", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("3", "2", "y", "3", "10.1.0.0/24, 10.2.0.0/24", "y", "4", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	ran := f.ran()
@@ -185,7 +185,7 @@ func TestConsoleScanWithNmapAndOtherNetworks(t *testing.T) {
 
 func TestConsoleScanRefusesAPublicNetworkAndAsksAgain(t *testing.T) {
 	f, o := installed(t)
-	if err := Console(context.Background(), f.env(menu("3", "3", "8.8.8.0/24", "10.1.0.0/24", "n", "4", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("3", "3", "8.8.8.0/24", "10.1.0.0/24", "n", "4", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f.out.String(), "private") {
@@ -199,7 +199,7 @@ func TestConsoleScanRefusesAPublicNetworkAndAsksAgain(t *testing.T) {
 func TestConsoleScanNeedsRoot(t *testing.T) {
 	f, o := installed(t)
 	f.uid = 1000
-	if err := Console(context.Background(), f.env(menu("3", "1", "4", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("3", "1", "4", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(f.ran(), "scan ") || !strings.Contains(f.out.String(), "run netscribe with sudo") {
@@ -209,7 +209,7 @@ func TestConsoleScanNeedsRoot(t *testing.T) {
 
 func TestConsoleDevicesListsWithoutAsking(t *testing.T) {
 	f, o := installed(t)
-	if err := Console(context.Background(), f.env(menu("4", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("4", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f.ran(), "devices --config") {
@@ -262,7 +262,7 @@ func TestConsoleExportAsksBeforeItReplacesAFile(t *testing.T) {
 	if err := os.WriteFile(dest, []byte("keep me"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Console(context.Background(), f.env(menu("5", "1", dest, "n", "5", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("5", "1", dest, "n", "5", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if readFile(t, dest) != "keep me" || strings.Contains(f.ran(), "export ") {
@@ -273,7 +273,7 @@ func TestConsoleExportAsksBeforeItReplacesAFile(t *testing.T) {
 func TestConfigureAsksBeforeItSavesAndANoChangesNothing(t *testing.T) {
 	f, o := installed(t)
 	before := readFile(t, o.ConfigPath)
-	if err := Configure(context.Background(), f.env(menu("2", "2", "45m", "n", "6", "14")), o, "v"); err != nil {
+	if err := Configure(context.Background(), f.env(menu("2", "2", "45m", "n", "6", "15")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if readFile(t, o.ConfigPath) != before || exists(o.ConfigPath+".bak") {
@@ -289,7 +289,7 @@ func TestConfigureRestoresThePreviousConfig(t *testing.T) {
 	if err := ConfigSet(context.Background(), f.env(""), o, "scan.interval", []string{"45m"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Configure(context.Background(), f.env(menu("13", "y", "14")), o, "v"); err != nil {
+	if err := Configure(context.Background(), f.env(menu("14", "y", "15")), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
 	if cfg, _ := config.Load(o.ConfigPath, false); cfg.Scan.Interval.Std().Minutes() != 15 {
@@ -300,7 +300,7 @@ func TestConfigureRestoresThePreviousConfig(t *testing.T) {
 	}
 	// a no leaves it alone, and no backup is no error
 	f2, o2 := installed(t)
-	if err := Configure(context.Background(), f2.env(menu("13", "14")), o2, "v"); err != nil {
+	if err := Configure(context.Background(), f2.env(menu("14", "15")), o2, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f2.out.String(), "no previous config") {
@@ -310,7 +310,7 @@ func TestConfigureRestoresThePreviousConfig(t *testing.T) {
 
 func TestConfigureAddsAndRemovesSSHHosts(t *testing.T) {
 	f, o := installed(t)
-	add := menu("10", "1", "192.168.1.10", "audit", "/home/a/key", "y", "3", "14")
+	add := menu("11", "1", "192.168.1.10", "audit", "/home/a/key", "y", "3", "15")
 	if err := Configure(context.Background(), f.env(add), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -318,7 +318,7 @@ func TestConfigureAddsAndRemovesSSHHosts(t *testing.T) {
 	if err != nil || len(cfg.SSH.Hosts) != 1 || cfg.SSH.Hosts[0].Address != "192.168.1.10" || cfg.SSH.Hosts[0].User != "audit" {
 		t.Fatalf("hosts %+v, %v", cfg.SSH.Hosts, err)
 	}
-	remove := menu("10", "2", "1", "n", "2", "1", "y", "3", "14") // a no first, then a yes
+	remove := menu("11", "2", "1", "n", "2", "1", "y", "3", "15") // a no first, then a yes
 	if err := Configure(context.Background(), f.env(remove), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -329,7 +329,7 @@ func TestConfigureAddsAndRemovesSSHHosts(t *testing.T) {
 
 func TestConfigureRefusesABadSSHAddress(t *testing.T) {
 	f, o := installed(t)
-	if err := Configure(context.Background(), f.env(menu("10", "1", "not-an-ip", "192.168.1.11:2222", "audit", "/k", "y", "3", "14")), o, "v"); err != nil {
+	if err := Configure(context.Background(), f.env(menu("11", "1", "not-an-ip", "192.168.1.11:2222", "audit", "/k", "y", "3", "15")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f.out.String(), "use an IP address") {
@@ -342,10 +342,10 @@ func TestConfigureRefusesABadSSHAddress(t *testing.T) {
 
 func TestConsoleCommandsListsEveryCommand(t *testing.T) {
 	f, o := installed(t)
-	if err := Console(context.Background(), f.env(menu("10", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("11", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"serve", "scan", "devices", "export", "user", "setup", "config", "watch", "doctor", "version"} {
+	for _, want := range []string{"serve", "scan", "devices", "export", "user", "setup", "config", "watch", "doctor", "update", "version"} {
 		if !strings.Contains(f.out.String(), "netscribe "+want) {
 			t.Errorf("the command list lacks %q", want)
 		}

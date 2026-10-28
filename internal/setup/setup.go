@@ -592,6 +592,15 @@ func (s *session) service(ctx context.Context) error {
 			return err
 		}
 	}
+	// Part of the service step the person just agreed to: no separate question.
+	err = s.doConfirmed("install the helper that lets the panel update and restart the service", func() error {
+		c, err := s.installPanelUnits(ctx)
+		changed = changed || c
+		return err
+	})
+	if err != nil && !errors.Is(err, errDeclined) {
+		return err
+	}
 	if changed {
 		if err := s.doConfirmed("reload systemd", func() error {
 			return s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"daemon-reload"}})

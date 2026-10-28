@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
+	"github.com/FlexEbat/Netscribe/internal/update"
 )
 
 const (
@@ -125,6 +127,17 @@ type Options struct {
 	Logger *slog.Logger
 	// Now is the clock. Nil means time.Now.
 	Now func() time.Time
+	// Version is the running version, shown in the corner of the panel. Empty means dev.
+	Version string
+	// Updates holds what is known about the newest release. Nil means there is no check.
+	Updates *update.Checker
+	// UpdatesEnabled tells whether the check is switched on in the config. Nil means it is.
+	UpdatesEnabled func() bool
+	// Helper takes the update and restart requests. Without it POST /api/update and
+	// POST /api/system/restart are not registered.
+	Helper SystemHelper
+	// Settings serves GET and PUT /api/settings. Without it those routes are not registered.
+	Settings SettingsEditor
 
 	// heartbeat is the keep-alive interval of the event streams. Zero means defaultHeartbeat.
 	// Only tests set it.
@@ -149,6 +162,15 @@ type server struct {
 	log        *slog.Logger
 	heartbeat  time.Duration // time between keep-alive comments on an event stream
 	limiter    *auth.Limiter // sign-in attempts per client address
+
+	version        string
+	updates        *update.Checker
+	updatesEnabled func() bool
+	helper         SystemHelper
+	settings       SettingsEditor
+	settingsMu     sync.Mutex // one change of the config file at a time
+	recheckMu      sync.Mutex
+	lastRecheck    time.Time
 }
 
 const (
@@ -162,6 +184,7 @@ func (s *server) routes() []Route {
 		route(http.MethodPost, "/api/auth/logout", permSession, s.logout),
 		route(http.MethodGet, "/api/auth/me", permSession, s.me),
 		route(http.MethodPut, "/api/auth/password", permSession, s.changePassword),
+		route(http.MethodGet, "/api/version", permSession, s.getVersion),
 	}
 	table = append(table,
 		route(http.MethodGet, "/api/users", model.PermUsersManage, s.listUsers),
@@ -173,6 +196,21 @@ func (s *server) routes() []Route {
 		route(http.MethodPost, "/api/tokens", model.PermTokensManage, s.createToken),
 		route(http.MethodDelete, "/api/tokens/{id}", model.PermTokensManage, s.revokeToken),
 	)
+	if s.updates != nil {
+		table = append(table, route(http.MethodPost, "/api/update/check", model.PermSystemManage, s.recheck))
+	}
+	if s.helper != nil {
+		table = append(table,
+			route(http.MethodPost, "/api/update", model.PermSystemManage, s.startUpdate),
+			route(http.MethodPost, "/api/system/restart", model.PermSystemManage, s.restartService),
+		)
+	}
+	if s.settings != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/settings", model.PermSystemManage, s.getSettings),
+			route(http.MethodPut, "/api/settings", model.PermSystemManage, s.putSettings),
+		)
+	}
 	if s.auditLog != nil {
 		table = append(table, route(http.MethodGet, "/api/audit", model.PermAuditRead, s.listAudit))
 	}
@@ -252,6 +290,12 @@ func newServer(opts Options) *server {
 		log:        log,
 		heartbeat:  heartbeat,
 		limiter:    auth.NewLimiter(loginAttemptsPerMinute, time.Minute, opts.Now),
+
+		version:        versionOrDev(opts.Version),
+		updates:        opts.Updates,
+		updatesEnabled: opts.UpdatesEnabled,
+		helper:         opts.Helper,
+		settings:       opts.Settings,
 	}
 }
 
@@ -330,4 +374,11 @@ func serveIndex(w http.ResponseWriter, r *http.Request, static fs.FS) {
 		return
 	}
 	_, _ = w.Write(data) // a failed write to the client has no recovery
+}
+
+func versionOrDev(v string) string {
+	if v = strings.TrimSpace(v); v == "" {
+		return "dev"
+	}
+	return v
 }

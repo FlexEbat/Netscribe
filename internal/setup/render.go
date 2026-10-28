@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"net/netip"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,15 @@ import (
 //
 //go:embed netscribe.service
 var unitTemplate string
+
+// helperServiceTemplate and helperPathTemplate are copies of deploy/netscribe-helper.service
+// and deploy/netscribe-helper.path. A test keeps them equal.
+//
+//go:embed netscribe-helper.service
+var helperServiceTemplate string
+
+//go:embed netscribe-helper.path
+var helperPathTemplate string
 
 // Answers are the values that the setup writes into a new config. Every other key keeps
 // its default, which the config package defines.
@@ -150,3 +160,52 @@ func Candidates(ifaces []NetIface) []Candidate {
 
 // overlaps reports whether two prefixes share addresses.
 func overlaps(a, b netip.Prefix) bool { return a.Contains(b.Addr()) || b.Contains(a.Addr()) }
+
+// the strings of the helper units that depend on where the install lives.
+const (
+	helperExec     = "ExecStart=/usr/local/bin/netscribe helper --request /var/lib/netscribe/helper.request"
+	helperWritable = "ReadWritePaths=/usr/local/bin /etc/systemd/system /var/lib/netscribe"
+	helperWatch    = "PathExists=/var/lib/netscribe/helper.request"
+)
+
+// RequestPath is the file the panel leaves for the helper.
+func RequestPath(o Options) string { return filepath.Join(o.StateDir, "helper.request") }
+
+// RenderHelperService returns the unit of the root helper for this install.
+func RenderHelperService(o Options) (string, error) {
+	for _, want := range []string{helperExec, helperWritable} {
+		if !strings.Contains(helperServiceTemplate, want) {
+			return "", fmt.Errorf("the helper unit template has no line %q", want)
+		}
+	}
+	u := strings.Replace(helperServiceTemplate, helperExec, fmt.Sprintf("ExecStart=%s helper --request %s", o.BinPath, RequestPath(o)), 1)
+	paths := uniqueStrings([]string{filepath.Dir(o.BinPath), o.UnitDir, o.StateDir})
+	return strings.Replace(u, helperWritable, "ReadWritePaths="+strings.Join(paths, " "), 1), nil
+}
+
+// RenderHelperPath returns the path unit that starts the helper when a request appears.
+func RenderHelperPath(o Options) (string, error) {
+	if !strings.Contains(helperPathTemplate, helperWatch) {
+		return "", fmt.Errorf("the helper path template has no line %q", helperWatch)
+	}
+	return strings.Replace(helperPathTemplate, helperWatch, "PathExists="+RequestPath(o), 1), nil
+}
+
+// RenderPanelDropIn lets the service write its config directory, which the panel needs to
+// save settings. The main unit keeps the rest of the protection: the system stays read-only.
+func RenderPanelDropIn(o Options) string {
+	return "# Written by \"netscribe setup\". The panel saves its settings in the config directory.\n" +
+		"[Service]\nReadWritePaths=" + filepath.Dir(o.ConfigPath) + "\n"
+}
+
+func uniqueStrings(in []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, v := range in {
+		if !seen[v] {
+			seen[v] = true
+			out = append(out, v)
+		}
+	}
+	return out
+}

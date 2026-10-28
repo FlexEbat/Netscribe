@@ -23,6 +23,10 @@ type Options struct {
 	UnitDir     string
 	SysctlDir   string
 	ServiceUser string
+	// HelperStatus is the file the helper reports in. Only tests change it.
+	HelperStatus string
+	// Version is the running version without the build details, for example v0.2.0 or dev.
+	Version string
 
 	Yes            bool
 	DryRun         bool
@@ -55,6 +59,8 @@ func DefaultOptions() Options {
 		SysctlDir:   "/etc/sysctl.d",
 		ServiceUser: "netscribe",
 		Listen:      "127.0.0.1:8080",
+
+		HelperStatus: HelperStatusPath,
 
 		HealthTimeout: 20 * time.Second,
 		WatchEvery:    2 * time.Second,

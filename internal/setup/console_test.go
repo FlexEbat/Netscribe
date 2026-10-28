@@ -9,7 +9,7 @@ import (
 func TestConsoleQuitsAndShowsTheState(t *testing.T) {
 	f, o := installed(t)
 	f.active = "active"
-	if err := Console(context.Background(), f.env(menu("11")), o, "vtest"); err != nil {
+	if err := Console(context.Background(), f.env(menu("12")), o, "vtest"); err != nil {
 		t.Fatal(err)
 	}
 	out := f.out.String()
@@ -30,7 +30,7 @@ func TestConsoleLeavesQuietlyWhenTheTerminalCloses(t *testing.T) {
 func TestConsoleWithoutAConfigPointsToSetup(t *testing.T) {
 	f := newFake(t)
 	o := f.opts()
-	if err := Console(context.Background(), f.env(menu("11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f.out.String(), "run Setup") {
@@ -42,7 +42,7 @@ func TestConsoleWatchAndCheck(t *testing.T) {
 	f, o := installed(t)
 	f.active = "active"
 	o.WatchCount = 1
-	if err := Console(context.Background(), f.env(menu("1", "2", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("1", "2", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	out := f.out.String()
@@ -55,7 +55,7 @@ func TestConsoleServiceActions(t *testing.T) {
 	f, o := installed(t)
 	f.active = "active"
 	// Service: restart (4), reload (5), start at boot (6), each confirmed, then status (1), log (8), back (9), quit
-	if err := Console(context.Background(), f.env(menu("8", "4", "y", "5", "y", "6", "y", "1", "8", "9", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("8", "4", "y", "5", "y", "6", "y", "1", "8", "9", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	ran := f.ran()
@@ -69,7 +69,7 @@ func TestConsoleServiceActions(t *testing.T) {
 func TestConsoleServiceNeedsRootToChangeThings(t *testing.T) {
 	f, o := installed(t)
 	f.uid = 1000
-	if err := Console(context.Background(), f.env(menu("8", "3", "9", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("8", "3", "9", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(f.ran(), "systemctl stop") || !strings.Contains(f.out.String(), "run netscribe with sudo") {
@@ -84,7 +84,7 @@ func TestConsoleAccounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Accounts: list (1), add (2) bob as admin (3), reset (3) bob, disable (4) bob, each confirmed, back (5), quit
-	input := menu("7", "1", "2", "bob", "3", "y", "3", "bob", "y", "4", "bob", "y", "5", "11")
+	input := menu("7", "1", "2", "bob", "3", "y", "3", "bob", "y", "4", "bob", "y", "5", "12")
 	if err := Console(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -110,7 +110,7 @@ func TestConsoleAccounts(t *testing.T) {
 func TestConsoleAccountsNeedTheServiceAccount(t *testing.T) {
 	f := newFake(t)
 	o := f.opts()
-	if err := Console(context.Background(), f.env(menu("7", "11")), o, "v"); err != nil {
+	if err := Console(context.Background(), f.env(menu("7", "12")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f.out.String(), "run Setup first") {
@@ -121,7 +121,7 @@ func TestConsoleAccountsNeedTheServiceAccount(t *testing.T) {
 func TestSetupOffersTheConsoleAtTheEnd(t *testing.T) {
 	f := newFake(t)
 	o := f.opts()
-	input := menu("y", "y", "y", "n", "n", "", "", "", "y", "", "alice", "y", "", "y", "11")
+	input := menu("y", "y", "y", "n", "n", "", "", "", "y", "", "alice", "y", "", "y", "12")
 	if err := Setup(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}

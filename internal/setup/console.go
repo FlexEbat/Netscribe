@@ -31,6 +31,7 @@ func Console(ctx context.Context, env Env, o Options, version string) error {
 			"Settings    change the configuration",
 			"Accounts    list, add, reset a password, disable",
 			"Service     start, stop, restart, log",
+			"Update      look for a newer release and install it",
 			"Setup       run the guided setup again",
 			"Commands    every netscribe command, for scripts and cron",
 			"Quit",
@@ -63,8 +64,10 @@ func Console(ctx context.Context, env Env, o Options, version string) error {
 		case 7:
 			err = s.serviceMenu(ctx)
 		case 8:
-			err = s.setupFromMenu(ctx)
+			err = s.updateFlow(ctx, false)
 		case 9:
+			err = s.setupFromMenu(ctx)
+		case 10:
 			s.ui.printf("%s\n", commandsHelp)
 		default:
 			return nil
@@ -92,6 +95,7 @@ const commandsHelp = `
   netscribe config [show|get KEY|set KEY VALUE|edit]   the configuration
   netscribe watch [--once]           live view, or one sample for monitors
   netscribe doctor                   check the install and say what to fix
+  netscribe update [--check]         look for a newer release and install it
   netscribe version
   Add --config FILE to the commands that read the config.`
 
