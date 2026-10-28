@@ -179,9 +179,11 @@ latest_tag() {
 
 remove_all() {
 	if [ -d /run/systemd/system ] && [ "$UNIT_DIR" = "/etc/systemd/system" ]; then
+		systemctl disable --now netscribe-helper.path >/dev/null 2>&1 || true
 		systemctl disable --now netscribe >/dev/null 2>&1 || true
 	fi
-	rm -f "$PREFIX/bin/netscribe" "$UNIT_DIR/netscribe.service"
+	rm -f "$PREFIX/bin/netscribe" "$UNIT_DIR/netscribe.service" "$UNIT_DIR/netscribe-helper.service" "$UNIT_DIR/netscribe-helper.path"
+	rm -rf "$UNIT_DIR/netscribe.service.d/20-panel.conf"
 	if [ -d /run/systemd/system ] && [ "$UNIT_DIR" = "/etc/systemd/system" ]; then
 		systemctl daemon-reload
 	fi
@@ -275,6 +277,13 @@ if [ "$WITH_SERVICE" -eq 1 ]; then
 			systemctl try-restart netscribe >/dev/null 2>&1 || true
 		fi
 		say "installed $UNIT_DIR/netscribe.service"
+		# The program writes the units of its own version: the helper that lets the panel
+		# update and restart the service, and the right to save settings. A failure here
+		# only means the panel shows the command to run instead of a button.
+		if [ "$UNIT_DIR" = "/etc/systemd/system" ]; then
+			"$PREFIX/bin/netscribe" update --units --config "$ETC_DIR/netscribe.yaml" ||
+				say "the panel helper was not installed: run sudo netscribe update --units"
+		fi
 	fi
 fi
 

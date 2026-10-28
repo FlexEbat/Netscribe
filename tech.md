@@ -4,8 +4,9 @@
 
 Changelog:
 - v0 (amendment 33) - the specification is translated into English (it was in Russian) and the README and the documents in `docs/` got Russian versions (`README.ru.md`, `docs/*.ru.md`). The console and the installer are complete: every menu and question has a way out (`q`, `quit`, `exit`, `b`), every action that changes something asks first, and the console covers scans, devices, export, SSH hosts and the restore of the previous config (slice 22).
+- v0 (amendment 34) - slice 24: updates and settings in the panel. The running version sits in the corner of every page; when `GET https://api.github.com/repos/FlexEbat/Netscribe/releases/latest` (the only address the check asks, every six hours, the answer limited to 1 MiB, nothing about the host is sent, switched off by `updates.check: false`) names a newer release, the version glows and a click asks "Update now" or "Not now", with the release notes and links to the release and to all releases. A `dev` build is never reported as outdated. Updating needs root and the service runs sandboxed, so the panel does not update itself: it leaves a request file (`<state dir>/helper.request`, one word, `update` or `restart`) and the path unit `netscribe-helper.path` starts `netscribe-helper.service` as root, which runs `netscribe helper`. The helper reads the file without following a link, deletes it, uses nothing from it but the word, and for `update` installs only the newest release of this repository after checking the SHA-256 sum against `checksums.txt` of the same release, then refreshes the units with the new program (`netscribe update --units`) and restarts the service; it reports in `/run/netscribe-helper/status.json`. Without the helper (Docker, an install from before this slice) the panel shows the command instead of a button. `sudo netscribe` gained "Update" and `netscribe update [--check] [--yes]`. The settings page edits the same settings as `netscribe config` (the groups come from the same table), as one validated change with a `.bak`; the service may write only its config directory for that, through the drop-in `netscribe.service.d/20-panel.conf` (`ReadWritePaths=`), the system stays read-only. `listen`, TLS, trusted proxies and the SSH hosts are not editable in the panel, so a mistake or a hijacked session cannot lock the owner out or change who can reach the panel; secrets (SNMP communities) can be replaced but are never sent to the page. New permission `system:manage`, administrator only, never in a token. `internal/setup` now imports `config` and `update` (the new std-only package `internal/update`). The audit log gets `update_request`, `restart_request` and `settings_change` (keys only, never values).
 - v0 (amendment 32) - slice 23: interface design to the owner's brief. Dark minimalism: a near-black background, matte cards, one electric blue accent, the Geist font (npm packages `@fontsource-variable/geist` and `@fontsource-variable/geist-mono`, OFL license, the font files sit in `dist` and are served from the same origin, the CSP did not change), an animated canvas background of dots and thin lines, blocks that appear one after another, a glow under the cursor on a card. This lifts for slice 23 the slice 17 restriction "animations beyond simple transitions": motion is allowed where it gives feedback, and it is always off under `prefers-reduced-motion`. The default theme is now dark (it was `system`): an unknown or empty value in `localStorage` and in `public/theme-init.js` means `dark`, and the `system` choice stays in the user menu. The light theme is kept and built from the same tokens.
-- v0 (amendment 31) - slice 22: the second installer. `scripts/get.sh` installs the `netscribe` command through `install.sh --no-service` and runs `netscribe setup`. `setup` checks the machine, proposes scan targets from the interfaces, writes the config, creates the account and the directories, installs Nmap and Chromium when asked, allows ICMP for the service group, installs the unit and drop-in, starts the service, waits for the panel to answer and creates the first administrator. `netscribe doctor` runs the same checks and changes nothing. Without flags `setup` guides a person through the items in a terminal and at the end offers the console, with flags (`--yes`, `--admin`, `--listen`, `--tls-cert`, `--trusted-proxy` and others) it asks nothing. The bare `netscribe` command in a terminal opens the console: `watch` (the watcher of the service, the panel and the host), the checks, the settings, the accounts, the service. `netscribe config` changes any key of the config with a check, a `.bak` copy and the comments kept. The panel address is chosen from four options (`127.0.0.1`, an interface address, `0.0.0.0`, your own), and for an address beyond loopback the protection is asked: a proxy, TLS or an explicit "no TLS". The classic `install.sh` did not change, except that when it runs from `get.sh` it does not print "Next steps". The new package `internal/setup` imports only `config`, and there are no dependencies in `go.mod`. The unit is embedded as a copy, `internal/setup/netscribe.service`, and a test compares it with `deploy/netscribe.service`: a binary cannot embed a file outside its own packages.
+- v0 (amendment 31) - slice 22: the second installer. `scripts/get.sh` installs the `netscribe` command through `install.sh --no-service` and runs `netscribe setup`. `setup` checks the machine, proposes scan targets from the interfaces, writes the config, creates the account and the directories, installs Nmap and Chromium when asked, allows ICMP for the service group, installs the unit and drop-in, starts the service, waits for the panel to answer and creates the first administrator. `netscribe doctor` runs the same checks and changes nothing. Without flags `setup` guides a person through the items in a terminal and at the end offers the console, with flags (`--yes`, `--admin`, `--listen`, `--tls-cert`, `--trusted-proxy` and others) it asks nothing. The bare `netscribe` command in a terminal opens the console: `watch` (the watcher of the service, the panel and the host), the checks, the settings, the accounts, the service. `netscribe config` changes any key of the config with a check, a `.bak` copy and the comments kept. The panel address is chosen from four options (`127.0.0.1`, an interface address, `0.0.0.0`, your own), and for an address beyond loopback the protection is asked: a proxy, TLS or an explicit "no TLS". The classic `install.sh` did not change, except that when it runs from `get.sh` it does not print "Next steps". The new package `internal/setup` imports only `config` (and `update` since amendment 34), and there are no dependencies in `go.mod`. The unit is embedded as a copy, `internal/setup/netscribe.service`, and a test compares it with `deploy/netscribe.service`: a binary cannot embed a file outside its own packages.
 - v0 (amendment 30) - two rare gate failures under load on the runner are fixed. The keep-alive interval of the event stream (`heartbeat`) became a field of the API server, 25 seconds by default, and in tests it is set by the unexported field `Options.heartbeat`: before, a test wrote to a package variable while the stream handlers could read it, and `-race` caught that now and then. In `TestAPDFWaitingForItsTurnGivesUpWithItsContext` the wait "the first print took the slot" was replaced by a signal from the printer instead of `time.Sleep`: on a slow runner the second print could take the slot of the first and the test hung. A rule about package variables and pauses was added to section 10. The causes were found by reading the code, the CI logs were not available.
 - v0 (amendment 29) - the lockout after failed logins is counted per pair (IP, username), not per account. Five failures in a row from one address under one name lock that pair for 15 minutes (even with the right password), the same user from another address signs in freely, so someone who knows only the name cannot lock the owner out. Unknown names are counted the same way. The counters live in memory (after a restart they start again, the per-IP limit stays), and the table is limited to 10,000 entries. A wrong current password in `PUT /api/auth/password` still locks the account itself: it needs a live session. The downside: guessing one name from many addresses is limited only by 5 attempts per address, and the list of common passwords and the 12-character minimum work against it.
 - v0 (amendment 28) - a password that equals the service name after digits and signs are dropped (`Netscribe-2026!`) is also rejected as common. The password list is rebuilt by the script `scripts/update-common-passwords.sh`. Frontend tests for `TopologyCanvas`, the graph nodes, `LinkBar`, `PortsDialog` and `DeviceForm`.
@@ -694,6 +695,9 @@ discovery:
 
 export:
   chromePath: ""                 # empty: look for chromium and google-chrome in PATH
+
+updates:
+  check: true                    # slice 24: ask GitHub whether a newer release exists, applied without a restart
 ```
 
 ---
@@ -881,6 +885,12 @@ There is no separate showcase route. A component that no slice uses is not writt
 | `POST /api/tokens`                   | issue a token, the value is returned once                         | `tokens:manage` | 201, 400, 409          |
 | `DELETE /api/tokens/{id}`            | revoke a token                                                    | `tokens:manage` | 204, 404               |
 | `GET /api/audit?limit=&before=`      | the audit log with filters                                        | `audit:read`    | 200, 400               |
+| `GET /api/version`                   | running version, newest release and its notes, state of the helper | session         | 200                    |
+| `POST /api/update/check`             | asks GitHub now, at most once in 30 seconds                       | `system:manage` | 200, 409               |
+| `POST /api/update`                   | asks the helper to install the newest release                     | `system:manage` | 202, 409, 501          |
+| `POST /api/system/restart`           | asks the helper to restart the service                            | `system:manage` | 202, 409, 501          |
+| `GET /api/settings`                  | every setting with its value, default and whether it applies at once | `system:manage` | 200                 |
+| `PUT /api/settings`                  | body `{ "changes": { "scan.interval": "30m" } }`, one checked save | `system:manage` | 200, 400               |
 
 SSE events: `scan.started`, `scan.progress` (data `{ scanId, stage, done, total }`), `scan.finished`, `topology.changed`, `config.reloaded`, `config.error`. The `config.*` events go only to users with the permission `users:manage`.
 
@@ -1026,6 +1036,7 @@ First start and service rules:
 | `devices:write` | manual adding, editing and deleting of devices and manual links, node positions on the canvas | no  | yes      | yes   |
 | `audit:read`    | reading the audit log                                                                      | no     | no       | yes   |
 | `users:manage`  | managing users, the `config.*` events                                                      | no     | no       | yes   |
+| `system:manage` | the settings page, the update and the restart of the service (slice 24)                    | no     | no       | yes   |
 
 Rules:
 
@@ -1812,6 +1823,28 @@ Acceptance criteria.
 4. At 1440, 1024 and 390 pixels there is no horizontal page scroll, text is not cut off and elements do not overlap (tables scroll inside their own card).
 5. The background does not interfere with reading: the brightness of dots and lines is low, and the content is always on top.
 6. All existing page tests pass without changing their expectations, except for the themes (`dark` by default).
+
+---
+
+### Slice 24 - updates and settings in the panel
+
+The goal: the owner sees which version runs, learns that a newer one exists, and can update and change every setting without a terminal.
+
+Files: `internal/update/`, `internal/setup/panel.go`, `internal/setup/helper.go`, `internal/setup/update.go`, `internal/api/system.go`, `cmd/netscribe/system.go`, `deploy/netscribe-helper.service`, `deploy/netscribe-helper.path`, `web/src/components/VersionBadge.tsx`, `web/src/components/UpdateDialog.tsx`, `web/src/pages/Settings.tsx`.
+
+- **Check.** `update.Checker` asks the fixed address, keeps the last good answer, refuses a draft, a pre-release, a tag that is not a version and a link outside the repository.
+- **Install.** `update.Installer` downloads `netscribe_<version>_linux_<arch>.tar.gz` and `checksums.txt` of the same tag, compares the SHA-256 sum, extracts the program and replaces the old one with a rename. A wrong sum changes nothing.
+- **Helper.** See amendment 34. Two words only. It never takes a version, a path or a command from the request.
+- **Console.** `Update` shows the installed and the newest version, the first lines of the release notes and the release link, asks, installs, writes the units, restarts and waits for the panel.
+- **Panel.** The badge, the dialog (Update now / Not now, release and changelog links, progress and a reload at the end), the settings page with the same groups as the console.
+
+Acceptance criteria.
+1. A build marked `dev` is never shown as outdated, and a failed check keeps the last answer and shows no error to a viewer.
+2. A wrong checksum, an archive without the program and a bad tag leave the installed program untouched.
+3. A request file that is a link, is larger than 64 bytes or holds any other word runs nothing and is removed.
+4. A change that the config would refuse saves nothing and keeps the file as it was; comments of the file stay.
+5. No secret is sent to the page or written to the audit log.
+6. No role below administrator reaches the update, restart or settings routes, and no token does.
 
 ---
 
