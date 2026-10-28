@@ -180,7 +180,7 @@ func TestEmbeddedHelperUnitsEqualTheShippedOnes(t *testing.T) {
 		"netscribe-helper.service": helperServiceTemplate,
 		"netscribe-helper.path":    helperPathTemplate,
 	} {
-		shipped, err := os.ReadFile("../../deploy/" + name)
+		shipped, err := os.ReadFile("../../deploy/" + name) //nolint:gosec // a fixed test path
 		if err != nil {
 			t.Fatal(err)
 		}
