@@ -1,6 +1,6 @@
 -- +goose Up
 -- Columns for manual input (manual, label, notes, kind_locked, version, updated_by)
--- arrive with the slice that needs them.
+-- are added by a later migration.
 CREATE TABLE devices (
 	id            INTEGER PRIMARY KEY AUTOINCREMENT,
 	mac           TEXT NOT NULL DEFAULT '',        -- lower case aa:bb:cc:dd:ee:ff, empty when unknown

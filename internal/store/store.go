@@ -34,7 +34,7 @@ var (
 	ErrNotManual       = model.ErrNotManual       // a scan found the link, a person cannot delete it
 )
 
-// Repo is the data access contract. It grows by the methods each slice implements.
+// Repo is the data access contract: every query the rest of the program needs.
 type Repo interface {
 	ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device, error)
 	GetDevice(ctx context.Context, id int64) (model.Device, error)       // ErrNotFound

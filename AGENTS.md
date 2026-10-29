@@ -68,7 +68,7 @@ A machine without the toolchain can install Go and Node.js with
 6. **Surgical changes.** Do not refactor working code next to the change. Every changed line
    follows from the task. No dead code, no commented-out code, no new files or abstractions
    beyond tech.md section 3 without a reason in the pull request.
-7. **One slice at a time**, and review in a second pass: after the code works and the gate
+7. **One change at a time**, and review in a second pass: after the code works and the gate
    is green, go through the checklist of tech.md section 17 and look for problems.
 8. **Errors** are returned or logged. `_ =` needs a comment that says why the error does
    not matter.

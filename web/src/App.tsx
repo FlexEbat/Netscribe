@@ -39,7 +39,7 @@ import { Services } from "@/pages/Services"
 import { Settings } from "@/pages/Settings"
 import { Topology } from "@/pages/Topology"
 
-// Pages are added here as slices deliver them.
+// The pages of the panel and the navigation that leads to them.
 interface NavItem {
   to: string
   label: string
