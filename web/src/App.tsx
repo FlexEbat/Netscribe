@@ -1,19 +1,20 @@
-import { useState } from "react"
-import { NavLink, Outlet, useLocation, type RouteObject } from "react-router-dom"
 import {
-  Box,
-  Cable,
-  History,
+  ClockCounterClockwise,
+  Cube,
   List,
-  Menu,
+  ListBullets,
   Moon,
-  Network,
-  ScrollText,
+  PlugsConnected,
+  Scroll,
+  ShareNetwork,
   SlidersHorizontal,
   Sun,
-  UserRound,
+  User as UserIcon,
   Users as UsersIcon,
-} from "lucide-react"
+  X,
+} from "@phosphor-icons/react"
+import { useState, type CSSProperties } from "react"
+import { NavLink, Outlet, useLocation, type RouteObject } from "react-router-dom"
 import { useSession } from "@/api/session"
 import { Brand, BrandMark } from "@/components/Brand"
 import { EmptyState } from "@/components/EmptyState"
@@ -42,43 +43,49 @@ import { Topology } from "@/pages/Topology"
 interface NavItem {
   to: string
   label: string
-  icon: typeof Network
+  icon: typeof ShareNetwork
   permission: Permission
   group: "workspace" | "admin"
 }
 
 const navItems: NavItem[] = [
-  { to: "/", label: "Topology", icon: Network, permission: "topology:read", group: "workspace" },
+  {
+    to: "/",
+    label: "Topology",
+    icon: ShareNetwork,
+    permission: "topology:read",
+    group: "workspace",
+  },
   {
     to: "/inventory",
     label: "Inventory",
-    icon: List,
+    icon: ListBullets,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/services",
     label: "Services",
-    icon: Cable,
+    icon: PlugsConnected,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/containers",
     label: "Containers",
-    icon: Box,
+    icon: Cube,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/changes",
     label: "Changes",
-    icon: History,
+    icon: ClockCounterClockwise,
     permission: "topology:read",
     group: "workspace",
   },
   { to: "/users", label: "Users", icon: UsersIcon, permission: "users:manage", group: "admin" },
-  { to: "/audit", label: "Audit log", icon: ScrollText, permission: "audit:read", group: "admin" },
+  { to: "/audit", label: "Audit log", icon: Scroll, permission: "audit:read", group: "admin" },
   {
     to: "/settings",
     label: "Settings",
@@ -100,26 +107,30 @@ interface SidebarProps {
 function NavGroup({
   group,
   items,
+  offset,
   onNavigate,
 }: {
   group: NavItem["group"]
   items: NavItem[]
+  /** How many links come before this group, so the entrance runs in reading order. */
+  offset: number
   onNavigate?: () => void
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <p className="px-3 pb-1 text-[11px] font-medium tracking-[0.08em] text-muted-foreground uppercase">
+      <p className="px-3 pb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {groupLabels[group]}
       </p>
-      {items.map(({ to, label, icon: Icon }) => (
+      {items.map(({ to, label, icon: Icon }, index) => (
         <NavLink
           key={to}
           to={to}
           end
           onClick={onNavigate}
+          style={{ "--i": offset + index } as CSSProperties}
           className={({ isActive }) =>
             cn(
-              "group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-[background-color,color,box-shadow] duration-200 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              "nav-item group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-[background-color,color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               isActive
                 ? "bg-accent font-medium text-foreground shadow-[inset_0_1px_0_var(--hairline)]"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
@@ -131,15 +142,14 @@ function NavGroup({
               <span
                 aria-hidden="true"
                 className={cn(
-                  "absolute top-1/2 -left-4 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand shadow-[0_0_14px_var(--glow)] transition-[opacity,transform] duration-300 ease-out",
+                  "absolute top-1/2 -left-4 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand shadow-[0_0_14px_var(--glow)] transition-[opacity,transform]",
                   isActive ? "scale-y-100 opacity-100" : "scale-y-50 opacity-0",
                 )}
               />
               <Icon
                 aria-hidden="true"
-                strokeWidth={1.6}
                 className={cn(
-                  "size-[18px] transition-[transform,color] duration-200 group-hover:-translate-y-px group-hover:scale-110",
+                  "size-5 transition-[transform,color] group-hover:-translate-y-px group-hover:scale-110",
                   isActive && "text-brand",
                 )}
               />
@@ -165,6 +175,7 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
               key={g}
               group={g}
               items={allowed.filter((i) => i.group === g)}
+              offset={allowed.findIndex((i) => i.group === g)}
               onNavigate={onNavigate}
             />
           ))}
@@ -176,12 +187,12 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
 }
 
 /** The label of the current page, for the capsule at the top. */
-function pageLabel(pathname: string): { label: string; icon: typeof Network } {
+function pageLabel(pathname: string): { label: string; icon: typeof ShareNetwork } {
   const hit = navItems.find((i) => i.to === pathname)
   if (hit) return { label: hit.label, icon: hit.icon }
   return pathname === "/account"
-    ? { label: "Account", icon: UserRound }
-    : { label: "Netscribe", icon: Network }
+    ? { label: "Account", icon: UserIcon }
+    : { label: "Netscribe", icon: ShareNetwork }
 }
 
 function TopBar({
@@ -207,11 +218,24 @@ function TopBar({
           aria-expanded={menuOpen}
           onClick={onOpenMenu}
         >
-          <Menu aria-hidden="true" strokeWidth={1.6} className="size-[18px]" />
+          <span aria-hidden="true" className="relative size-5">
+            <List
+              className={cn(
+                "absolute inset-0 size-5 transition-[opacity,transform]",
+                menuOpen ? "scale-75 rotate-90 opacity-0" : "scale-100 rotate-0 opacity-100",
+              )}
+            />
+            <X
+              className={cn(
+                "absolute inset-0 size-5 transition-[opacity,transform]",
+                menuOpen ? "scale-100 rotate-0 opacity-100" : "scale-75 -rotate-90 opacity-0",
+              )}
+            />
+          </span>
         </Button>
         <BrandMark className="md:hidden" />
-        <div className="hidden items-center gap-2 rounded-full border bg-muted py-1.5 pr-4 pl-3 text-sm md:inline-flex">
-          <Icon aria-hidden="true" strokeWidth={1.6} className="size-4 text-brand" />
+        <div className="hidden items-center gap-2 rounded-full border bg-muted py-2 pr-4 pl-3 text-sm md:inline-flex">
+          <Icon aria-hidden="true" className="size-4 text-brand" />
           <span className="font-medium">{label}</span>
         </div>
       </div>
@@ -225,14 +249,12 @@ function TopBar({
         {dark ? (
           <Sun
             aria-hidden="true"
-            strokeWidth={1.6}
-            className="size-[18px] transition-transform duration-500 group-hover:rotate-45"
+            className="size-5 transition-transform duration-500 group-hover:rotate-45"
           />
         ) : (
           <Moon
             aria-hidden="true"
-            strokeWidth={1.6}
-            className="size-[18px] transition-transform duration-500 group-hover:-rotate-12"
+            className="size-5 transition-transform duration-500 group-hover:-rotate-12"
           />
         )}
       </Button>
@@ -253,7 +275,7 @@ function Layout() {
     <div className="flex min-h-screen">
       {/* Below the md breakpoint the sidebar folds into a sheet behind a menu button. */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent className="right-auto left-0 w-72 justify-between border-r border-l-0 bg-sidebar">
+        <SheetContent className="right-auto left-0 w-72 justify-between border-r border-l-0 bg-sidebar/95 backdrop-blur-2xl">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <SheetDescription className="sr-only">Pages of Netscribe</SheetDescription>
           <Sidebar

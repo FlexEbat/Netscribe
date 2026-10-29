@@ -61,9 +61,11 @@ export function Login() {
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-3">
             <BrandMark className="size-12 rounded-2xl" />
-            <p className="text-sm text-muted-foreground">Network documentation, kept current.</p>
+            <h1 className="hero-heading text-center text-3xl font-semibold">
+              Network documentation, kept current.
+            </h1>
           </div>
-          <Card className="gap-6 p-7">
+          <Card className="gap-6 p-8">
             <CardHeader>
               <CardTitle className="text-xl">Netscribe</CardTitle>
               <CardDescription>Sign in to continue.</CardDescription>

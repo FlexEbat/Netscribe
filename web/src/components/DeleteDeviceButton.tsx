@@ -1,5 +1,5 @@
+import { Trash } from "@phosphor-icons/react"
 import { useState } from "react"
-import { Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
@@ -21,7 +21,7 @@ export function DeleteDeviceButton({ name, onConfirm }: DeleteDeviceButtonProps)
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Trash2 className="size-4" aria-hidden="true" />
+        <Trash className="size-4" aria-hidden="true" />
         Delete
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>

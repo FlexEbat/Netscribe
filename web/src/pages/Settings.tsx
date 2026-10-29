@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 
 /** What the person typed or chose for each key. A key stays out until it is touched. */
 type Draft = Record<string, string | boolean>
@@ -129,7 +130,7 @@ function SettingRow({
     }
   })()
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{setting.label}</Label>
       {field}
       <p className="text-xs text-muted-foreground">{hint}</p>
@@ -218,7 +219,15 @@ export function Settings() {
   }
 
   if (loadError) return <Alert variant="destructive">The settings could not be loaded.</Alert>
-  if (!groups) return <p className="text-sm text-muted-foreground">Loading…</p>
+  if (!groups) {
+    return (
+      <div role="status" aria-label="Loading settings" className="flex max-w-3xl flex-col gap-4">
+        <Skeleton className="h-8 w-40" />
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -260,7 +269,7 @@ export function Settings() {
             <CardTitle>{g.name}</CardTitle>
             <CardDescription>{g.hint}</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-5">
+          <CardContent className="flex flex-col gap-6">
             {g.settings.map((s) => (
               <SettingRow
                 key={s.key}

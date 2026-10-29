@@ -74,11 +74,11 @@ var settingGroups = []group{
 	}},
 	{name: "Discovery", hint: "how devices are told apart", items: []setting{
 		{path: p("discovery.nmap"), label: "Identify devices with Nmap", kind: kBool, def: "off",
-			help: "Asks an installed nmap about devices that nothing else could type. Needs raw-socket rights for the service."},
+			help: "Asks an installed nmap about devices that nothing else could type. Needs raw socket rights for the service."},
 		{path: p("discovery.nmapScope"), label: "Which devices Nmap asks about", kind: kEnum, choices: []string{"untyped", "all"}, def: "untyped",
 			help: "untyped: only devices nothing else could type. all: every device, slower and noisier."},
 		{path: p("discovery.mdns"), label: "mDNS", kind: kBool, def: "on", help: "One PTR query in each local segment."},
-		{path: p("discovery.ssdp"), label: "SSDP", kind: kBool, def: "on", help: "One M-SEARCH in each local segment."},
+		{path: p("discovery.ssdp"), label: "SSDP", kind: kBool, def: "on", help: "One multicast search in each local segment."},
 		{path: p("discovery.httpHeaders"), label: "HTTP banners", kind: kBool, def: "on", help: "A HEAD / request on the open web ports."},
 		{path: p("discovery.routerTables"), label: "Router tables over SNMP", kind: kBool, def: "on", help: "Reads ARP and bridge tables of routers and switches."},
 		{path: p("discovery.nmapPath"), label: "Path of nmap", kind: kText, def: "found in PATH",
@@ -91,16 +91,16 @@ var settingGroups = []group{
 	}},
 	{name: "SNMP", hint: "device queries", items: []setting{
 		{path: p("snmp.communities"), label: "Communities", kind: kSecrets, hot: true,
-			help: "Read-only community strings, tried in order. Use a community that the devices restrict by ACL, not public."},
+			help: "Read only community strings, tried in order. Use a community that the devices restrict by ACL, not public."},
 		{path: p("snmp.timeout"), label: "Timeout of a query", kind: kDuration, hot: true, def: "2s", help: "How long one SNMP request waits."},
 	}},
 	{name: "History", hint: "how long scans and the audit log are kept", items: []setting{
 		{path: p("history.keepScans"), label: "Scans to keep", kind: kInt, hot: true, def: "200", help: "Older scans are pruned."},
 		{path: p("audit.keepDays"), label: "Days to keep the audit log", kind: kInt, def: "365", help: "Entries of the audit log older than this are pruned."},
 	}},
-	{name: "Sign-in policy", hint: "accounts and sessions", items: []setting{
+	{name: "Sign in policy", hint: "accounts and sessions", items: []setting{
 		{path: p("auth.minPasswordLength"), label: "Shortest password", kind: kInt, def: "12", help: "Longer is better. Twelve is the recommended minimum."},
-		{path: p("auth.maxFailedLogins"), label: "Failed sign-ins before a lockout", kind: kInt, def: "5", help: "Counted per address and username."},
+		{path: p("auth.maxFailedLogins"), label: "Failed attempts before a lockout", kind: kInt, def: "5", help: "Counted per address and username."},
 		{path: p("auth.lockoutDuration"), label: "Lockout time", kind: kDuration, def: "15m", help: "How long a locked pair has to wait."},
 		{path: p("auth.sessionIdleTimeout"), label: "Idle session timeout", kind: kDuration, def: "8h", help: "A session with no request for this long ends."},
 		{path: p("auth.sessionMaxAge"), label: "Longest session", kind: kDuration, def: "168h", help: "A session ends after this time, active or not."},

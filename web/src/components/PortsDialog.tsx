@@ -55,7 +55,7 @@ export function PortsDialog({
         </DialogDescription>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4" noValidate>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-a`}>Port on {aName}</Label>
             <Input
               id={`${id}-a`}
@@ -64,7 +64,7 @@ export function PortsDialog({
               onChange={(e) => setAPort(e.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-b`}>Port on {bName}</Label>
             <Input
               id={`${id}-b`}

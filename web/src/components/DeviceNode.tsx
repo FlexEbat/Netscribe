@@ -1,47 +1,47 @@
-import { memo } from "react"
-import { Handle, Position, type NodeProps } from "@xyflow/react"
 import {
   Camera,
-  CircleHelp,
   Cpu,
   HardDrive,
+  HardDrives,
   Monitor,
-  Network,
   Printer,
-  Router,
-  Server,
+  Question,
+  Network,
+  ShareNetwork,
   Shield,
-  Wifi,
-  type LucideIcon,
-} from "lucide-react"
+  WifiHigh,
+  type Icon,
+} from "@phosphor-icons/react"
+import { memo } from "react"
+import { Handle, Position, type NodeProps } from "@xyflow/react"
 import type { DeviceKind } from "@/api/client"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { displayName, kindLabels, type DeviceNodeData } from "@/lib/topology"
 
-const icons: Record<DeviceKind, LucideIcon> = {
-  router: Router,
-  switch: Network,
-  ap: Wifi,
+const icons: Record<DeviceKind, Icon> = {
+  router: Network,
+  switch: ShareNetwork,
+  ap: WifiHigh,
   firewall: Shield,
-  server: Server,
+  server: HardDrives,
   nas: HardDrive,
   printer: Printer,
   camera: Camera,
   iot: Cpu,
   host: Monitor,
-  unknown: CircleHelp,
+  unknown: Question,
 }
 
 /** One device on the canvas: icon by kind, name, address and state. */
 function DeviceNodeView({ data, selected }: NodeProps) {
   const { device, containerCount } = data as DeviceNodeData
-  const Icon = icons[device.kind] ?? CircleHelp
+  const Icon = icons[device.kind] ?? Question
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`surface surface-lift flex w-48 items-center gap-3 rounded-xl px-3 py-2.5 text-card-foreground ${
+          className={`surface surface-lift flex w-48 items-center gap-3 rounded-xl px-3 py-3 text-card-foreground ${
             selected ? "ring-2 ring-ring" : ""
           } ${device.online ? "" : "opacity-60"}`}
         >
