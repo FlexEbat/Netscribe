@@ -77,6 +77,7 @@ type Device struct {
 	Version     int64
 	UpdatedBy   sql.NullInt64
 	OsGuess     string
+	Trusted     int64
 }
 
 type Interface struct {

@@ -168,7 +168,7 @@ func (s *server) deleteDevice(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// listDevices answers GET /api/devices?online=true|false&kind=router&q=text with {"devices": [...]}.
+// listDevices answers GET /api/devices?online=true|false&trusted=true|false&kind=router&q=text with {"devices": [...]}.
 func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	var f store.DeviceFilter
@@ -180,6 +180,15 @@ func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 		f.Online = &online
 	default:
 		writeError(w, http.StatusBadRequest, "online must be true or false")
+		return
+	}
+	switch v := q.Get("trusted"); v {
+	case "":
+	case "true", "false":
+		trusted := v == "true"
+		f.Trusted = &trusted
+	default:
+		writeError(w, http.StatusBadRequest, "trusted must be true or false")
 		return
 	}
 	if v := q.Get("kind"); v != "" {

@@ -118,9 +118,10 @@ var (
 
 // DeviceFilter narrows ListDevices. The zero value matches every device.
 type DeviceFilter struct {
-	Online *bool
-	Kind   model.DeviceKind
-	Query  string
+	Online  *bool
+	Kind    model.DeviceKind
+	Query   string
+	Trusted *bool
 }
 
 // Store is the SQLite implementation of Repo.

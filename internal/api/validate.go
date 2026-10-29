@@ -141,6 +141,7 @@ type editBody struct {
 	Label   *string `json:"label"`
 	Notes   *string `json:"notes"`
 	Kind    *string `json:"kind"`
+	Trusted *bool   `json:"trusted"`
 	Version int64   `json:"version"`
 }
 
@@ -171,6 +172,7 @@ func (b editBody) deviceEdit() (model.DeviceEdit, error) {
 		}
 		e.Kind = &k
 	}
+	e.Trusted = b.Trusted
 	return e, nil
 }
 
