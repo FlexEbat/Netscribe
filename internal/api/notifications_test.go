@@ -65,7 +65,7 @@ func TestNotificationRoutesAreForAdminsOnly(t *testing.T) {
 		}
 		// A token never carries system:manage, whoever issued it.
 		tok := issueToken(t, e, admin, map[string]any{"name": "ci", "permissions": []string{"topology:read"}})
-		if rec := withToken(e, tok.Token, r.method, r.path, r.body); rec.Code != http.StatusForbidden {
+		if rec := withToken(e, tok.Value, r.method, r.path, r.body); rec.Code != http.StatusForbidden {
 			t.Errorf("token %s %s = %d, want 403", r.method, r.path, rec.Code)
 		}
 	}
