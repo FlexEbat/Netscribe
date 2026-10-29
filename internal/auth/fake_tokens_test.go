@@ -7,7 +7,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
-// The user and token half of fakeRepo that slice 6 added to Repo.
+// The user and token half of fakeRepo.
 
 func (r *fakeRepo) GetUser(_ context.Context, id int64) (model.User, error) {
 	r.mu.Lock()

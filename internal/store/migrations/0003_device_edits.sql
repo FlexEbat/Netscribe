@@ -8,7 +8,7 @@ ALTER TABLE devices ADD COLUMN kind_locked INTEGER NOT NULL DEFAULT 0;        --
 ALTER TABLE devices ADD COLUMN version     INTEGER NOT NULL DEFAULT 1;        -- grows with every edit by a person
 ALTER TABLE devices ADD COLUMN updated_by  INTEGER REFERENCES users(id) ON DELETE SET NULL;
 
--- Links are created here, not with the slice that discovers them, because people draw
+-- Links are created here, not with the scan that discovers them, because people draw
 -- links by hand first.
 CREATE TABLE links (
 	id           INTEGER PRIMARY KEY AUTOINCREMENT,
