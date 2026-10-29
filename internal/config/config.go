@@ -9,7 +9,9 @@ import (
 	"io/fs"
 	"log/slog"
 	"net"
+	"net/mail"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -75,6 +77,7 @@ type Config struct {
 	Discovery          DiscoveryConfig `yaml:"discovery"`
 	Export             ExportConfig    `yaml:"export"`
 	Updates            UpdatesConfig   `yaml:"updates"`
+	Notify             NotifyConfig    `yaml:"notify"`
 }
 
 type ScanConfig struct {
@@ -159,6 +162,108 @@ type UpdatesConfig struct {
 	Check bool `yaml:"check"`
 }
 
+// The events a channel can be told about.
+const (
+	EventDeviceAdded   = "device_added"
+	EventDeviceOffline = "device_offline"
+	EventPortOpened    = "port_opened"
+	EventRiskyService  = "risky_service"
+	EventScanFailed    = "scan_failed"
+)
+
+// The kinds of notification channel.
+const (
+	ChannelWebhook  = "webhook"
+	ChannelTelegram = "telegram"
+	ChannelEmail    = "email"
+)
+
+// NotifyConfig says which events are sent and where. Every address, token and password in
+// it is a Secret: the panel and the API show channel names only.
+type NotifyConfig struct {
+	Events   []string        `yaml:"events"`
+	Channels []ChannelConfig `yaml:"channels"`
+}
+
+// ChannelConfig is one place to send messages to. Which fields count depends on Type.
+type ChannelConfig struct {
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
+
+	URL Secret `yaml:"url"` // webhook
+
+	BotToken Secret `yaml:"botToken"` // telegram
+	ChatID   Secret `yaml:"chatId"`
+
+	Host     string   `yaml:"host"` // email
+	Port     int      `yaml:"port"`
+	User     string   `yaml:"user"`
+	Password Secret   `yaml:"password"`
+	From     string   `yaml:"from"`
+	To       []string `yaml:"to"`
+}
+
+var channelName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
+
+// validate checks the notify block. A single problem refuses the whole config, so a typo
+// never silently turns an alert off.
+func (n NotifyConfig) validate(fail func(where string, err error)) {
+	known := map[string]bool{EventDeviceAdded: true, EventDeviceOffline: true, EventPortOpened: true, EventRiskyService: true, EventScanFailed: true}
+	seenEvent := map[string]bool{}
+	for i, e := range n.Events {
+		where := fmt.Sprintf("notify.events[%d]", i)
+		switch {
+		case !known[e]:
+			fail(where, errors.New("unknown event"))
+		case seenEvent[e]:
+			fail(where, errors.New("listed twice"))
+		}
+		seenEvent[e] = true
+	}
+	seenName := map[string]bool{}
+	for i, ch := range n.Channels {
+		where := fmt.Sprintf("notify.channels[%d]", i)
+		if !channelName.MatchString(ch.Name) {
+			fail(where, errors.New("name must be 1 to 32 letters, digits, - or _"))
+		} else if seenName[ch.Name] {
+			fail(where, errors.New("name is used twice"))
+		}
+		seenName[ch.Name] = true
+		switch ch.Type {
+		case ChannelWebhook:
+			u, err := url.Parse(string(ch.URL))
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				fail(where, errors.New("url must be an http or https address"))
+			}
+		case ChannelTelegram:
+			if ch.BotToken == "" || ch.ChatID == "" {
+				fail(where, errors.New("botToken and chatId are required"))
+			}
+		case ChannelEmail:
+			if ch.Host == "" || ch.Port < 1 || ch.Port > 65535 {
+				fail(where, errors.New("host and a port from 1 to 65535 are required"))
+			}
+			if (ch.User == "") != (ch.Password == "") {
+				fail(where, errors.New("user and password go together"))
+			}
+			if _, err := mail.ParseAddress(ch.From); err != nil {
+				fail(where, errors.New("from is not an address"))
+			}
+			if len(ch.To) == 0 {
+				fail(where, errors.New("to needs at least one address"))
+			}
+			for _, a := range ch.To {
+				if _, err := mail.ParseAddress(a); err != nil {
+					fail(where, errors.New("to holds something that is not an address"))
+					break
+				}
+			}
+		default:
+			fail(where, errors.New("type must be webhook, telegram or email"))
+		}
+	}
+}
+
 // defaults returns the values used for every key the file leaves out.
 // The auth block must be complete, because Validate enforces minimums on it.
 func defaults() Config {
@@ -167,7 +272,7 @@ func defaults() Config {
 		Database: "./netscribe.db",
 		Scan: ScanConfig{
 			Interval: Duration(15 * time.Minute),
-			Ports:    []int{22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100},
+			Ports:    []int{21, 22, 23, 53, 80, 443, 445, 515, 554, 631, 3389, 5900, 8080, 9100},
 
 			PortTimeout: Duration(500 * time.Millisecond),
 			Concurrency: 256,
@@ -187,6 +292,7 @@ func defaults() Config {
 		},
 		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true, NmapScope: "untyped"},
 		Updates:   UpdatesConfig{Check: true},
+		Notify:    NotifyConfig{Events: []string{EventDeviceAdded, EventScanFailed}},
 	}
 }
 
@@ -329,6 +435,7 @@ func (c Config) Validate() error {
 			fail(fmt.Sprintf("trustedProxies[%d] %q", i, p), errProxyCIDR)
 		}
 	}
+	c.Notify.validate(fail)
 	return errors.Join(errs...)
 }
 

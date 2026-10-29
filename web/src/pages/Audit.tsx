@@ -38,6 +38,7 @@ const actions = [
   "export",
   "config_reload",
   "config_reload_failed",
+  "notify_test",
   "access_denied",
 ]
 

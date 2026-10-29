@@ -654,7 +654,7 @@ allowPublicTargets: false
 scan:
   targets: [192.168.1.0/24]
   interval: 15m                  # 0 turns the schedule off
-  ports: [22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100]   # an empty list turns the port scan off
+  ports: [21, 22, 23, 53, 80, 443, 445, 515, 554, 631, 3389, 5900, 8080, 9100]   # an empty list turns the port scan off
   portTimeout: 500ms             # slice 25: one TCP connection of the port scan, 100ms to 10s
   concurrency: 256               # slice 25: connections held open at once, 1 to 512
   retryAfter: 0                  # slice 25: wait before a failed scheduled scan is retried, 0 = off, else 1m to 24h
@@ -1886,7 +1886,7 @@ Acceptance criteria.
 
 The goal: the owner learns about a new or vanished device and about a dangerous open port without opening the panel, and can tell known devices from unknown ones.
 
-Files: `internal/store/migrations/0011_device_trust.sql`, `internal/store/queries/devices.sql`, `internal/model/model.go` (`Device.Trusted`), `internal/model/risk.go`, `internal/notify/` (package, imports only `config` and `model`), `internal/config/` (the `notify` block and its checks), `internal/collector/scanner.go` (hands the finished scan to the notifier), `internal/api/notifications.go`, `internal/api/devices.go`, `internal/api/services.go`, `internal/api/router.go`, `web/src/pages/Inventory.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/pages/Services.tsx`, `web/src/pages/Settings.tsx`.
+Files: `internal/store/migrations/0011_device_trust.sql`, `internal/store/queries/devices.sql`, `internal/model/model.go` (`Device.Trusted`), `internal/model/risk.go`, `internal/notify/` (package, imports only `config` and `model`), `internal/config/` (the `notify` block and its checks), `cmd/netscribe/notify.go` (hands every `scan.finished` event of the hub to the notifier; the scanner does not change), `internal/api/notifications.go`, `internal/api/devices.go`, `internal/api/services.go`, `internal/api/router.go`, `web/src/pages/Inventory.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/pages/Services.tsx`, `web/src/pages/Settings.tsx`.
 
 - **Trust.** `trusted` is set through `PATCH /api/devices/{id}` with the usual `version`. A device found by a scan starts untrusted. A manual device is created trusted. The inventory shows a badge for untrusted devices and filters by it.
 - **Risk rules.** A fixed table in `internal/model/risk.go`, no config. `high`: 23/tcp Telnet, 69/udp TFTP, 5900/tcp VNC. `medium`: 21/tcp FTP, 445/tcp SMB (the version is not known, so the text says to check it), 3389/tcp RDP, 161/udp SNMP. The function takes a port and a protocol and returns a severity and one line, nothing else.

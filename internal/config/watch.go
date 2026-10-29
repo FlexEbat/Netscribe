@@ -19,7 +19,7 @@ const reloadDelay = 200 * time.Millisecond
 
 // Watcher holds the live config and replaces it when the file changes or SIGHUP arrives.
 // Only the sections that can change at runtime are taken from the new file: scan, snmp,
-// ssh, docker, history and export. A change to any other key needs a restart, and the
+// ssh, docker, history, export, updates and notify. A change to any other key needs a restart, and the
 // watcher logs a warning instead of applying it, so a security setting such as auth or
 // tls never changes under a running server.
 type Watcher struct {
@@ -71,7 +71,7 @@ func mergeHot(cur, next Config) (Config, []string) {
 	applied := cur
 	applied.Scan, applied.SNMP, applied.SSH = next.Scan, next.SNMP, next.SSH
 	applied.Docker, applied.History, applied.Export = next.Docker, next.History, next.Export
-	applied.Updates = next.Updates
+	applied.Updates, applied.Notify = next.Updates, next.Notify
 
 	var restart []string
 	for _, k := range []struct {

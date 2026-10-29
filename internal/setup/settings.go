@@ -59,7 +59,7 @@ var settingGroups = []group{
 			help: "Private networks in CIDR form, a /16 at most. ARP discovery sees the networks this host is connected to."},
 		{path: p("scan.interval"), label: "Scan every", kind: kDuration, hot: true, def: "15m",
 			help: "A duration such as 15m or 1h, at least 1m. 0 turns the schedule off: scans run only on request."},
-		{path: p("scan.ports"), label: "TCP ports to probe", kind: kPorts, hot: true, def: "22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100",
+		{path: p("scan.ports"), label: "TCP ports to probe", kind: kPorts, hot: true, def: "21, 22, 23, 53, 80, 443, 445, 515, 554, 631, 3389, 5900, 8080, 9100",
 			help: "Ports that decide what a host is: 22, 80, 443 and so on. A longer list makes a scan slower."},
 		{path: p("scan.portTimeout"), label: "Wait for a port", kind: kDuration, hot: true, def: "500ms",
 			help: "How long one TCP connection may take before the port counts as closed, 100ms to 10s. Raise it on a slow or distant network."},
