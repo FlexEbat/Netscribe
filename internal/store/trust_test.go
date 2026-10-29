@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"io/fs"
 	"strings"
 	"testing"
@@ -10,10 +11,12 @@ import (
 )
 
 func TestMigrationTrustsTheDevicesThatExistedBeforeIt(t *testing.T) {
-	db, err := openDB(":memory:")
+	// openDB would apply every migration at once, so the database is opened bare here.
+	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
+	db.SetMaxOpenConns(1) // every connection to ":memory:" is a database of its own
 	t.Cleanup(func() { _ = db.Close() })
 
 	all, err := fs.Sub(migrationsFS, "migrations")
