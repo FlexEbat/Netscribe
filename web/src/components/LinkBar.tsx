@@ -1,5 +1,5 @@
+import { LinkBreak } from "@phosphor-icons/react"
 import { useState } from "react"
-import { Unlink } from "lucide-react"
 import { ApiError, deleteLink, type Link } from "@/api/client"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -41,7 +41,7 @@ export function LinkBar({ link, aName, bName, canEdit, onDeleted }: LinkBarProps
       </span>
       {canEdit && manual ? (
         <Button variant="outline" size="sm" onClick={() => void remove()}>
-          <Unlink className="size-4" aria-hidden="true" />
+          <LinkBreak className="size-4" aria-hidden="true" />
           Delete link
         </Button>
       ) : null}

@@ -6,7 +6,7 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex flex-col gap-1.5", className)} {...props} />
+  return <div className={cn("flex flex-col gap-2", className)} {...props} />
 }
 
 function CardTitle({ className, children, ...props }: React.ComponentProps<"h2">) {

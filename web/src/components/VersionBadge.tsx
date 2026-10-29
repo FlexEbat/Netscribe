@@ -1,5 +1,5 @@
+import { ArrowCircleUp } from "@phosphor-icons/react"
 import { useCallback, useEffect, useState } from "react"
-import { ArrowUpCircle } from "lucide-react"
 import { getVersion, type VersionInfo } from "@/api/client"
 import { UpdateDialog } from "@/components/UpdateDialog"
 import { can, type Permission } from "@/lib/permissions"
@@ -48,15 +48,15 @@ export function VersionBadge({ permissions }: VersionBadgeProps) {
             onClick={() => setOpen(true)}
             aria-label={`Version ${label}. ${info.update.latest?.tag} is available. Open the update notice.`}
             className={cn(
-              "update-glow pointer-events-auto inline-flex items-center gap-1.5 rounded-full border bg-popover px-3 py-1.5 font-mono text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              "update-glow pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-popover px-3 py-2 font-mono text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             )}
           >
-            <ArrowUpCircle aria-hidden="true" strokeWidth={1.8} className="size-3.5 text-brand" />
+            <ArrowCircleUp aria-hidden="true" className="size-3.5 text-brand" />
             {label}
             <span className="text-brand">→ {info.update.latest?.tag}</span>
           </button>
         ) : (
-          <span className="pointer-events-auto rounded-full border bg-popover/80 px-3 py-1.5 font-mono text-xs text-muted-foreground backdrop-blur">
+          <span className="pointer-events-auto rounded-full border bg-popover/80 px-3 py-2 font-mono text-xs text-muted-foreground backdrop-blur">
             {label}
           </span>
         )}

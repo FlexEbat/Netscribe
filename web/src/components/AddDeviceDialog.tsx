@@ -1,5 +1,5 @@
+import { Plus } from "@phosphor-icons/react"
 import { useState } from "react"
-import { Plus } from "lucide-react"
 import { createDevice, type Device } from "@/api/client"
 import { DeviceForm } from "@/components/DeviceForm"
 import { Button } from "@/components/ui/button"

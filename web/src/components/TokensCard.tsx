@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { ApiError, createToken, listTokens, revokeToken, type AccessToken } from "@/api/client"
 import { Alert } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -86,7 +87,7 @@ export function TokensCard({ role }: TokensCardProps) {
       <CardContent className="flex flex-col gap-4">
         {error ? <Alert variant="destructive">{error}</Alert> : null}
         <form onSubmit={(e) => void issue(e)} className="flex flex-wrap items-end gap-3" noValidate>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="token-name">Token name</Label>
             <Input
               id="token-name"
@@ -95,7 +96,7 @@ export function TokensCard({ role }: TokensCardProps) {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="token-scope">Scope</Label>
             <select
               id="token-scope"
@@ -107,7 +108,7 @@ export function TokensCard({ role }: TokensCardProps) {
               {role !== "viewer" ? <option value="write">Write</option> : null}
             </select>
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="token-days">Valid for (days)</Label>
             <Input
               id="token-days"
@@ -125,9 +126,10 @@ export function TokensCard({ role }: TokensCardProps) {
         </form>
 
         {state.status === "loading" ? (
-          <p role="status" className="text-sm text-muted-foreground">
-            Loading tokens…
-          </p>
+          <div role="status" aria-label="Loading tokens" className="flex flex-col gap-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
         ) : state.status === "failed" ? (
           <Alert variant="destructive">The tokens could not be loaded.</Alert>
         ) : state.tokens.length === 0 ? (

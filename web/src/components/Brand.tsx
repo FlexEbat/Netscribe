@@ -35,7 +35,7 @@ export function Brand({ className }: { className?: string }) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
       <BrandMark />
-      <p className="text-[17px] font-semibold tracking-tight">Netscribe</p>
+      <p className="text-base font-semibold tracking-tight">Netscribe</p>
     </div>
   )
 }

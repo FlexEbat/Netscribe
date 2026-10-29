@@ -41,8 +41,8 @@ export function ScanBar({
             className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted"
           >
             <div
-              className="h-full bg-primary transition-all"
-              style={{ width: `${(progress.done / progress.total) * 100}%` }}
+              className="h-full w-full origin-left bg-primary transition-transform"
+              style={{ transform: `scaleX(${progress.done / progress.total})` }}
             />
           </div>
         ) : null}

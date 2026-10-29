@@ -1,5 +1,5 @@
+import { CaretUpDown, SignOut, User as UserIcon } from "@phosphor-icons/react"
 import { Link } from "react-router-dom"
-import { ChevronsUpDown, LogOut, UserRound } from "lucide-react"
 import { RoleBadge } from "@/components/RoleBadge"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,7 +27,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="h-auto w-full justify-between gap-3 rounded-2xl border bg-muted px-3 py-2.5 hover:bg-accent"
+          className="h-auto w-full justify-between gap-3 rounded-2xl border bg-muted px-3 py-3 hover:bg-accent"
         >
           <span
             aria-hidden="true"
@@ -39,11 +39,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
             <span className="max-w-full truncate">{user.username}</span>
             <RoleBadge role={user.role} />
           </span>
-          <ChevronsUpDown
-            aria-hidden="true"
-            strokeWidth={1.6}
-            className="size-4 shrink-0 text-muted-foreground"
-          />
+          <CaretUpDown aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
@@ -51,7 +47,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
           <Link to="/account">
-            <UserRound aria-hidden="true" className="size-4" />
+            <UserIcon aria-hidden="true" className="size-4" />
             Account
           </Link>
         </DropdownMenuItem>
@@ -64,7 +60,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSignOut}>
-          <LogOut aria-hidden="true" className="size-4" />
+          <SignOut aria-hidden="true" className="size-4" />
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>

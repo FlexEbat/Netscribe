@@ -99,7 +99,7 @@ export function DeviceForm({
           ) : null}
         </Alert>
       ) : null}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-label`}>Name</Label>
         <Input
           id={`${id}-label`}
@@ -108,7 +108,7 @@ export function DeviceForm({
           onChange={(e) => set("label", e.target.value)}
         />
       </div>
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-kind`}>Kind</Label>
         <Select value={values.kind} onValueChange={(v) => set("kind", v as DeviceKind)}>
           <SelectTrigger id={`${id}-kind`}>
@@ -124,7 +124,7 @@ export function DeviceForm({
         </Select>
       </div>
       {mode === "create" ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor={`${id}-hostname`}>Hostname</Label>
           <Input
             id={`${id}-hostname`}
@@ -137,7 +137,7 @@ export function DeviceForm({
       ) : null}
       {mode === "create" ? (
         <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-ip`}>IP address</Label>
             <Input
               id={`${id}-ip`}
@@ -147,7 +147,7 @@ export function DeviceForm({
               onChange={(e) => set("ip", e.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-mac`}>MAC address</Label>
             <Input
               id={`${id}-mac`}
@@ -158,7 +158,7 @@ export function DeviceForm({
           </div>
         </div>
       ) : null}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-notes`}>Notes</Label>
         <Textarea
           id={`${id}-notes`}

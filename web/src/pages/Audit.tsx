@@ -138,7 +138,7 @@ export function Audit() {
           setApplied(draft)
         }}
       >
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="audit-user">User</Label>
           <Input
             id="audit-user"
@@ -147,7 +147,7 @@ export function Audit() {
             onChange={(e) => set("user")(e.target.value)}
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="audit-action">Action</Label>
           <select
             id="audit-action"
@@ -163,7 +163,7 @@ export function Audit() {
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="audit-result">Result</Label>
           <select
             id="audit-result"
@@ -177,7 +177,7 @@ export function Audit() {
             <option value="error">error</option>
           </select>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="audit-from">From</Label>
           <Input
             id="audit-from"
@@ -186,7 +186,7 @@ export function Audit() {
             onChange={(e) => set("from")(e.target.value)}
           />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <Label htmlFor="audit-to">To</Label>
           <Input
             id="audit-to"

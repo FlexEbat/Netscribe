@@ -8,14 +8,12 @@ import { routes } from "@/App"
 import { AmbientBackground } from "@/components/AmbientBackground"
 import { Toaster } from "@/components/ui/sonner"
 import { can } from "@/lib/permissions"
-import { startSpotlight } from "@/lib/spotlight"
 import { initTheme } from "@/lib/theme"
 import "@fontsource-variable/geist"
 import "@fontsource-variable/geist-mono"
 import "./index.css"
 
 initTheme()
-startSpotlight()
 
 const router = createBrowserRouter(routes)
 

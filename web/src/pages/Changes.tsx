@@ -123,7 +123,7 @@ function Feed({ changes }: { changes: Change[] }) {
             {new Date(c.at).toLocaleString()}
           </time>
           <span
-            className={`w-36 shrink-0 rounded border px-1.5 py-0.5 text-center text-xs font-medium ${kindClasses(c.kind)}`}
+            className={`w-36 shrink-0 rounded border px-2 py-0.5 text-center text-xs font-medium ${kindClasses(c.kind)}`}
           >
             {kindLabels[c.kind] ?? c.kind}
           </span>

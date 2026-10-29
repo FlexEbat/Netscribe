@@ -95,7 +95,7 @@ export function Users() {
             <TableHead>User</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead>Last sign-in</TableHead>
+            <TableHead>Last sign in</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -224,7 +224,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
         </DialogDescription>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4" noValidate>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="new-username">Username</Label>
             <Input
               id="new-username"
@@ -233,7 +233,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="new-role">Role</Label>
             <select
               id="new-role"
@@ -248,7 +248,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
               ))}
             </select>
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="new-temp-password">Temporary password</Label>
             <Input
               id="new-temp-password"
@@ -310,7 +310,7 @@ function ResetPasswordDialog({
         </DialogDescription>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4" noValidate>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="reset-password">Temporary password</Label>
             <Input
               id="reset-password"

@@ -1,5 +1,5 @@
+import { DownloadSimple } from "@phosphor-icons/react"
 import { useState } from "react"
-import { Download } from "lucide-react"
 import { downloadExport } from "@/api/client"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -60,7 +60,7 @@ export function ExportMenu({ formats }: ExportMenuProps) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline" disabled={busy}>
-            <Download aria-hidden />
+            <DownloadSimple aria-hidden />
             {busy ? "Preparing…" : "Export"}
           </Button>
         </DropdownMenuTrigger>

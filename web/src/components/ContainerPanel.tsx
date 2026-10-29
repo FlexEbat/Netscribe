@@ -34,7 +34,7 @@ export function ContainerPanel({ container, hostName, onClose }: ContainerPanelP
         <dl className="flex flex-col gap-3">
           <Row label="State">
             <span
-              className={`rounded border px-1.5 py-0.5 text-xs font-medium ${stateClasses(container.state)}`}
+              className={`rounded border px-2 py-0.5 text-xs font-medium ${stateClasses(container.state)}`}
             >
               {container.state}
             </span>

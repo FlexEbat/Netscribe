@@ -1,5 +1,5 @@
+import { PencilSimple, Scan } from "@phosphor-icons/react"
 import { useEffect, useState } from "react"
-import { Pencil, ScanSearch } from "lucide-react"
 import {
   ApiError,
   deleteDevice,
@@ -113,7 +113,7 @@ export function DevicePanel({
             {canEdit && state.status === "ready" ? (
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                  <Pencil className="size-4" aria-hidden="true" />
+                  <PencilSimple className="size-4" aria-hidden="true" />
                   Edit
                 </Button>
                 <DeleteDeviceButton
@@ -191,7 +191,7 @@ function IdentifyButton({ deviceId, onDone }: { deviceId: number; onDone: () => 
   return (
     <div className="flex flex-col gap-2">
       <Button variant="outline" size="sm" disabled={running} onClick={() => void start()}>
-        <ScanSearch className="size-4" aria-hidden="true" />
+        <Scan className="size-4" aria-hidden="true" />
         {running ? "Asking Nmap…" : "Identify with Nmap"}
       </Button>
       {error ? <Alert variant="destructive">{error}</Alert> : null}

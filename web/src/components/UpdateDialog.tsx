@@ -1,5 +1,5 @@
+import { ArrowSquareOut } from "@phosphor-icons/react"
 import { useEffect, useRef, useState } from "react"
-import { ExternalLink } from "lucide-react"
 import { ApiError, getVersion, startUpdate, type VersionInfo } from "@/api/client"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -104,7 +104,7 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
                   rel="noreferrer noopener"
                   className="inline-flex items-center gap-1 text-brand underline-offset-4 hover:underline"
                 >
-                  This release <ExternalLink aria-hidden="true" className="size-3.5" />
+                  This release <ArrowSquareOut aria-hidden="true" className="size-3.5" />
                 </a>
               ) : null}
               {changelog ? (
@@ -115,7 +115,7 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
                   className="inline-flex items-center gap-1 text-brand underline-offset-4 hover:underline"
                 >
                   All releases and changelog{" "}
-                  <ExternalLink aria-hidden="true" className="size-3.5" />
+                  <ArrowSquareOut aria-hidden="true" className="size-3.5" />
                 </a>
               ) : null}
             </div>
