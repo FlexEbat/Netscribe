@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { listDevices, listServices, type Device, type Service } from "@/api/client"
 import { EmptyState } from "@/components/EmptyState"
+import { RiskBadge } from "@/components/RiskBadge"
 import { Alert } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -110,7 +111,10 @@ function Results({ state, query }: { state: State; query: string }) {
           const d = state.devices.get(s.deviceId)
           return (
             <TableRow key={s.id}>
-              <TableCell>{s.name || "–"}</TableCell>
+              <TableCell className="flex flex-wrap items-center gap-2">
+                {s.name || "–"}
+                {s.risk ? <RiskBadge risk={s.risk} /> : null}
+              </TableCell>
               <TableCell className="font-mono">{s.port}</TableCell>
               <TableCell className="uppercase">{s.proto}</TableCell>
               <TableCell className="max-w-64 break-words text-muted-foreground">

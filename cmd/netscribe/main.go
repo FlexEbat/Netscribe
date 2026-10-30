@@ -29,6 +29,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/model"
+	"github.com/FlexEbat/Netscribe/internal/notify"
 	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
 	"github.com/FlexEbat/Netscribe/internal/update"
@@ -229,9 +230,11 @@ func serve(args []string, e streams) error {
 	scanner.SetEvents(hub)
 	updates := &update.Checker{}
 	go updates.Run(ctx, func() bool { return live.Current().Updates.Check }, func(err error) { logger.Warn("update check", "err", err) })
+	notifier := notify.New(notifySource{db}, func() config.NotifyConfig { return live.Current().Notify }, logger)
+	go notifyOnScans(ctx, hub, notifier)
 	router := api.NewRouter(api.Options{
 		Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
-		Helper: newHelperClient(cfg.Database), Settings: newSettingsEditor(*flags.configPath),
+		Helper: newHelperClient(cfg.Database), Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},

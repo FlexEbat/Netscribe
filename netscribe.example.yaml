@@ -7,7 +7,7 @@ allowPublicTargets: false # true allows scan targets outside RFC 1918
 scan:
   targets: [192.168.1.0/24]
   interval: 15m # 0 turns the schedule off, the minimum is 1m
-  ports: [22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100] # an empty list turns the port scan off
+  ports: [21, 22, 23, 53, 80, 443, 445, 515, 554, 631, 3389, 5900, 8080, 9100] # an empty list turns the port scan off
   portTimeout: 500ms # how long one TCP connection may take before the port counts as closed, 100ms to 10s
   concurrency: 256 # TCP connections held open at once by the port scan, 1 to 512
   retryAfter: 0 # wait before a failed scheduled scan is tried again, 1m to 24h; 0 turns the retry off
@@ -69,3 +69,22 @@ export:
 
 updates:
   check: true # ask GitHub once in a while whether a newer release exists; nothing about this host is sent
+
+notify: # messages about what a scan found, one summary per scan; applied without a restart
+  events: [device_added, scan_failed] # also: device_offline, port_opened, risky_service
+  channels: [] # an empty list turns notifications off
+  # - name: ops
+  #   type: webhook
+  #   url: https://example.org/hook # a secret, it stays in this file
+  # - name: phone
+  #   type: telegram
+  #   botToken: "" # a secret
+  #   chatId: "" # a secret
+  # - name: mail
+  #   type: email # STARTTLS is required
+  #   host: smtp.example.org
+  #   port: 587
+  #   user: ""
+  #   password: "" # a secret
+  #   from: netscribe@example.org
+  #   to: [admin@example.org]

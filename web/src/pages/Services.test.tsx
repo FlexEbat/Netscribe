@@ -23,6 +23,7 @@ function device(id: number, ip: string, hostname: string): Device {
     notes: "",
     osGuess: "",
     kindLocked: false,
+    trusted: true,
     version: 1,
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
@@ -41,6 +42,7 @@ function service(id: number, deviceId: number, port: number, name: string): Serv
     banner: "",
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
+    risk: null,
   }
 }
 
@@ -114,5 +116,21 @@ describe("Services banner", () => {
     await userEvent.type(screen.getByLabelText("Filter by service name or banner"), "nginx")
     expect(screen.getByText("nginx/1.25.3")).toBeInTheDocument()
     expect(screen.queryByText("ssh")).not.toBeInTheDocument()
+  })
+
+  it("marks a risky service and leaves the others alone", async () => {
+    const telnet = {
+      ...service(1, 1, 23, "telnet"),
+      risk: { severity: "high" as const, message: "Telnet sends passwords in clear text" },
+    }
+    setup([telnet, service(2, 1, 22, "ssh")], [device(1, "192.168.1.1", "gateway")])
+    const rows = within(await screen.findByRole("table")).getAllByRole("row")
+    const telnetRow = rows.find((r) => within(r).queryByText("telnet"))!
+    const sshRow = rows.find((r) => within(r).queryByText("ssh"))!
+    expect(within(telnetRow).getByText("high risk")).toHaveAttribute(
+      "title",
+      "Telnet sends passwords in clear text",
+    )
+    expect(within(sshRow).queryByText(/risk/)).not.toBeInTheDocument()
   })
 })

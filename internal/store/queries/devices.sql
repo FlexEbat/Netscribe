@@ -33,13 +33,13 @@ UPDATE devices SET online = 0 WHERE id = ?;
 UPDATE devices SET x = ?, y = ? WHERE id = ?;
 
 -- name: InsertManualDevice :one
-INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, manual, label, notes, kind_locked, updated_by, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, '', ?, '', 'manual', 1, 1, ?, ?, ?, ?, ?, ?)
+INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, manual, trusted, label, notes, kind_locked, updated_by, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, '', ?, '', 'manual', 1, 1, 1, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: UpdateDeviceEdit :execrows
 UPDATE devices
-SET label = ?, notes = ?, kind = ?, kind_locked = ?, version = version + 1, updated_by = ?
+SET label = ?, notes = ?, kind = ?, kind_locked = ?, trusted = ?, version = version + 1, updated_by = ?
 WHERE id = ? AND version = ?;
 
 -- name: DeleteDevice :execrows

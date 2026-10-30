@@ -39,6 +39,9 @@ func (s *Store) ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device
 		if f.Online != nil && d.Online != *f.Online {
 			continue
 		}
+		if f.Trusted != nil && d.Trusted != *f.Trusted {
+			continue
+		}
 		if f.Kind != "" && d.Kind != f.Kind {
 			continue
 		}
@@ -152,6 +155,7 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		Label:       r.Label,
 		Notes:       r.Notes,
 		KindLocked:  r.KindLocked != 0,
+		Trusted:     r.Trusted != 0,
 		Version:     r.Version,
 		FirstSeenAt: first,
 		LastSeenAt:  last,

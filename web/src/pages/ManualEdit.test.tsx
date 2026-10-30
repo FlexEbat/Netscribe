@@ -54,6 +54,7 @@ function device(id: number, overrides: Partial<Device> = {}): Device {
     notes: "",
     osGuess: "",
     kindLocked: false,
+    trusted: true,
     version: 3,
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",

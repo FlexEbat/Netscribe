@@ -59,7 +59,10 @@ func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, 
 	if err != nil {
 		return model.Device{}, err
 	}
-	label, notes, kind, locked := cur.Label, cur.Notes, cur.Kind, cur.KindLocked
+	label, notes, kind, locked, trusted := cur.Label, cur.Notes, cur.Kind, cur.KindLocked, cur.Trusted
+	if e.Trusted != nil {
+		trusted = *e.Trusted
+	}
 	if e.Label != nil {
 		label = *e.Label
 	}
@@ -78,6 +81,7 @@ func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, 
 		Notes:      notes,
 		Kind:       string(kind),
 		KindLocked: boolToInt(locked),
+		Trusted:    boolToInt(trusted),
 		UpdatedBy:  sql.NullInt64{Int64: userID, Valid: userID > 0},
 		ID:         id,
 		Version:    e.Version,

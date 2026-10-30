@@ -23,6 +23,7 @@ const device: Device = {
   notes: "",
   osGuess: "",
   kindLocked: false,
+  trusted: true,
   version: 1,
   firstSeenAt: "2026-10-09T12:00:00.000Z",
   lastSeenAt: "2026-10-09T12:00:00.000Z",
@@ -44,6 +45,7 @@ function service(id: number, overrides: Partial<Service> = {}): Service {
     banner: "",
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
+    risk: null,
     ...overrides,
   }
 }
@@ -239,5 +241,35 @@ describe("DevicePanel identify with Nmap", () => {
       await screen.findByText("A scan or another identification is running."),
     ).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Identify with Nmap" })).toBeEnabled()
+  })
+})
+
+describe("DevicePanel trust", () => {
+  it("marks an unknown device as trusted with the version it loaded", async () => {
+    const unknown = { ...device, trusted: false, version: 7 }
+    const mock = mockFetch({
+      "GET /api/devices/3": () => json(200, { device: unknown, interfaces: [], services: [] }),
+      "PATCH /api/devices/3": () =>
+        json(200, { device: { ...unknown, trusted: true, version: 8 } }),
+    })
+    render(<DevicePanel deviceId={3} onClose={() => {}} canEdit />)
+    expect(await screen.findByText("Unknown")).toBeInTheDocument()
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "Mark as trusted" }))
+
+    expect(await screen.findByRole("button", { name: "Mark as unknown" })).toBeInTheDocument()
+    expect(screen.getByText("Trusted")).toBeInTheDocument()
+    const patch = mock.calls.find((c) => c.method === "PATCH")!
+    expect(JSON.parse(String(patch.init.body))).toEqual({ trusted: true, version: 7 })
+  })
+
+  it("offers no trust button to someone who may not edit", async () => {
+    mockFetch({
+      "GET /api/devices/3": () =>
+        json(200, { device: { ...device, trusted: false }, interfaces: [], services: [] }),
+    })
+    render(<DevicePanel deviceId={3} onClose={() => {}} />)
+    expect(await screen.findByText("Unknown")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Mark as/ })).not.toBeInTheDocument()
   })
 })

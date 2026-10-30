@@ -138,6 +138,9 @@ type Options struct {
 	Helper SystemHelper
 	// Settings serves GET and PUT /api/settings. Without it those routes are not registered.
 	Settings SettingsEditor
+	// Notifications serves GET /api/notifications and POST /api/notifications/test. Without
+	// it those routes are not registered.
+	Notifications Notifications
 
 	// heartbeat is the keep-alive interval of the event streams. Zero means defaultHeartbeat.
 	// Only tests set it.
@@ -168,6 +171,7 @@ type server struct {
 	updatesEnabled func() bool
 	helper         SystemHelper
 	settings       SettingsEditor
+	notifier       Notifications
 	settingsMu     sync.Mutex // one change of the config file at a time
 	recheckMu      sync.Mutex
 	lastRecheck    time.Time
@@ -211,6 +215,12 @@ func (s *server) routes() []Route {
 			route(http.MethodPut, "/api/settings", model.PermSystemManage, s.putSettings),
 		)
 	}
+	if s.notifier != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/notifications", model.PermSystemManage, s.listNotifications),
+			route(http.MethodPost, "/api/notifications/test", model.PermSystemManage, s.testNotification),
+		)
+	}
 	if s.auditLog != nil {
 		table = append(table, route(http.MethodGet, "/api/audit", model.PermAuditRead, s.listAudit))
 	}
@@ -224,6 +234,8 @@ func (s *server) routes() []Route {
 			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
 			route(http.MethodPost, "/api/devices", model.PermDevicesWrite, s.createDevice),
 			route(http.MethodGet, "/api/devices/{id}", model.PermTopologyRead, s.getDevice),
+			route(http.MethodGet, "/api/devices/{id}/history", model.PermTopologyRead, s.getDeviceHistory),
+			route(http.MethodGet, "/api/overview", model.PermTopologyRead, s.getOverview),
 			route(http.MethodPatch, "/api/devices/{id}", model.PermDevicesWrite, s.updateDevice),
 			route(http.MethodDelete, "/api/devices/{id}", model.PermDevicesWrite, s.deleteDevice),
 			route(http.MethodPost, "/api/links", model.PermDevicesWrite, s.createLink),
@@ -296,6 +308,7 @@ func newServer(opts Options) *server {
 		updatesEnabled: opts.UpdatesEnabled,
 		helper:         opts.Helper,
 		settings:       opts.Settings,
+		notifier:       opts.Notifications,
 	}
 }
 

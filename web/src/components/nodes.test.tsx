@@ -22,6 +22,7 @@ const device = (over: Partial<Device> = {}): Device => ({
   notes: "",
   osGuess: "",
   kindLocked: false,
+  trusted: true,
   version: 1,
   firstSeenAt: "",
   lastSeenAt: "",

@@ -29,13 +29,16 @@ type Device struct {
 	Description string     `json:"description"`
 	// OSGuess is the system nmap guessed, for example "Linux 5.3 - 5.4". It is empty when
 	// nmap never ran for the device or had no guess.
-	OSGuess     string    `json:"osGuess"`
-	Source      string    `json:"source"`
-	Online      bool      `json:"online"`
-	Manual      bool      `json:"manual"`
-	Label       string    `json:"label"`
-	Notes       string    `json:"notes"`
-	KindLocked  bool      `json:"kindLocked"`
+	OSGuess    string `json:"osGuess"`
+	Source     string `json:"source"`
+	Online     bool   `json:"online"`
+	Manual     bool   `json:"manual"`
+	Label      string `json:"label"`
+	Notes      string `json:"notes"`
+	KindLocked bool   `json:"kindLocked"`
+	// Trusted is true when a person marked the device as known. A scan creates devices
+	// untrusted.
+	Trusted     bool      `json:"trusted"`
 	Version     int64     `json:"version"`
 	FirstSeenAt time.Time `json:"firstSeenAt"`
 	LastSeenAt  time.Time `json:"lastSeenAt"`
@@ -71,6 +74,8 @@ type Service struct {
 	Banner      string    `json:"banner"`
 	FirstSeenAt time.Time `json:"firstSeenAt"`
 	LastSeenAt  time.Time `json:"lastSeenAt"`
+	// Risk is computed from the port and the protocol, nil when the service is not on the list.
+	Risk *Risk `json:"risk"`
 }
 
 type PortMapping struct {
@@ -200,7 +205,8 @@ type DeviceEdit struct { // a nil field stays unchanged
 	Label   *string
 	Notes   *string
 	Kind    *DeviceKind // a non-empty value sets kind_locked = 1
-	Version int64       // version the editor saw, required
+	Trusted *bool
+	Version int64 // version the editor saw, required
 }
 
 type ManualLink struct {

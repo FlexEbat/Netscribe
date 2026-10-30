@@ -3,6 +3,8 @@
 **Version: v0 (draft)** (2026-10-23)
 
 Changelog:
+- v0 (amendment 38) - slice 28: an overview page and the history of a device. A new table `device_presence` (migration `0012_device_presence.sql`) gets one row per scanned, non-manual device for every completed scan, written by `ApplyResult` in the same transaction, and goes away with its scan (`history.keepScans` is the limit). There is no backfill: the history of a device starts at the upgrade. `GET /api/overview` answers the counts of the overview page and `GET /api/devices/{id}/history` answers uptime, IP changes and outages of one device, both for `topology:read`. The web gets the page `/overview` (a new item in the navigation, the landing page does not change) and a tab "History" in the device panel.
+- v0 (amendment 37) - slice 27: trusted devices, notifications and risky services (built and reviewed on the branch `dev`, then merged into `main`). A device has a flag `trusted`, set by a person through `PATCH /api/devices/{id}`; manual devices and every device that exists when the migration runs are trusted. The list can be filtered by `trusted=`. A new package `internal/notify` sends one summary message per scan to the channels of the new config block `notify` (`webhook`, `telegram`, `email`) for the events `device_added`, `device_offline`, `port_opened`, `risky_service` and `scan_failed`. Channel addresses, tokens and passwords are `config.Secret`, live only in the config and never reach the page, the audit log or an export. The block applies without a restart. `GET /api/notifications` lists the channels without secrets and `POST /api/notifications/test` sends a test message, both for `system:manage`. A service gets a computed field `risk` from a fixed rule table (`internal/model/risk.go`), `GET /api/services` takes `risky=true`. The default `scan.ports` gain `21`, `23` and `5900` so that the risk rules can fire on a fresh install; a config that lists its own ports is not changed. The audit log gets `notify_test`.
 - v0 (amendment 33) - the specification is translated into English (it was in Russian) and the README and the documents in `docs/` got Russian versions (`README.ru.md`, `docs/*.ru.md`). The console and the installer are complete: every menu and question has a way out (`q`, `quit`, `exit`, `b`), every action that changes something asks first, and the console covers scans, devices, export, SSH hosts and the restore of the previous config (slice 22).
 - v0 (amendment 36) - slice 26: the panel follows a flat, restrained visual system. It replaces parts of the slice 17 design (the surface gradient and spotlight, the two drifting spots of light, custom radii). Icons come from Phosphor (`@phosphor-icons/react`, `lucide-react` is removed). Backgrounds are flat and the dark ones come only from `#000000 #181818 #1F1F1F #272727 #313131 #131209` (page `#000000`, cards `#181818`, menus and inputs `#1F1F1F`, muted `#272727`, hover `#313131`); the one gradient is the text of the sign in heading (`.hero-heading`, white to `#9B9B9B` in dark, black to `#666666` in light, 680px wide). `.surface` is a flat card with a border all the way round; `spotlight.ts` is deleted. Radius is Tailwind's own scale (the custom `--radius` tokens are removed). Font sizes sit on Tailwind's type scale, spacing on 0, 2, 4, 8, 12, 16, 24, 32, 40, 48, 64, 80 and 96px. Main buttons are `text-base` semibold with 8px and 12px padding, small header buttons are `text-sm`. Every transition uses `cubic-bezier(0.22, 1, 0.36, 1)` (set as the default timing function), 300ms by default, and moves only transform, opacity or colour: the scan progress bar scales instead of changing width, the online beacon and the update glow animate opacity and transform only, skeletons replace "Loading" text. On a narrow screen the menu is a full height blurred panel whose links arrive 60ms apart (24px rise, capped at 400ms), and its toggle icon turns between the two states. Interface copy has no hyphens inside words and headings and buttons are in sentence case. `web/src/design-rules.test.ts` checks these rules on the source. The ambient particle canvas of slice 17 stays: it is not a gradient and it does not touch layout. Not applied, because they belong to a landing page and not to an application: the intake and page structure of part A, the floating top bar, and the tagline reveal section.
 - v0 (amendment 35) - slice 25: scan tuning in the config and the panel. Three keys of `scan`, all applied without a restart and shown in the console and on the Settings page: `portTimeout` (how long one TCP connection of the port scan may take, default `500ms`, from `100ms` to `10s`), `concurrency` (TCP connections the port scan holds open at once, default `256`, from `1` to `512`) and `retryAfter` (the wait before a scheduled scan that failed is run again, default `0` = off, otherwise from `1m` to `24h`). The defaults equal the values that were fixed in the code, so an existing config behaves as before. Only a scan started by the schedule is retried, a failed scan that a person started is not; a retry that fails asks for the next one, and a change of `scan.interval` ends the wait. The other limits (ARP, HTTP, SNMP, nmap concurrency) stay fixed, they are safety limits of section 9.6.
@@ -121,6 +123,10 @@ internal/
     ratelimit.go              login attempt limit
   model/
     model.go                  domain types and constants (section 4)
+    risk.go                   slice 27: the fixed table of risky ports and the function that rates a service
+  notify/
+    notify.go                 slice 27: events of a finished scan to messages, one per channel
+    webhook.go, telegram.go, email.go   the three channel types
   store/
     store.go                  Open(path), the interface Repo, ErrNotFound
     apply.go                  ApplyResult: merging a scan result into the database, writing changes
@@ -250,6 +256,9 @@ CREATE TABLE devices (
 	y             REAL
 );
 CREATE UNIQUE INDEX devices_mac ON devices(mac) WHERE mac <> '';
+-- slice 27, migration 0011_device_trust.sql:
+-- ALTER TABLE devices ADD COLUMN trusted INTEGER NOT NULL DEFAULT 0;   -- 1: a person marked it as known
+-- UPDATE devices SET trusted = 1;                                      -- everything that exists at migration time counts as known
 CREATE UNIQUE INDEX devices_ip_nomac ON devices(ip) WHERE mac = '' AND ip <> '';
 
 CREATE TABLE interfaces (
@@ -319,6 +328,15 @@ CREATE TABLE changes (
 	summary   TEXT NOT NULL,
 	at        TEXT NOT NULL
 );
+
+CREATE TABLE device_presence (                -- slice 28, migration 0012_device_presence.sql
+	scan_id   INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+	device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+	online    INTEGER NOT NULL,               -- 1 when this scan saw the device
+	ip        TEXT NOT NULL DEFAULT '',       -- the address the device had in this scan
+	PRIMARY KEY (scan_id, device_id)
+) WITHOUT ROWID;
+CREATE INDEX device_presence_device ON device_presence(device_id);
 
 CREATE TABLE users (
 	id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -646,7 +664,7 @@ allowPublicTargets: false
 scan:
   targets: [192.168.1.0/24]
   interval: 15m                  # 0 turns the schedule off
-  ports: [22, 53, 80, 443, 445, 515, 554, 631, 3389, 8080, 9100]   # an empty list turns the port scan off
+  ports: [21, 22, 23, 53, 80, 443, 445, 515, 554, 631, 3389, 5900, 8080, 9100]   # an empty list turns the port scan off
   portTimeout: 500ms             # slice 25: one TCP connection of the port scan, 100ms to 10s
   concurrency: 256               # slice 25: connections held open at once, 1 to 512
   retryAfter: 0                  # slice 25: wait before a failed scheduled scan is retried, 0 = off, else 1m to 24h
@@ -703,6 +721,25 @@ export:
 
 updates:
   check: true                    # slice 24: ask GitHub whether a newer release exists, applied without a restart
+
+notify:                          # slice 27: applied without a restart
+  events: [device_added, scan_failed]   # any of: device_added, device_offline, port_opened, risky_service, scan_failed
+  channels:                      # an empty list turns notifications off
+    - name: ops                  # 1 to 32 characters, letters, digits, - and _, unique
+      type: webhook              # webhook, telegram, email
+      url: https://example.org/hook          # Secret, webhook only, http or https
+    - name: phone
+      type: telegram
+      botToken: ""               # Secret
+      chatId: ""                 # Secret
+    - name: mail
+      type: email
+      host: smtp.example.org     # STARTTLS is required
+      port: 587
+      user: ""
+      password: ""               # Secret
+      from: netscribe@example.org
+      to: [admin@example.org]
 ```
 
 ---
@@ -865,16 +902,18 @@ There is no separate showcase route. A component that no slice uses is not writt
 | `GET /api/auth/me`                   | the current user, their permissions, the CSRF token               | sign-in only    | 200, 401               |
 | `PUT /api/auth/password`             | change your own password (current and new)                        | sign-in only    | 204, 400, 401          |
 | `GET /api/topology`                  | devices, links, containers in one answer                          | `topology:read` | 200                    |
-| `GET /api/devices?online=&kind=&q=`  | list of devices, the answer is `{ "devices": [...] }`             | `topology:read` | 200, 400               |
+| `GET /api/devices?online=&kind=&q=&trusted=` | list of devices, the answer is `{ "devices": [...] }`   | `topology:read` | 200, 400               |
 | `POST /api/devices`                  | manual add; 409 if the MAC or IP is taken by another record       | `devices:write` | 201, 400, 409          |
 | `GET /api/devices/{id}`              | a device, its interfaces and services                             | `topology:read` | 200, 404               |
-| `PATCH /api/devices/{id}`            | edit `label`, `notes`, `kind`, the field `version` is required   | `devices:write` | 200, 400, 404, 409     |
+| `GET /api/devices/{id}/history`      | uptime, addresses and outages of one device over the stored scans  | `topology:read` | 200, 404               |
+| `GET /api/overview`                  | the counts, the last scan and the last changes for the overview page | `topology:read` | 200                  |
+| `PATCH /api/devices/{id}`            | edit `label`, `notes`, `kind`, `trusted`, the field `version` is required | `devices:write` | 200, 400, 404, 409 |
 | `DELETE /api/devices/{id}`           | delete a device                                                   | `devices:write` | 204, 404               |
 | `PUT /api/devices/{id}/position`     | body `{ "x": 1, "y": 2 }`, saves the coordinates                  | `devices:write` | 204, 400, 404          |
 | `POST /api/links`                    | a manual link between devices                                     | `devices:write` | 201, 400, 404, 409     |
 | `DELETE /api/links/{id}`             | delete a manual link                                              | `devices:write` | 204, 404, 409          |
 | `GET /api/containers`                | list of containers                                                | `topology:read` | 200                    |
-| `GET /api/services?deviceId=`        | list of services                                                  | `topology:read` | 200, 400               |
+| `GET /api/services?deviceId=&risky=` | list of services, each with a computed `risk`                    | `topology:read` | 200, 400               |
 | `GET /api/scans`                     | the latest scans                                                  | `topology:read` | 200                    |
 | `POST /api/scans`                    | starts a scan                                                     | `scans:run`     | 202, 409               |
 | `GET /api/scans/{id}`                | one scan                                                          | `topology:read` | 200, 404               |
@@ -895,6 +934,8 @@ There is no separate showcase route. A component that no slice uses is not writt
 | `POST /api/update`                   | asks the helper to install the newest release                     | `system:manage` | 202, 409, 501          |
 | `POST /api/system/restart`           | asks the helper to restart the service                            | `system:manage` | 202, 409, 501          |
 | `GET /api/settings`                  | every setting with its value, default and whether it applies at once | `system:manage` | 200                 |
+| `GET /api/notifications`             | channels with name, type and the events sent, no secrets          | `system:manage` | 200                    |
+| `POST /api/notifications/test`       | body `{ "channel": "ops" }`, sends one test message, at most once in 10 seconds per channel | `system:manage` | 200, 400, 404, 429, 502 |
 | `PUT /api/settings`                  | body `{ "changes": { "scan.interval": "30m" } }`, one checked save | `system:manage` | 200, 400               |
 
 SSE events: `scan.started`, `scan.progress` (data `{ scanId, stage, done, total }`), `scan.finished`, `topology.changed`, `config.reloaded`, `config.error`. The `config.*` events go only to users with the permission `users:manage`.
@@ -904,6 +945,7 @@ SSE events: `scan.started`, `scan.progress` (data `{ scanId, stage, done, total 
 | path            | what it shows                                                   |
 | --------------- | --------------------------------------------------------------- |
 | `/`             | the topology, the device side panel by `?device=<id>`           |
+| `/overview`     | devices online and offline, what is new, scan health, the last changes |
 | `/inventory`    | the table of devices and IPs, search, filters                   |
 | `/containers`   | the table of containers                                         |
 | `/services`     | the table of services                                           |
@@ -1096,9 +1138,11 @@ Multi-user work:
 - SSH: keys only, `known_hosts` is checked strictly, the commands are fixed, a separate account without write rights. The key file permissions are not wider than `0600`, otherwise the host is skipped.
 - Docker: the socket is connected read-only. `docker-socket-proxy` allowing only `containers`, `networks`, `events` is recommended. The risk of socket access is described in the README.
 
+- Slice 27: notifications are the only traffic the service starts toward an address that a person typed. The addresses come from the config only, never from the API or the page. A request has a 5 second timeout, follows no redirect, reads at most 4 KiB of the answer and is retried once after 5 seconds. One message per channel per scan, at most 20 lines, the rest as `and N more`. Text that came from the network (host names, banners, container names) is cut by length and cleaned of control characters before it is put into a message; Telegram gets plain text without a parse mode, an e-mail subject has no line breaks. E-mail needs STARTTLS and checks the certificate. A failed delivery is logged without the address or the token and never fails a scan.
+
 ### 9.7 Secrets and data on disk
 
-- Secrets (`snmp.communities`, paths to SSH keys) live only in the config. The permissions of the config file are not wider than `0600`, otherwise the service refuses to start. The flag `--allow-loose-permissions` allows a start with a warning for environments such as a bind mount in Docker.
+- Secrets (`snmp.communities`, paths to SSH keys, and since slice 27 the webhook URL, the Telegram token and chat id and the SMTP password) live only in the config. The permissions of the config file are not wider than `0600`, otherwise the service refuses to start. The flag `--allow-loose-permissions` allows a start with a warning for environments such as a bind mount in Docker.
 - The database file is created with permissions `0600`, the data directory with `0700`. There is no database encryption in v1, and the protection is at the OS level (section 18).
 - Hashes of passwords, tokens and sessions are not returned by the API, not logged and do not get into exports.
 - Passwords, tokens, cookie values, the `Authorization` header and communities are forbidden in logs (`slog`). The filter is covered by a test.
@@ -1106,7 +1150,7 @@ Multi-user work:
 
 ### 9.8 Audit
 
-These events are written: `login`, `login_failed`, `logout`, `password_change`, `user_create`, `user_update`, `user_delete`, `user_password_reset`, `token_create`, `token_revoke`, `scan_start`, `device_create`, `device_edit`, `device_delete`, `link_create`, `link_delete`, `export`, `config_reload`, `config_reload_failed`, `access_denied`.
+These events are written: `login`, `login_failed`, `logout`, `password_change`, `user_create`, `user_update`, `user_delete`, `user_password_reset`, `token_create`, `token_revoke`, `scan_start`, `device_create`, `device_edit`, `device_delete`, `link_create`, `link_delete`, `export`, `config_reload`, `config_reload_failed`, `access_denied`, `notify_test`.
 
 An entry holds the time, the user, the IP, the result (`ok`, `denied`, `error`) and one line of description without secrets. The API cannot change or delete entries: old entries are deleted only by the cleanup by `audit.keepDays` (365 by default). Only the permission `audit:read` reads the log.
 
@@ -1245,7 +1289,7 @@ Do not write code with an invented type. Do not extend or weaken on your own the
 
 ## 16. Stages and slices
 
-Status: slices 0-23 are merged into `main`, the plan is complete.
+Status: slices 0-28 are merged into `main`.
 
 The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
@@ -1850,6 +1894,51 @@ Acceptance criteria.
 4. A change that the config would refuse saves nothing and keeps the file as it was; comments of the file stay.
 5. No secret is sent to the page or written to the audit log.
 6. No role below administrator reaches the update, restart or settings routes, and no token does.
+
+### Slice 27 - trusted devices, notifications and risky services
+
+The goal: the owner learns about a new or vanished device and about a dangerous open port without opening the panel, and can tell known devices from unknown ones.
+
+Files: `internal/store/migrations/0011_device_trust.sql`, `internal/store/queries/devices.sql`, `internal/model/model.go` (`Device.Trusted`), `internal/model/risk.go`, `internal/notify/` (package, imports only `config` and `model`), `internal/config/` (the `notify` block and its checks), `cmd/netscribe/notify.go` (hands every `scan.finished` event of the hub to the notifier; the scanner does not change), `internal/api/notifications.go`, `internal/api/devices.go`, `internal/api/services.go`, `internal/api/router.go`, `web/src/pages/Inventory.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/pages/Services.tsx`, `web/src/pages/Settings.tsx`.
+
+- **Trust.** `trusted` is set through `PATCH /api/devices/{id}` with the usual `version`. A device found by a scan starts untrusted. A manual device is created trusted. The inventory shows a badge for untrusted devices and filters by it.
+- **Risk rules.** A fixed table in `internal/model/risk.go`, no config. `high`: 23/tcp Telnet, 69/udp TFTP, 5900/tcp VNC. `medium`: 21/tcp FTP, 445/tcp SMB (the version is not known, so the text says to check it), 3389/tcp RDP, 161/udp SNMP. The function takes a port and a protocol and returns a severity and one line, nothing else.
+- **Events.** `device_added`: a device that a scan created and that is untrusted. `device_offline`: the change feed entry of the scan, for trusted and untrusted devices alike. `port_opened`: a service created on a device that already existed. `risky_service`: a new service with a risk. `scan_failed`: a scan that ended with an error. The notifier reads them from the scan that just finished, so a repeated scan sends nothing twice.
+- **Delivery.** See section 9.6. A channel that fails does not stop the others.
+- **Panel.** The trust toggle in the device panel, the badge and the filter in the inventory, a risk badge in the services table, the channel list and a "Send test" button on the settings page. The panel does not edit channels: they hold secrets and live in the config and in the console.
+
+Acceptance criteria.
+1. A device that existed before the migration is trusted, a device found afterwards is not, and a manual device is trusted.
+2. `PATCH` with a stale `version` gives 409 and leaves `trusted` as it was; a viewer gets 403 and no token without `devices:write` can change it.
+3. A scan that finds one new device sends exactly one message per channel, and the same scan data run again sends none.
+4. A message never holds a control character from the network, never exceeds 20 lines and never holds a secret.
+5. A webhook that answers with a redirect, times out or answers 500 is retried once, logged without its address and does not fail or delay the scan beyond the timeouts.
+6. An e-mail channel without STARTTLS or with a certificate that does not verify sends nothing.
+7. `GET /api/notifications` and the page never contain a URL, a token, a chat id or a password; a viewer and an operator get 403 and a token gets 403.
+8. `POST /api/notifications/test` for an unknown channel answers 404, a second call within 10 seconds answers 429, and a delivery error answers 502 with no secret in the text.
+9. A config with a duplicate channel name, an unknown type, an unknown event or a missing required field is rejected as a whole and keeps the old config running.
+10. Every risk rule has a test for its port and protocol, and 23/udp is not risky.
+
+### Slice 28 - overview and device history
+
+The goal: one page that says how the network is doing, and for each device the answer to "how often is it there, and has it moved".
+
+Files: `internal/store/migrations/0012_device_presence.sql`, `internal/store/queries/presence.sql`, `internal/store/apply.go` (writing the presence rows), `internal/store/history.go`, `internal/store/overview.go`, `internal/model/model.go` (`DeviceHistory`, `Overview`), `internal/api/overview.go`, `internal/api/devices.go`, `internal/api/router.go`, `web/src/pages/Overview.tsx`, `web/src/components/HistoryTab.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/App.tsx`, `web/src/components/` (the navigation).
+
+- **Presence.** `ApplyResult` writes one `device_presence` row for each device that is not manual and that this scan saw or that lies in its targets, after the scan was merged and before the changes are written, with `online` as the device has it after the merge and the `ip` it has then. A failed scan writes none. Rows go with their scan and with their device.
+- **`GET /api/devices/{id}/history`** answers `{ "history": { "scans": 120, "online": 118, "uptime": 98.3, "ips": [ { "ip": "192.168.1.9", "from": "...", "to": "..." } ], "outages": [ { "from": "...", "to": null } ], "points": [ { "scanId": 7, "at": "...", "online": true, "ip": "192.168.1.9" } ] } }`. `uptime` is the percent of the stored scans that saw the device, with one decimal, and `null` when there are no rows. `ips` lists the addresses the device had, newest first: `from` is the time of the first scan with that address, `to` the time of the last. `outages` lists runs of scans that did not see the device, newest first, at most 20, `to` is the time of the first scan that saw it again and `null` while the device is still away. `points` are the last 100 rows, oldest first. A device that does not exist gives 404; a manual device gives 200 with `scans: 0`.
+- **`GET /api/overview`** answers `{ "overview": { "devices": { "total": 12, "online": 9, "offline": 3, "unknown": 2, "newThisWeek": 1 }, "risky": 2, "lastScan": null, "recentScans": { "total": 10, "failed": 1 }, "changes": [] } }`. `unknown` counts untrusted devices, `newThisWeek` the devices that a scan first saw in the last 7 days, `risky` the services with a risk, `lastScan` the newest scan of any status or `null`, `recentScans` the last 10 scans, `changes` the 10 newest changes in the form of `GET /api/changes`.
+- **Web.** The page `/overview` shows the counts as tiles, the last scan (as the scan bar of the inventory does), the scan health ("1 of the last 10 scans failed") and the last changes; the tiles for online, offline and unknown devices link to the inventory with the matching filter (`?status=online|offline`, `?trust=unknown`, which the inventory reads on load), the others to the page that has the details. The tab "History" of the device panel shows the uptime with the number of scans it rests on, the addresses and the outages in words and times. The text says that the history starts when slice 28 was installed.
+
+Acceptance criteria.
+1. A completed scan writes one row per scanned non-manual device and none for manual devices; a failed scan writes none; `PruneScans` removes the rows of the scans it deletes.
+2. `uptime` is the share of the stored scans that saw the device, and a device that was added in the 3rd of 4 scans has `scans: 2`.
+3. A change of address shows as two entries in `ips`; an address that came back shows as a third.
+4. A run of missed scans is one outage, an outage that is still going on has `to: null`, and a device that is back has a closed one.
+5. A device that does not exist gives 404, a non-numeric id gives 404, a viewer may read both routes, a request without a session gets 401.
+6. `GET /api/overview` on an empty database answers zeros, `lastScan: null` and `changes: []`, never `null` lists.
+7. `newThisWeek` counts a device first seen 6 days ago and not one first seen 8 days ago; manual devices are not counted.
+8. The overview page shows an `EmptyState` before the first scan, and a tile never shows a number it was not given.
 
 ---
 

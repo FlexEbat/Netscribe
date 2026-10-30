@@ -77,6 +77,14 @@ type Device struct {
 	Version     int64
 	UpdatedBy   sql.NullInt64
 	OsGuess     string
+	Trusted     int64
+}
+
+type DevicePresence struct {
+	ScanID   int64
+	DeviceID int64
+	Online   int64
+	Ip       string
 }
 
 type Interface struct {

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import {
   ApiError,
   getNmap,
   listDevices,
   listScans,
   startScan,
+  updateDevice,
   type Device,
   type NmapState,
   type Scan,
@@ -16,6 +18,7 @@ import { EmptyState } from "@/components/EmptyState"
 import { ScanBar } from "@/components/ScanBar"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/StatusBadge"
+import { UnknownBadge } from "@/components/TrustBadge"
 import { Alert } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -32,6 +35,7 @@ import { sortByIp } from "@/lib/ip"
 import { can } from "@/lib/permissions"
 
 type Filter = "all" | "online" | "offline"
+type TrustFilter = "all" | "unknown" | "trusted"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; devices: Device[] }
 
@@ -45,7 +49,16 @@ export function Inventory() {
   const [nmap, setNmap] = useState<NmapState | null>(null)
   const [useNmap, setUseNmap] = useState(false)
   const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<Filter>("all")
+  // The overview links here with ?status=offline or ?trust=unknown.
+  const [params] = useSearchParams()
+  const [filter, setFilter] = useState<Filter>(() => {
+    const v = params.get("status")
+    return v === "online" || v === "offline" ? v : "all"
+  })
+  const [trust, setTrust] = useState<TrustFilter>(() => {
+    const v = params.get("trust")
+    return v === "unknown" || v === "trusted" ? v : "all"
+  })
   const [state, setState] = useState<State>({ status: "loading" })
   const [refresh, setRefresh] = useState(0)
   const [scan, setScan] = useState<Scan | null>(null)
@@ -86,7 +99,8 @@ export function Inventory() {
   useEffect(() => {
     let cancelled = false
     const online = filter === "all" ? undefined : filter === "online"
-    listDevices({ q: search.trim(), online })
+    const trusted = trust === "all" ? undefined : trust === "trusted"
+    listDevices({ q: search.trim(), online, trusted })
       .then((devices) => {
         if (!cancelled) setState({ status: "ready", devices: sortByIp(devices) })
       })
@@ -96,7 +110,7 @@ export function Inventory() {
     return () => {
       cancelled = true
     }
-  }, [search, filter, refresh])
+  }, [search, filter, trust, refresh])
 
   useEffect(() => {
     let cancelled = false
@@ -146,7 +160,7 @@ export function Inventory() {
     }
   }, [useNmap])
 
-  const filtering = search.trim() !== "" || filter !== "all"
+  const filtering = search.trim() !== "" || filter !== "all" || trust !== "all"
 
   return (
     <div className="flex flex-col gap-4">
@@ -186,10 +200,22 @@ export function Inventory() {
           <option value="online">Online</option>
           <option value="offline">Offline</option>
         </select>
+        <select
+          aria-label="Filter by trust"
+          className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          value={trust}
+          onChange={(e) => setTrust(e.target.value as TrustFilter)}
+        >
+          <option value="all">Known and unknown</option>
+          <option value="unknown">Unknown only</option>
+          <option value="trusted">Trusted only</option>
+        </select>
       </div>
       <Results
         state={state}
         filtering={filtering}
+        canWrite={canWrite}
+        onTrusted={() => setRefresh((n) => n + 1)}
         firstScan={canRun && scan === null ? () => void run() : undefined}
       />
     </div>
@@ -199,10 +225,14 @@ export function Inventory() {
 function Results({
   state,
   filtering,
+  canWrite,
+  onTrusted,
   firstScan,
 }: {
   state: State
   filtering: boolean
+  canWrite: boolean
+  onTrusted: () => void
   firstScan?: () => void
 }) {
   if (state.status === "loading") {
@@ -238,6 +268,7 @@ function Results({
           <TableHead>Hostname</TableHead>
           <TableHead>Kind</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>Trust</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -250,9 +281,46 @@ function Results({
             <TableCell>
               <StatusBadge online={d.online} />
             </TableCell>
+            <TableCell>
+              {d.trusted ? (
+                <span className="text-muted-foreground">Trusted</span>
+              ) : (
+                <span className="flex flex-wrap items-center gap-2">
+                  <UnknownBadge />
+                  {canWrite ? <TrustButton device={d} onDone={onTrusted} /> : null}
+                </span>
+              )}
+            </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+  )
+}
+
+/** Marks a device as known. A version that is out of date only reloads the list. */
+function TrustButton({ device, onDone }: { device: Device; onDone: () => void }) {
+  const [busy, setBusy] = useState(false)
+  async function trust() {
+    setBusy(true)
+    try {
+      await updateDevice(device.id, { trusted: true, version: device.version })
+    } catch {
+      // A conflict means someone changed the device; the reload shows the current state.
+    } finally {
+      setBusy(false)
+      onDone()
+    }
+  }
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={busy}
+      aria-label={`Trust ${device.label || device.hostname || device.ip || device.mac}`}
+      onClick={() => void trust()}
+    >
+      Trust
+    </Button>
   )
 }
