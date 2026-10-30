@@ -590,3 +590,40 @@ export async function listNotifications(): Promise<NotificationChannel[]> {
 export function testNotification(channel: string): Promise<void> {
   return api("POST", "/api/notifications/test", { body: { channel } })
 }
+
+export interface PresencePoint {
+  scanId: number
+  at: string
+  online: boolean
+  ip: string
+}
+
+export interface DeviceHistory {
+  scans: number
+  online: number
+  /** Percent of the stored scans that saw the device, or null without scans. */
+  uptime: number | null
+  /** The addresses the device had, newest first. */
+  ips: { ip: string; from: string; to: string }[]
+  /** Runs of scans that did not see the device, newest first. `to` is null while it is away. */
+  outages: { from: string; to: string | null }[]
+  points: PresencePoint[]
+}
+
+export async function getDeviceHistory(id: number): Promise<DeviceHistory> {
+  const body = await api<{ history: DeviceHistory }>("GET", `/api/devices/${id}/history`)
+  return body.history
+}
+
+export interface Overview {
+  devices: { total: number; online: number; offline: number; unknown: number; newThisWeek: number }
+  risky: number
+  lastScan: Scan | null
+  recentScans: { total: number; failed: number }
+  changes: Change[]
+}
+
+export async function getOverview(): Promise<Overview> {
+  const body = await api<{ overview: Overview }>("GET", "/api/overview")
+  return body.overview
+}

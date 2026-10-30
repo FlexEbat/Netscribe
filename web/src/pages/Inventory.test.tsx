@@ -75,6 +75,8 @@ class FakeEventSource {
 }
 
 interface OpenOptions {
+  /** The address to open, with its query. */
+  entry?: string
   role?: Role
   scans?: Scan[]
   startResponse?: () => Response
@@ -103,7 +105,7 @@ function open(devices: (path: string) => Response, options: OpenOptions = {}) {
     }
     return base(input, init)
   })
-  const router = createMemoryRouter(routes, { initialEntries: ["/inventory"] })
+  const router = createMemoryRouter(routes, { initialEntries: [options.entry ?? "/inventory"] })
   render(
     <SessionProvider>
       <RouterProvider router={router} />
@@ -325,5 +327,26 @@ describe("Inventory trust", () => {
     open(() => json(200, { devices: [unknown] }), { role: "viewer" })
     expect(await screen.findByText("Unknown")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Trust cam1" })).not.toBeInTheDocument()
+  })
+
+  it("starts with the filters that the link of the overview carries", async () => {
+    const mock = open(() => json(200, { devices: [unknown] }), {
+      entry: "/inventory?status=offline&trust=unknown",
+    })
+    await screen.findByRole("table")
+    const list = mock.calls.filter((c) => c.path.startsWith("/api/devices"))[0]!
+    expect(list.path).toContain("online=false")
+    expect(list.path).toContain("trusted=false")
+    expect(screen.getByLabelText("Filter by trust")).toHaveValue("unknown")
+  })
+
+  it("ignores a filter value it does not know", async () => {
+    const mock = open(() => json(200, { devices: [unknown] }), {
+      entry: "/inventory?status=sideways&trust=maybe",
+    })
+    await screen.findByRole("table")
+    const list = mock.calls.filter((c) => c.path.startsWith("/api/devices"))[0]!
+    expect(list.path).not.toContain("online=")
+    expect(list.path).not.toContain("trusted=")
   })
 })

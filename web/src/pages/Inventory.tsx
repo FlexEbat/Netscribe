@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import {
   ApiError,
   getNmap,
@@ -48,8 +49,16 @@ export function Inventory() {
   const [nmap, setNmap] = useState<NmapState | null>(null)
   const [useNmap, setUseNmap] = useState(false)
   const [search, setSearch] = useState("")
-  const [filter, setFilter] = useState<Filter>("all")
-  const [trust, setTrust] = useState<TrustFilter>("all")
+  // The overview links here with ?status=offline or ?trust=unknown.
+  const [params] = useSearchParams()
+  const [filter, setFilter] = useState<Filter>(() => {
+    const v = params.get("status")
+    return v === "online" || v === "offline" ? v : "all"
+  })
+  const [trust, setTrust] = useState<TrustFilter>(() => {
+    const v = params.get("trust")
+    return v === "unknown" || v === "trusted" ? v : "all"
+  })
   const [state, setState] = useState<State>({ status: "loading" })
   const [refresh, setRefresh] = useState(0)
   const [scan, setScan] = useState<Scan | null>(null)
