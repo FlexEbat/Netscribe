@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"io/fs"
-	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -29,7 +28,8 @@ func TestMigrationTrustsTheDevicesThatExistedBeforeIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), "0011_") {
+		// Everything from 0011 on is applied by the second migrate, in order.
+		if e.Name() >= "0011_" {
 			continue
 		}
 		data, err := fs.ReadFile(all, e.Name())
