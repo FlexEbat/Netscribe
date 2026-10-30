@@ -1289,7 +1289,7 @@ Do not write code with an invented type. Do not extend or weaken on your own the
 
 ## 16. Stages and slices
 
-Status: slices 0-26 are merged into `main`. Slices 27 and 28 are in progress on the branch `dev`.
+Status: slices 0-28 are merged into `main`.
 
 The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
