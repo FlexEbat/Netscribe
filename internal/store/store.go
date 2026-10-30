@@ -45,6 +45,11 @@ type Repo interface {
 	ListServices(ctx context.Context, deviceID int64) ([]model.Service, error) // 0 means every device
 	DeviceHistory(ctx context.Context, id int64) (model.DeviceHistory, error)  // ErrNotFound
 	Overview(ctx context.Context) (model.Overview, error)
+	ListGroups(ctx context.Context) ([]model.Group, error)
+	GetGroup(ctx context.Context, id int64) (model.Group, error)                       // ErrNotFound
+	CreateGroup(ctx context.Context, in model.ManualGroup) (model.Group, error)        // ErrConflict
+	UpdateGroup(ctx context.Context, id int64, e model.GroupEdit) (model.Group, error) // ErrNotFound, ErrVersionConflict, ErrConflict
+	DeleteGroup(ctx context.Context, id int64) error                                   // ErrNotFound
 
 	CreateDevice(ctx context.Context, in model.ManualDevice, userID int64) (model.Device, error)        // ErrConflict
 	UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, userID int64) (model.Device, error) // ErrNotFound, ErrVersionConflict
@@ -124,6 +129,7 @@ type DeviceFilter struct {
 	Kind    model.DeviceKind
 	Query   string
 	Trusted *bool
+	Group   *int64 // the id of the effective group, 0 for devices without one
 }
 
 // Store is the SQLite implementation of Repo.

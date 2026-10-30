@@ -49,7 +49,11 @@ func (s *Store) CreateDevice(ctx context.Context, in model.ManualDevice, userID 
 	if err != nil {
 		return model.Device{}, fmt.Errorf("create device: %w", err)
 	}
-	return toDevice(row)
+	d, err := toDevice(row)
+	if err != nil {
+		return model.Device{}, err
+	}
+	return s.withGroup(ctx, d)
 }
 
 // UpdateDevice applies an edit if the editor saw the current version. A stale version is
@@ -60,6 +64,18 @@ func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, 
 		return model.Device{}, err
 	}
 	label, notes, kind, locked, trusted := cur.Label, cur.Notes, cur.Kind, cur.KindLocked, cur.Trusted
+	group := cur.GroupID
+	if e.GroupID != nil {
+		group = nil
+		if *e.GroupID != 0 {
+			if _, err := s.q.GetGroup(ctx, *e.GroupID); errors.Is(err, sql.ErrNoRows) {
+				return model.Device{}, ErrNoSuchGroup
+			} else if err != nil {
+				return model.Device{}, fmt.Errorf("update device: %w", err)
+			}
+			group = e.GroupID
+		}
+	}
 	if e.Trusted != nil {
 		trusted = *e.Trusted
 	}
@@ -82,6 +98,7 @@ func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, 
 		Kind:       string(kind),
 		KindLocked: boolToInt(locked),
 		Trusted:    boolToInt(trusted),
+		GroupID:    groupArg(group),
 		UpdatedBy:  sql.NullInt64{Int64: userID, Valid: userID > 0},
 		ID:         id,
 		Version:    e.Version,
@@ -238,4 +255,11 @@ func (s *Store) ApplyIdentity(ctx context.Context, id int64, osGuess string, kin
 		return model.Device{}, fmt.Errorf("apply identity: %w", err)
 	}
 	return toDevice(after)
+}
+
+func groupArg(g *int64) sql.NullInt64 {
+	if g == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: *g, Valid: true}
 }

@@ -38,7 +38,12 @@ type Device struct {
 	KindLocked bool   `json:"kindLocked"`
 	// Trusted is true when a person marked the device as known. A scan creates devices
 	// untrusted.
-	Trusted     bool      `json:"trusted"`
+	Trusted bool `json:"trusted"`
+	// GroupID is the group a person chose, nil when none was chosen. Group is the effective
+	// group: the chosen one, else the first group whose ranges contain the address.
+	GroupID     *int64    `json:"groupId"`
+	Group       *GroupRef `json:"group"`
+	GroupAuto   bool      `json:"groupAuto"`
 	Version     int64     `json:"version"`
 	FirstSeenAt time.Time `json:"firstSeenAt"`
 	LastSeenAt  time.Time `json:"lastSeenAt"`
@@ -206,7 +211,8 @@ type DeviceEdit struct { // a nil field stays unchanged
 	Notes   *string
 	Kind    *DeviceKind // a non-empty value sets kind_locked = 1
 	Trusted *bool
-	Version int64 // version the editor saw, required
+	GroupID *int64 // 0 removes the group, nil keeps it
+	Version int64  // version the editor saw, required
 }
 
 type ManualLink struct {
@@ -260,4 +266,38 @@ type ContainerInput struct {
 	ComposeProject string
 	Ports          []PortMapping
 	Networks       []ContainerNetwork
+}
+
+// Group names a part of the network: a site, a VLAN, a range of addresses.
+type Group struct {
+	ID          int64    `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	VLAN        *int     `json:"vlan"`
+	Ranges      []string `json:"ranges"`
+	DeviceCount int      `json:"deviceCount"` // devices whose effective group this is
+	Version     int64    `json:"version"`
+}
+
+// GroupRef is the part of a group that a device carries.
+type GroupRef struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	VLAN *int   `json:"vlan"`
+}
+
+// ManualGroup is the input of a new group, and the checked form of an edit.
+type ManualGroup struct {
+	Name, Description string
+	VLAN              *int
+	Ranges            []string
+}
+
+// GroupEdit changes a group; a nil field stays as it is. A non-nil VLAN pointing at 0
+// removes the VLAN number.
+type GroupEdit struct {
+	Name, Description *string
+	VLAN              *int
+	Ranges            *[]string
+	Version           int64
 }

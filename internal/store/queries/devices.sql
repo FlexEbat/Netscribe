@@ -39,7 +39,7 @@ RETURNING *;
 
 -- name: UpdateDeviceEdit :execrows
 UPDATE devices
-SET label = ?, notes = ?, kind = ?, kind_locked = ?, trusted = ?, version = version + 1, updated_by = ?
+SET label = ?, notes = ?, kind = ?, kind_locked = ?, trusted = ?, group_id = ?, version = version + 1, updated_by = ?
 WHERE id = ? AND version = ?;
 
 -- name: DeleteDevice :execrows
