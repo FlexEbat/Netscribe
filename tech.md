@@ -3,6 +3,7 @@
 **Version: v0 (draft)** (2026-10-23)
 
 Changelog:
+- v0 (amendment 39) - slice 29: groups, bulk edit and CSV import. A new table `groups` (name, optional VLAN number, optional address ranges, migration `0013_groups.sql`) and a nullable `devices.group_id`. A device shows one effective group: the one a person set, else the first group (lowest id) whose ranges contain its address. Groups are managed through `GET/POST /api/groups` and `PATCH/DELETE /api/groups/{id}` (reading needs `topology:read`, the rest `devices:write`); `PATCH /api/devices/{id}` takes `groupId` (`0` clears it). `POST /api/devices/bulk` changes `trusted`, `kind` or `groupId` of up to 200 devices in one transaction. `POST /api/devices/import` creates manual devices from a CSV file, all or none, with `?dryRun=true` to check a file first. Search and saved filters are not part of this slice: they move to slice 30.
 - v0 (amendment 38) - slice 28: an overview page and the history of a device. A new table `device_presence` (migration `0012_device_presence.sql`) gets one row per scanned, non-manual device for every completed scan, written by `ApplyResult` in the same transaction, and goes away with its scan (`history.keepScans` is the limit). There is no backfill: the history of a device starts at the upgrade. `GET /api/overview` answers the counts of the overview page and `GET /api/devices/{id}/history` answers uptime, IP changes and outages of one device, both for `topology:read`. The web gets the page `/overview` (a new item in the navigation, the landing page does not change) and a tab "History" in the device panel.
 - v0 (amendment 37) - slice 27: trusted devices, notifications and risky services (built and reviewed on the branch `dev`, then merged into `main`). A device has a flag `trusted`, set by a person through `PATCH /api/devices/{id}`; manual devices and every device that exists when the migration runs are trusted. The list can be filtered by `trusted=`. A new package `internal/notify` sends one summary message per scan to the channels of the new config block `notify` (`webhook`, `telegram`, `email`) for the events `device_added`, `device_offline`, `port_opened`, `risky_service` and `scan_failed`. Channel addresses, tokens and passwords are `config.Secret`, live only in the config and never reach the page, the audit log or an export. The block applies without a restart. `GET /api/notifications` lists the channels without secrets and `POST /api/notifications/test` sends a test message, both for `system:manage`. A service gets a computed field `risk` from a fixed rule table (`internal/model/risk.go`), `GET /api/services` takes `risky=true`. The default `scan.ports` gain `21`, `23` and `5900` so that the risk rules can fire on a fresh install; a config that lists its own ports is not changed. The audit log gets `notify_test`.
 - v0 (amendment 33) - the specification is translated into English (it was in Russian) and the README and the documents in `docs/` got Russian versions (`README.ru.md`, `docs/*.ru.md`). The console and the installer are complete: every menu and question has a way out (`q`, `quit`, `exit`, `b`), every action that changes something asks first, and the console covers scans, devices, export, SSH hosts and the restore of the previous config (slice 22).
@@ -328,6 +329,18 @@ CREATE TABLE changes (
 	summary   TEXT NOT NULL,
 	at        TEXT NOT NULL
 );
+
+CREATE TABLE groups (                         -- slice 29, migration 0013_groups.sql
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	name        TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- 1 to 40 characters, no control characters
+	description TEXT NOT NULL DEFAULT '',              -- up to 200 characters
+	vlan        INTEGER,                               -- 1 to 4094, NULL when the group is not a VLAN
+	ranges      TEXT NOT NULL DEFAULT '[]',            -- JSON, an array of up to 16 CIDR strings (IPv4)
+	version     INTEGER NOT NULL DEFAULT 1,
+	created_at  TEXT NOT NULL
+);
+-- ALTER TABLE devices ADD COLUMN group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL;
+CREATE INDEX devices_group ON devices(group_id);
 
 CREATE TABLE device_presence (                -- slice 28, migration 0012_device_presence.sql
 	scan_id   INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
@@ -902,12 +915,18 @@ There is no separate showcase route. A component that no slice uses is not writt
 | `GET /api/auth/me`                   | the current user, their permissions, the CSRF token               | sign-in only    | 200, 401               |
 | `PUT /api/auth/password`             | change your own password (current and new)                        | sign-in only    | 204, 400, 401          |
 | `GET /api/topology`                  | devices, links, containers in one answer                          | `topology:read` | 200                    |
-| `GET /api/devices?online=&kind=&q=&trusted=` | list of devices, the answer is `{ "devices": [...] }`   | `topology:read` | 200, 400               |
+| `GET /api/devices?online=&kind=&q=&trusted=&group=` | list of devices, the answer is `{ "devices": [...] }`   | `topology:read` | 200, 400               |
 | `POST /api/devices`                  | manual add; 409 if the MAC or IP is taken by another record       | `devices:write` | 201, 400, 409          |
 | `GET /api/devices/{id}`              | a device, its interfaces and services                             | `topology:read` | 200, 404               |
+| `POST /api/devices/bulk`             | body `{ "ids": [1, 2], "trusted": true, "kind": "camera", "groupId": 3 }`, every field but `ids` optional, `groupId` 0 clears; all or none | `devices:write` | 200, 400, 404 |
+| `POST /api/devices/import`           | body is CSV (`Content-Type: text/csv`, at most 1 MiB and 1000 rows), creates manual devices, all or none; `?dryRun=true` only checks | `devices:write` | 201, 200 for a dry run, 400, 409, 413 |
+| `GET /api/groups`                    | the groups with the number of devices in each, `{ "groups": [...] }` | `topology:read` | 200                    |
+| `POST /api/groups`                   | body `{ name, description, vlan, ranges }`                         | `devices:write` | 201, 400, 409          |
+| `PATCH /api/groups/{id}`             | same fields, all optional, `version` required                      | `devices:write` | 200, 400, 404, 409     |
+| `DELETE /api/groups/{id}`            | the devices of the group lose it, they are not deleted             | `devices:write` | 204, 404               |
 | `GET /api/devices/{id}/history`      | uptime, addresses and outages of one device over the stored scans  | `topology:read` | 200, 404               |
 | `GET /api/overview`                  | the counts, the last scan and the last changes for the overview page | `topology:read` | 200                  |
-| `PATCH /api/devices/{id}`            | edit `label`, `notes`, `kind`, `trusted`, the field `version` is required | `devices:write` | 200, 400, 404, 409 |
+| `PATCH /api/devices/{id}`            | edit `label`, `notes`, `kind`, `trusted`, `groupId` (0 clears), the field `version` is required | `devices:write` | 200, 400, 404, 409 |
 | `DELETE /api/devices/{id}`           | delete a device                                                   | `devices:write` | 204, 404               |
 | `PUT /api/devices/{id}/position`     | body `{ "x": 1, "y": 2 }`, saves the coordinates                  | `devices:write` | 204, 400, 404          |
 | `POST /api/links`                    | a manual link between devices                                     | `devices:write` | 201, 400, 404, 409     |
@@ -945,6 +964,7 @@ SSE events: `scan.started`, `scan.progress` (data `{ scanId, stage, done, total 
 | path            | what it shows                                                   |
 | --------------- | --------------------------------------------------------------- |
 | `/`             | the topology, the device side panel by `?device=<id>`           |
+| `/groups`       | the groups: name, VLAN, ranges, number of devices, create, edit, delete |
 | `/overview`     | devices online and offline, what is new, scan health, the last changes |
 | `/inventory`    | the table of devices and IPs, search, filters                   |
 | `/containers`   | the table of containers                                         |
@@ -1289,7 +1309,7 @@ Do not write code with an invented type. Do not extend or weaken on your own the
 
 ## 16. Stages and slices
 
-Status: slices 0-28 are merged into `main`.
+Status: slices 0-28 are merged into `main`. Slice 29 is in progress on the branch `dev`.
 
 The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
@@ -1939,6 +1959,30 @@ Acceptance criteria.
 6. `GET /api/overview` on an empty database answers zeros, `lastScan: null` and `changes: []`, never `null` lists.
 7. `newThisWeek` counts a device first seen 6 days ago and not one first seen 8 days ago; manual devices are not counted.
 8. The overview page shows an `EmptyState` before the first scan, and a tile never shows a number it was not given.
+
+### Slice 29 - groups, bulk edit and CSV import
+
+The goal: one install documents several networks, and a person can sort and change many devices at once instead of one by one.
+
+Files: `internal/store/migrations/0013_groups.sql`, `internal/store/queries/groups.sql`, `internal/store/groups.go`, `internal/store/bulk.go`, `internal/store/manual.go`, `internal/model/model.go` (`Group`, `GroupRef`, `Device.Group`), `internal/model/csv.go` (the CSV parser, pure), `internal/api/groups.go`, `internal/api/bulk.go`, `internal/api/devices.go`, `internal/api/router.go`, `web/src/pages/Groups.tsx`, `web/src/pages/Inventory.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/components/ImportDialog.tsx`, `web/src/components/BulkBar.tsx`, `web/src/App.tsx`.
+
+- **Group.** `{ id, name, description, vlan, ranges, deviceCount, version }`. The name is 1 to 40 characters without control characters and unique without regard to case; `vlan` is 1 to 4094 or `null`; `ranges` holds at most 16 IPv4 CIDRs, each written as its network address (`192.168.1.0/24`, not `192.168.1.5/24`). A bad value gives 400 with the text of the first problem, a taken name gives 409, a stale `version` gives 409.
+- **Effective group.** `Device.group` is `{ id, name, vlan }` or `null`. If `groupId` is set the device has that group. Otherwise it has the group with the lowest id whose ranges contain the device's address, and `groupAuto` is `true`. A device without an address and without `groupId` has none. Deleting a group sets `group_id` to `NULL` and the ranges stop applying, so its devices fall back to the next matching group or to none.
+- **Filter.** `GET /api/devices?group=<id>` keeps the devices whose effective group is that one; `group=none` keeps those without one. Any other value gives 400.
+- **Bulk edit.** `POST /api/devices/bulk` changes the given fields on every listed device in one transaction. `ids` has 1 to 200 distinct positive numbers. A device that does not exist gives 404 and nothing is changed. A body with no field to change gives 400. A change of `kind` locks the kind as a single edit does, each device's `version` rises by one, and the audit log gets one `device_bulk_edit` entry with the number of devices and the field names, never a list of ids longer than 20.
+- **CSV import.** The first line names the columns, in any order, from `label`, `ip`, `mac`, `hostname`, `kind`, `group`, `notes`; `label` is required, and a row needs an `ip` or a `mac` (a manual device may lack both, but then a row of blank cells is refused as empty). `group` is a group name that must exist. Values follow the rules of `POST /api/devices`. A cell is text: nothing is evaluated, and a cell that starts with `=`, `+`, `-` or `@` is stored as typed. The answer of a good file is `{ "created": 12 }` with 201, and of a dry run `{ "wouldCreate": 12 }` with 200. A bad file creates nothing and answers 400 with `{ "error": "3 rows have problems", "rows": [ { "line": 4, "error": "ip is not an address" } ] }`, at most 50 rows listed. A MAC or address that another record has gives 409 for the whole file with the line. More than 1000 rows or 1 MiB gives 413.
+- **Web.** The page `/groups` lists, creates, edits and deletes groups (editing needs `devices:write`). The inventory gets a group column, a group filter, row checkboxes and a bar for the selected rows (trust, kind, group), and an "Import CSV" button that checks the file first and shows the problem lines. The device panel shows the group and lets an editor change it, saying when the group comes from the ranges.
+
+Acceptance criteria.
+1. A device in `192.168.1.0/24` shows the group that lists that range, and `groupAuto` is `true`; setting `groupId` wins over the range; clearing it returns to the range.
+2. With two groups whose ranges overlap, the lower id wins; deleting it hands the device to the other one.
+3. Deleting a group deletes no device; a viewer gets 403 on every write route and 200 on the reads; no session gets 401.
+4. Group name, VLAN, range and count rules each have a test with a bad value, and an overlong `ranges` list or a range with host bits set gives 400.
+5. Bulk edit with one missing id changes nothing and gives 404; with 201 ids gives 400; it raises the version of every device it changed and writes one audit entry.
+6. An import with one bad row creates nothing and lists that row; a good file creates every row as a trusted manual device; a dry run creates nothing.
+7. An import with a row whose `=cmd()` cell is stored as that text, an unknown `group` is a row problem, and a duplicate MAC inside the file is a row problem.
+8. The parser handles quoted cells with commas, quotes and line breaks, a byte order mark, and CRLF line endings, and refuses a file without a header.
+9. The inventory filter by group sends `group=` and the selection bar changes only the selected rows.
 
 ---
 
