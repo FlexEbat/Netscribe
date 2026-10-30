@@ -221,8 +221,8 @@ func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) (int
 }
 
 const insertManualDevice = `-- name: InsertManualDevice :one
-INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, manual, trusted, label, notes, kind_locked, updated_by, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, '', ?, '', 'manual', 1, 1, 1, ?, ?, ?, ?, ?, ?)
+INSERT INTO devices (mac, ip, hostname, vendor, kind, description, source, online, manual, trusted, label, notes, kind_locked, updated_by, first_seen_at, last_seen_at, group_id)
+VALUES (?, ?, ?, '', ?, '', 'manual', 1, 1, 1, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id
 `
 
@@ -237,6 +237,7 @@ type InsertManualDeviceParams struct {
 	UpdatedBy   sql.NullInt64
 	FirstSeenAt string
 	LastSeenAt  string
+	GroupID     sql.NullInt64
 }
 
 func (q *Queries) InsertManualDevice(ctx context.Context, arg InsertManualDeviceParams) (Device, error) {
@@ -251,6 +252,7 @@ func (q *Queries) InsertManualDevice(ctx context.Context, arg InsertManualDevice
 		arg.UpdatedBy,
 		arg.FirstSeenAt,
 		arg.LastSeenAt,
+		arg.GroupID,
 	)
 	var i Device
 	err := row.Scan(

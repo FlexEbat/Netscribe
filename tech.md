@@ -1170,7 +1170,7 @@ Multi-user work:
 
 ### 9.8 Audit
 
-These events are written: `login`, `login_failed`, `logout`, `password_change`, `user_create`, `user_update`, `user_delete`, `user_password_reset`, `token_create`, `token_revoke`, `scan_start`, `device_create`, `device_edit`, `device_delete`, `link_create`, `link_delete`, `export`, `config_reload`, `config_reload_failed`, `access_denied`, `notify_test`.
+These events are written: `login`, `login_failed`, `logout`, `password_change`, `user_create`, `user_update`, `user_delete`, `user_password_reset`, `token_create`, `token_revoke`, `scan_start`, `device_create`, `device_edit`, `device_delete`, `link_create`, `link_delete`, `export`, `config_reload`, `config_reload_failed`, `access_denied`, `notify_test`, and since slice 29 `group_create`, `group_edit`, `group_delete`, `device_bulk_edit`, `device_import`.
 
 An entry holds the time, the user, the IP, the result (`ok`, `denied`, `error`) and one line of description without secrets. The API cannot change or delete entries: old entries are deleted only by the cleanup by `audit.keepDays` (365 by default). Only the permission `audit:read` reads the log.
 

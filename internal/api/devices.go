@@ -130,6 +130,9 @@ func (s *server) updateDevice(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, model.ErrVersionConflict):
 		writeError(w, http.StatusConflict, "the device was changed by someone else")
 		return
+	case errors.Is(err, store.ErrNoSuchGroup):
+		writeError(w, http.StatusBadRequest, "the group does not exist")
+		return
 	case err != nil:
 		s.internalError(w, "update device", err)
 		return
@@ -181,6 +184,19 @@ func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusBadRequest, "online must be true or false")
 		return
+	}
+	switch v := q.Get("group"); v {
+	case "":
+	case "none":
+		none := int64(0)
+		f.Group = &none
+	default:
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id < 1 {
+			writeError(w, http.StatusBadRequest, "group must be a group id or none")
+			return
+		}
+		f.Group = &id
 	}
 	switch v := q.Get("trusted"); v {
 	case "":

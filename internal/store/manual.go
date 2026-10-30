@@ -16,6 +16,19 @@ import (
 // CreateDevice stores a device a person added. A MAC or an IP that another record
 // already uses is ErrConflict. A kind given by the person is locked against scans.
 func (s *Store) CreateDevice(ctx context.Context, in model.ManualDevice, userID int64) (model.Device, error) {
+	row, err := s.createManual(ctx, s.q, in, nil, userID)
+	if err != nil {
+		return model.Device{}, err
+	}
+	d, err := toDevice(row)
+	if err != nil {
+		return model.Device{}, err
+	}
+	return s.withGroup(ctx, d)
+}
+
+// createManual inserts one manual device through q, which may belong to a transaction.
+func (s *Store) createManual(ctx context.Context, q *dbgen.Queries, in model.ManualDevice, group *int64, userID int64) (dbgen.Device, error) {
 	kind := in.Kind
 	locked := kind != "" && kind != model.KindUnknown
 	if kind == "" {
@@ -24,14 +37,14 @@ func (s *Store) CreateDevice(ctx context.Context, in model.ManualDevice, userID 
 	mac, ip := strings.ToLower(strings.TrimSpace(in.MAC)), strings.TrimSpace(in.IP)
 	if mac == "" && ip != "" {
 		// An address that a discovered device already uses is that device, not a new one.
-		if _, err := s.q.GetDeviceByIP(ctx, ip); err == nil {
-			return model.Device{}, ErrConflict
+		if _, err := q.GetDeviceByIP(ctx, ip); err == nil {
+			return dbgen.Device{}, ErrConflict
 		} else if !errors.Is(err, sql.ErrNoRows) {
-			return model.Device{}, fmt.Errorf("create device: %w", err)
+			return dbgen.Device{}, fmt.Errorf("create device: %w", err)
 		}
 	}
 	ts := formatTime(s.now())
-	row, err := s.q.InsertManualDevice(ctx, dbgen.InsertManualDeviceParams{
+	row, err := q.InsertManualDevice(ctx, dbgen.InsertManualDeviceParams{
 		Mac:         mac,
 		Ip:          ip,
 		Hostname:    cleanText(in.Hostname),
@@ -42,18 +55,15 @@ func (s *Store) CreateDevice(ctx context.Context, in model.ManualDevice, userID 
 		UpdatedBy:   sql.NullInt64{Int64: userID, Valid: userID > 0},
 		FirstSeenAt: ts,
 		LastSeenAt:  ts,
+		GroupID:     groupArg(group),
 	})
 	if isUniqueViolation(err) {
-		return model.Device{}, ErrConflict
+		return dbgen.Device{}, ErrConflict
 	}
 	if err != nil {
-		return model.Device{}, fmt.Errorf("create device: %w", err)
+		return dbgen.Device{}, fmt.Errorf("create device: %w", err)
 	}
-	d, err := toDevice(row)
-	if err != nil {
-		return model.Device{}, err
-	}
-	return s.withGroup(ctx, d)
+	return row, nil
 }
 
 // UpdateDevice applies an edit if the editor saw the current version. A stale version is

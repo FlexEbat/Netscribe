@@ -46,10 +46,12 @@ type Repo interface {
 	DeviceHistory(ctx context.Context, id int64) (model.DeviceHistory, error)  // ErrNotFound
 	Overview(ctx context.Context) (model.Overview, error)
 	ListGroups(ctx context.Context) ([]model.Group, error)
-	GetGroup(ctx context.Context, id int64) (model.Group, error)                       // ErrNotFound
-	CreateGroup(ctx context.Context, in model.ManualGroup) (model.Group, error)        // ErrConflict
-	UpdateGroup(ctx context.Context, id int64, e model.GroupEdit) (model.Group, error) // ErrNotFound, ErrVersionConflict, ErrConflict
-	DeleteGroup(ctx context.Context, id int64) error                                   // ErrNotFound
+	GetGroup(ctx context.Context, id int64) (model.Group, error)                                   // ErrNotFound
+	CreateGroup(ctx context.Context, in model.ManualGroup) (model.Group, error)                    // ErrConflict
+	UpdateGroup(ctx context.Context, id int64, e model.GroupEdit) (model.Group, error)             // ErrNotFound, ErrVersionConflict, ErrConflict
+	DeleteGroup(ctx context.Context, id int64) error                                               // ErrNotFound
+	BulkEdit(ctx context.Context, ids []int64, c BulkChange, userID int64) (int, error)            // ErrNotFound, ErrNoSuchGroup
+	ImportDevices(ctx context.Context, items []ImportItem, dryRun bool, userID int64) (int, error) // *ImportConflict
 
 	CreateDevice(ctx context.Context, in model.ManualDevice, userID int64) (model.Device, error)        // ErrConflict
 	UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, userID int64) (model.Device, error) // ErrNotFound, ErrVersionConflict
