@@ -234,6 +234,8 @@ func (s *server) routes() []Route {
 			route(http.MethodGet, "/api/devices", model.PermTopologyRead, s.listDevices),
 			route(http.MethodPost, "/api/devices", model.PermDevicesWrite, s.createDevice),
 			route(http.MethodGet, "/api/devices/{id}", model.PermTopologyRead, s.getDevice),
+			route(http.MethodGet, "/api/devices/{id}/history", model.PermTopologyRead, s.getDeviceHistory),
+			route(http.MethodGet, "/api/overview", model.PermTopologyRead, s.getOverview),
 			route(http.MethodPatch, "/api/devices/{id}", model.PermDevicesWrite, s.updateDevice),
 			route(http.MethodDelete, "/api/devices/{id}", model.PermDevicesWrite, s.deleteDevice),
 			route(http.MethodPost, "/api/links", model.PermDevicesWrite, s.createLink),

@@ -80,6 +80,13 @@ type Device struct {
 	Trusted     int64
 }
 
+type DevicePresence struct {
+	ScanID   int64
+	DeviceID int64
+	Online   int64
+	Ip       string
+}
+
 type Interface struct {
 	ID       int64
 	DeviceID int64

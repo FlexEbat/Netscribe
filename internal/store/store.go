@@ -43,6 +43,8 @@ type Repo interface {
 	ListLinks(ctx context.Context) ([]model.Link, error)
 	ListInterfaces(ctx context.Context, deviceID int64) ([]model.Interface, error)
 	ListServices(ctx context.Context, deviceID int64) ([]model.Service, error) // 0 means every device
+	DeviceHistory(ctx context.Context, id int64) (model.DeviceHistory, error)  // ErrNotFound
+	Overview(ctx context.Context) (model.Overview, error)
 
 	CreateDevice(ctx context.Context, in model.ManualDevice, userID int64) (model.Device, error)        // ErrConflict
 	UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, userID int64) (model.Device, error) // ErrNotFound, ErrVersionConflict

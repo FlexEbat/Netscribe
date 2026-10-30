@@ -93,6 +93,21 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		}
 	}
 
+	// The presence of every scanned device, as the scan leaves it. A manual device is not
+	// scanned, so a row for it would only invent an uptime.
+	all, err := q.ListDevices(ctx)
+	if err != nil {
+		return fmt.Errorf("apply result: %w", err)
+	}
+	for _, d := range all {
+		if _, was := seen[d.ID]; d.Manual != 0 || (!was && !inTargets(targets, d.Ip)) {
+			continue
+		}
+		if err := q.InsertPresence(ctx, dbgen.InsertPresenceParams{ScanID: scanID, DeviceID: d.ID, Online: d.Online, Ip: d.Ip}); err != nil {
+			return fmt.Errorf("apply result: %w", err)
+		}
+	}
+
 	if done > 0 {
 		after, err := takeSnapshot(ctx, q)
 		if err != nil {
