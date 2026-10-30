@@ -3,6 +3,7 @@
 **Version: v0 (draft)** (2026-10-23)
 
 Changelog:
+- v0 (amendment 38) - slice 28: an overview page and the history of a device. A new table `device_presence` (migration `0012_device_presence.sql`) gets one row per scanned, non-manual device for every completed scan, written by `ApplyResult` in the same transaction, and goes away with its scan (`history.keepScans` is the limit). There is no backfill: the history of a device starts at the upgrade. `GET /api/overview` answers the counts of the overview page and `GET /api/devices/{id}/history` answers uptime, IP changes and outages of one device, both for `topology:read`. The web gets the page `/overview` (a new item in the navigation, the landing page does not change) and a tab "History" in the device panel.
 - v0 (amendment 37) - slice 27: trusted devices, notifications and risky services (work happens on the branch `dev`, which the owner reviews before it goes to `main`). A device has a flag `trusted`, set by a person through `PATCH /api/devices/{id}`; manual devices and every device that exists when the migration runs are trusted. The list can be filtered by `trusted=`. A new package `internal/notify` sends one summary message per scan to the channels of the new config block `notify` (`webhook`, `telegram`, `email`) for the events `device_added`, `device_offline`, `port_opened`, `risky_service` and `scan_failed`. Channel addresses, tokens and passwords are `config.Secret`, live only in the config and never reach the page, the audit log or an export. The block applies without a restart. `GET /api/notifications` lists the channels without secrets and `POST /api/notifications/test` sends a test message, both for `system:manage`. A service gets a computed field `risk` from a fixed rule table (`internal/model/risk.go`), `GET /api/services` takes `risky=true`. The default `scan.ports` gain `21`, `23` and `5900` so that the risk rules can fire on a fresh install; a config that lists its own ports is not changed. The audit log gets `notify_test`.
 - v0 (amendment 33) - the specification is translated into English (it was in Russian) and the README and the documents in `docs/` got Russian versions (`README.ru.md`, `docs/*.ru.md`). The console and the installer are complete: every menu and question has a way out (`q`, `quit`, `exit`, `b`), every action that changes something asks first, and the console covers scans, devices, export, SSH hosts and the restore of the previous config (slice 22).
 - v0 (amendment 36) - slice 26: the panel follows a flat, restrained visual system. It replaces parts of the slice 17 design (the surface gradient and spotlight, the two drifting spots of light, custom radii). Icons come from Phosphor (`@phosphor-icons/react`, `lucide-react` is removed). Backgrounds are flat and the dark ones come only from `#000000 #181818 #1F1F1F #272727 #313131 #131209` (page `#000000`, cards `#181818`, menus and inputs `#1F1F1F`, muted `#272727`, hover `#313131`); the one gradient is the text of the sign in heading (`.hero-heading`, white to `#9B9B9B` in dark, black to `#666666` in light, 680px wide). `.surface` is a flat card with a border all the way round; `spotlight.ts` is deleted. Radius is Tailwind's own scale (the custom `--radius` tokens are removed). Font sizes sit on Tailwind's type scale, spacing on 0, 2, 4, 8, 12, 16, 24, 32, 40, 48, 64, 80 and 96px. Main buttons are `text-base` semibold with 8px and 12px padding, small header buttons are `text-sm`. Every transition uses `cubic-bezier(0.22, 1, 0.36, 1)` (set as the default timing function), 300ms by default, and moves only transform, opacity or colour: the scan progress bar scales instead of changing width, the online beacon and the update glow animate opacity and transform only, skeletons replace "Loading" text. On a narrow screen the menu is a full height blurred panel whose links arrive 60ms apart (24px rise, capped at 400ms), and its toggle icon turns between the two states. Interface copy has no hyphens inside words and headings and buttons are in sentence case. `web/src/design-rules.test.ts` checks these rules on the source. The ambient particle canvas of slice 17 stays: it is not a gradient and it does not touch layout. Not applied, because they belong to a landing page and not to an application: the intake and page structure of part A, the floating top bar, and the tagline reveal section.
@@ -327,6 +328,15 @@ CREATE TABLE changes (
 	summary   TEXT NOT NULL,
 	at        TEXT NOT NULL
 );
+
+CREATE TABLE device_presence (                -- slice 28, migration 0012_device_presence.sql
+	scan_id   INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
+	device_id INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+	online    INTEGER NOT NULL,               -- 1 when this scan saw the device
+	ip        TEXT NOT NULL DEFAULT '',       -- the address the device had in this scan
+	PRIMARY KEY (scan_id, device_id)
+) WITHOUT ROWID;
+CREATE INDEX device_presence_device ON device_presence(device_id);
 
 CREATE TABLE users (
 	id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -895,6 +905,8 @@ There is no separate showcase route. A component that no slice uses is not writt
 | `GET /api/devices?online=&kind=&q=&trusted=` | list of devices, the answer is `{ "devices": [...] }`   | `topology:read` | 200, 400               |
 | `POST /api/devices`                  | manual add; 409 if the MAC or IP is taken by another record       | `devices:write` | 201, 400, 409          |
 | `GET /api/devices/{id}`              | a device, its interfaces and services                             | `topology:read` | 200, 404               |
+| `GET /api/devices/{id}/history`      | uptime, addresses and outages of one device over the stored scans  | `topology:read` | 200, 404               |
+| `GET /api/overview`                  | the counts, the last scan and the last changes for the overview page | `topology:read` | 200                  |
 | `PATCH /api/devices/{id}`            | edit `label`, `notes`, `kind`, `trusted`, the field `version` is required | `devices:write` | 200, 400, 404, 409 |
 | `DELETE /api/devices/{id}`           | delete a device                                                   | `devices:write` | 204, 404               |
 | `PUT /api/devices/{id}/position`     | body `{ "x": 1, "y": 2 }`, saves the coordinates                  | `devices:write` | 204, 400, 404          |
@@ -933,6 +945,7 @@ SSE events: `scan.started`, `scan.progress` (data `{ scanId, stage, done, total 
 | path            | what it shows                                                   |
 | --------------- | --------------------------------------------------------------- |
 | `/`             | the topology, the device side panel by `?device=<id>`           |
+| `/overview`     | devices online and offline, what is new, scan health, the last changes |
 | `/inventory`    | the table of devices and IPs, search, filters                   |
 | `/containers`   | the table of containers                                         |
 | `/services`     | the table of services                                           |
@@ -1276,7 +1289,7 @@ Do not write code with an invented type. Do not extend or weaken on your own the
 
 ## 16. Stages and slices
 
-Status: slices 0-26 are merged into `main`. Slice 27 is in progress on the branch `dev`.
+Status: slices 0-26 are merged into `main`. Slices 27 and 28 are in progress on the branch `dev`.
 
 The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
@@ -1905,6 +1918,27 @@ Acceptance criteria.
 8. `POST /api/notifications/test` for an unknown channel answers 404, a second call within 10 seconds answers 429, and a delivery error answers 502 with no secret in the text.
 9. A config with a duplicate channel name, an unknown type, an unknown event or a missing required field is rejected as a whole and keeps the old config running.
 10. Every risk rule has a test for its port and protocol, and 23/udp is not risky.
+
+### Slice 28 - overview and device history
+
+The goal: one page that says how the network is doing, and for each device the answer to "how often is it there, and has it moved".
+
+Files: `internal/store/migrations/0012_device_presence.sql`, `internal/store/queries/presence.sql`, `internal/store/apply.go` (writing the presence rows), `internal/store/history.go`, `internal/store/overview.go`, `internal/model/model.go` (`DeviceHistory`, `Overview`), `internal/api/overview.go`, `internal/api/devices.go`, `internal/api/router.go`, `web/src/pages/Overview.tsx`, `web/src/components/HistoryTab.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/App.tsx`, `web/src/components/` (the navigation).
+
+- **Presence.** `ApplyResult` writes one `device_presence` row for each device that is not manual, after the scan was merged and before the changes are written, with `online` as the device has it after the merge and the `ip` it has then. A failed scan writes none. Rows go with their scan and with their device.
+- **`GET /api/devices/{id}/history`** answers `{ "history": { "scans": 120, "online": 118, "uptime": 98.3, "ips": [ { "ip": "192.168.1.9", "from": "...", "to": "..." } ], "outages": [ { "from": "...", "to": null } ], "points": [ { "scanId": 7, "at": "...", "online": true, "ip": "192.168.1.9" } ] } }`. `uptime` is the percent of the stored scans that saw the device, with one decimal, and `null` when there are no rows. `ips` lists the addresses the device had, newest first: `from` is the time of the first scan with that address, `to` the time of the last. `outages` lists runs of scans that did not see the device, newest first, at most 20, `to` is the time of the first scan that saw it again and `null` while the device is still away. `points` are the last 100 rows, oldest first. A device that does not exist gives 404; a manual device gives 200 with `scans: 0`.
+- **`GET /api/overview`** answers `{ "overview": { "devices": { "total": 12, "online": 9, "offline": 3, "unknown": 2, "newThisWeek": 1 }, "risky": 2, "lastScan": null, "recentScans": { "total": 10, "failed": 1 }, "changes": [] } }`. `unknown` counts untrusted devices, `newThisWeek` the devices that a scan first saw in the last 7 days, `risky` the services with a risk, `lastScan` the newest scan of any status or `null`, `recentScans` the last 10 scans, `changes` the 10 newest changes in the form of `GET /api/changes`.
+- **Web.** The page `/overview` shows the counts as tiles, the last scan (as the scan bar of the inventory does), the scan health ("1 of the last 10 scans failed") and the last changes; each tile links to the inventory with the matching filter. The tab "History" of the device panel shows the uptime with the number of scans it rests on, the addresses and the outages in words and times. The text says that the history starts when slice 28 was installed.
+
+Acceptance criteria.
+1. A completed scan writes one row per scanned non-manual device and none for manual devices; a failed scan writes none; `PruneScans` removes the rows of the scans it deletes.
+2. `uptime` is the share of the stored scans that saw the device, and a device that was added in the 3rd of 4 scans has `scans: 2`.
+3. A change of address shows as two entries in `ips`; an address that came back shows as a third.
+4. A run of missed scans is one outage, an outage that is still going on has `to: null`, and a device that is back has a closed one.
+5. A device that does not exist gives 404, a non-numeric id gives 404, a viewer may read both routes, a request without a session gets 401.
+6. `GET /api/overview` on an empty database answers zeros, `lastScan: null` and `changes: []`, never `null` lists.
+7. `newThisWeek` counts a device first seen 6 days ago and not one first seen 8 days ago; manual devices are not counted.
+8. The overview page shows an `EmptyState` before the first scan, and a tile never shows a number it was not given.
 
 ---
 
