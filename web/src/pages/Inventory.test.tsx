@@ -29,6 +29,7 @@ function device(overrides: Partial<Device>): Device {
     notes: "",
     osGuess: "",
     kindLocked: false,
+    trusted: true,
     version: 1,
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
@@ -284,5 +285,45 @@ describe("Inventory nmap option", () => {
     const mock = open(() => json(200, { devices: [device({})] }), { nmap, role: "viewer" })
     await screen.findByRole("table")
     expect(mock.calls.some((c) => c.path === "/api/nmap")).toBe(false)
+  })
+})
+
+describe("Inventory trust", () => {
+  const unknown = device({ id: 1, hostname: "cam1", ip: "192.168.1.9", trusted: false, version: 4 })
+  const known = device({ id: 2, hostname: "nas", ip: "192.168.1.10", trusted: true })
+
+  it("asks the server for the unknown devices only", async () => {
+    const mock = open(() => json(200, { devices: [unknown, known] }))
+    await screen.findByRole("table")
+    await userEvent.setup().selectOptions(screen.getByLabelText("Filter by trust"), "unknown")
+    await waitFor(() => expect(mock.calls.some((c) => c.path.includes("trusted=false"))).toBe(true))
+  })
+
+  it("marks an unknown device and says nothing about a trusted one", async () => {
+    open(() => json(200, { devices: [unknown, known] }))
+    const rows = within(await screen.findByRole("table")).getAllByRole("row")
+    expect(within(rows[1]!).getByText("Unknown")).toBeInTheDocument()
+    expect(within(rows[1]!).getByRole("button", { name: "Trust cam1" })).toBeInTheDocument()
+    expect(within(rows[2]!).getByText("Trusted")).toBeInTheDocument()
+    expect(within(rows[2]!).queryByRole("button", { name: /Trust/ })).not.toBeInTheDocument()
+  })
+
+  it("trusts a device and loads the list again", async () => {
+    const seen: string[] = []
+    open((path) => {
+      seen.push(path)
+      return path === "/api/devices/1"
+        ? json(200, { device: { ...unknown, trusted: true } })
+        : json(200, { devices: [unknown] })
+    })
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Trust cam1" }))
+    await waitFor(() => expect(seen).toContain("/api/devices/1"))
+    await waitFor(() => expect(seen.filter((p) => p === "/api/devices")).toHaveLength(2))
+  })
+
+  it("offers a viewer the badge but not the button", async () => {
+    open(() => json(200, { devices: [unknown] }), { role: "viewer" })
+    expect(await screen.findByText("Unknown")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Trust cam1" })).not.toBeInTheDocument()
   })
 })

@@ -16,6 +16,7 @@ import { DeviceForm } from "@/components/DeviceForm"
 import { InterfacesTable } from "@/components/InterfacesTable"
 import { ServicesTable } from "@/components/ServicesTable"
 import { StatusBadge } from "@/components/StatusBadge"
+import { UnknownBadge } from "@/components/TrustBadge"
 import { Button } from "@/components/ui/button"
 import { Alert } from "@/components/ui/alert"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
@@ -115,6 +116,30 @@ export function DevicePanel({
                 <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
                   <PencilSimple className="size-4" aria-hidden="true" />
                   Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const d = state.device
+                    updateDevice(d.id, { trusted: !d.trusted, version: d.version })
+                      .then((device) => {
+                        setLoaded({
+                          id: deviceId,
+                          state: {
+                            status: "ready",
+                            device,
+                            interfaces: state.interfaces,
+                            services: state.services,
+                          },
+                        })
+                        onChanged?.()
+                      })
+                      // A conflict or a failure: load the current state.
+                      .catch(() => setReloads((n) => n + 1))
+                  }}
+                >
+                  {state.device.trusted ? "Mark as unknown" : "Mark as trusted"}
                 </Button>
                 <DeleteDeviceButton
                   name={displayName(state.device)}
@@ -235,6 +260,7 @@ function Body({ state }: { state: State }) {
 function Details({ device: d }: { device: Device }) {
   const rows: [string, React.ReactNode][] = [
     ["Status", <StatusBadge key="s" online={d.online} />],
+    ["Trust", d.trusted ? "Trusted" : <UnknownBadge key="t" />],
     ["Kind", kindLabels[d.kind]],
     ["IP", d.ip || "–"],
     ["MAC", d.mac || "–"],

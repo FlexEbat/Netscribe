@@ -38,6 +38,7 @@ function device(id: number, ip: string, hostname: string): Device {
     notes: "",
     osGuess: "",
     kindLocked: false,
+    trusted: true,
     version: 1,
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",

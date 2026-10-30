@@ -41,6 +41,7 @@ const device = (id: number): Device => ({
   notes: "",
   osGuess: "",
   kindLocked: false,
+  trusted: true,
   version: 1,
   firstSeenAt: "",
   lastSeenAt: "",

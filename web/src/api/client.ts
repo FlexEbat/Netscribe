@@ -117,6 +117,8 @@ export interface Device {
   label: string
   notes: string
   kindLocked: boolean
+  /** A person marked the device as known. A scan creates devices untrusted. */
+  trusted: boolean
   version: number
   firstSeenAt: string
   lastSeenAt: string
@@ -127,12 +129,14 @@ export interface Device {
 export interface DeviceQuery {
   q?: string
   online?: boolean
+  trusted?: boolean
 }
 
 export function listDevices(query: DeviceQuery = {}): Promise<Device[]> {
   const params = new URLSearchParams()
   if (query.q) params.set("q", query.q)
   if (query.online !== undefined) params.set("online", String(query.online))
+  if (query.trusted !== undefined) params.set("trusted", String(query.trusted))
   const suffix = params.size > 0 ? `?${params.toString()}` : ""
   return api<{ devices: Device[] }>("GET", `/api/devices${suffix}`).then((body) => body.devices)
 }
@@ -307,6 +311,13 @@ export interface Service {
   banner: string
   firstSeenAt: string
   lastSeenAt: string
+  /** Why the open port deserves a look, or null when it is not on the list. */
+  risk: Risk | null
+}
+
+export interface Risk {
+  severity: "medium" | "high"
+  message: string
 }
 
 export interface DeviceDetail {
@@ -348,10 +359,12 @@ export async function createDevice(input: DeviceInput): Promise<Device> {
   return body.device
 }
 
+/** The fields to change; only the version is required. */
 export interface DeviceChanges {
-  label: string
-  notes: string
-  kind: DeviceKind
+  label?: string
+  notes?: string
+  kind?: DeviceKind
+  trusted?: boolean
   version: number
 }
 
@@ -559,4 +572,21 @@ export async function getSettings(): Promise<SettingsGroup[]> {
 
 export function saveSettings(changes: Record<string, unknown>): Promise<SettingsSaved> {
   return api<SettingsSaved>("PUT", "/api/settings", { body: { changes } })
+}
+
+export interface NotificationChannel {
+  name: string
+  type: "webhook" | "telegram" | "email"
+  /** The events the channel is sent. */
+  events: string[]
+}
+
+/** The channels of the config. Addresses, tokens and passwords never come with them. */
+export async function listNotifications(): Promise<NotificationChannel[]> {
+  const body = await api<{ channels: NotificationChannel[] }>("GET", "/api/notifications")
+  return body.channels
+}
+
+export function testNotification(channel: string): Promise<void> {
+  return api("POST", "/api/notifications/test", { body: { channel } })
 }

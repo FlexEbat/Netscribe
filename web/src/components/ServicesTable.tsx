@@ -1,4 +1,5 @@
 import type { Service } from "@/api/client"
+import { RiskBadge } from "@/components/RiskBadge"
 import {
   Table,
   TableBody,
@@ -26,7 +27,10 @@ export function ServicesTable({ services }: { services: readonly Service[] }) {
       <TableBody>
         {services.map((s) => (
           <TableRow key={s.id}>
-            <TableCell>{s.name || "–"}</TableCell>
+            <TableCell className="flex flex-wrap items-center gap-2">
+              {s.name || "–"}
+              {s.risk ? <RiskBadge risk={s.risk} /> : null}
+            </TableCell>
             <TableCell className="font-mono">{s.port}</TableCell>
             <TableCell className="uppercase">{s.proto}</TableCell>
             <TableCell className="max-w-64 break-words text-muted-foreground">
