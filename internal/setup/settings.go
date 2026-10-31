@@ -105,17 +105,15 @@ var settingGroups = []group{
 		{path: p("auth.sessionIdleTimeout"), label: "Idle session timeout", kind: kDuration, def: "8h", help: "A session with no request for this long ends."},
 		{path: p("auth.sessionMaxAge"), label: "Longest session", kind: kDuration, def: "168h", help: "A session ends after this time, active or not."},
 	}},
-	{name: "Export", hint: "reports", items: []setting{
+	{name: "Export", hint: "reports and metrics", items: []setting{
 		{path: p("export.chromePath"), label: "Browser for PDF export", kind: kText, hot: true, def: "found in PATH",
 			help: "The path of chromium or chrome. Empty means look for one in PATH."},
+		{path: p("metrics.enabled"), label: "Serve /metrics", kind: kBool, hot: true, def: "off",
+			help: "Prometheus text format with counts of devices, risky services and scans. Reading it needs a token with the read scope. Names and addresses of devices are never in it."},
 	}},
 	{name: "SSH", hint: "reading hosts over SSH (the hosts themselves: SSH hosts)", items: []setting{
 		{path: p("ssh.knownHosts"), label: "known_hosts file", kind: kText, hot: true, def: "~/.ssh/known_hosts",
 			help: "Strict: a host that is not listed, or whose key changed, is skipped. Fill it with ssh-keyscan and check the fingerprint."},
-	}},
-	{name: "Metrics", hint: "numbers for Prometheus", items: []setting{
-		{path: p("metrics.enabled"), label: "Serve /metrics", kind: kBool, hot: true, def: "off",
-			help: "Prometheus text format with counts of devices, risky services and scans. Reading it needs a token with the read scope. Names and addresses of devices are never in it."},
 	}},
 	{name: "Updates", hint: "newer releases", items: []setting{
 		{path: p("updates.check"), label: "Look for new releases", kind: kBool, hot: true, def: "on",
