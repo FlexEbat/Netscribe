@@ -71,7 +71,7 @@ func mergeHot(cur, next Config) (Config, []string) {
 	applied := cur
 	applied.Scan, applied.SNMP, applied.SSH = next.Scan, next.SNMP, next.SSH
 	applied.Docker, applied.History, applied.Export = next.Docker, next.History, next.Export
-	applied.Updates, applied.Notify = next.Updates, next.Notify
+	applied.Updates, applied.Notify, applied.Metrics = next.Updates, next.Notify, next.Metrics
 
 	var restart []string
 	for _, k := range []struct {

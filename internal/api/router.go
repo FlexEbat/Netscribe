@@ -133,6 +133,11 @@ type Options struct {
 	Updates *update.Checker
 	// UpdatesEnabled tells whether the check is switched on in the config. Nil means it is.
 	UpdatesEnabled func() bool
+	// MetricsEnabled tells whether GET /metrics answers. Nil means it does not.
+	MetricsEnabled func() bool
+	// Backup makes and checks backups. Without it GET /api/backup and POST /api/backup/restore
+	// are not registered.
+	Backup BackupService
 	// Helper takes the update and restart requests. Without it POST /api/update and
 	// POST /api/system/restart are not registered.
 	Helper SystemHelper
@@ -172,6 +177,12 @@ type server struct {
 	helper         SystemHelper
 	settings       SettingsEditor
 	notifier       Notifications
+	backup         BackupService
+	backupMu       sync.Mutex // one backup or restore at a time
+	metricsOn      func() bool
+	metricsMu      sync.Mutex
+	metricsAt      time.Time
+	metricsText    []byte
 	settingsMu     sync.Mutex // one change of the config file at a time
 	recheckMu      sync.Mutex
 	lastRecheck    time.Time
@@ -209,6 +220,12 @@ func (s *server) routes() []Route {
 			route(http.MethodPost, "/api/system/restart", model.PermSystemManage, s.restartService),
 		)
 	}
+	if s.backup != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/backup", model.PermSystemManage, s.getBackup),
+			route(http.MethodPost, "/api/backup/restore", model.PermSystemManage, s.restoreBackup),
+		)
+	}
 	if s.settings != nil {
 		table = append(table,
 			route(http.MethodGet, "/api/settings", model.PermSystemManage, s.getSettings),
@@ -226,6 +243,9 @@ func (s *server) routes() []Route {
 	}
 	if s.containers != nil {
 		table = append(table, route(http.MethodGet, "/api/containers", model.PermTopologyRead, s.listContainers))
+	}
+	if s.repo != nil && s.metricsOn != nil {
+		table = append(table, route(http.MethodGet, "/metrics", model.PermTopologyRead, s.getMetrics))
 	}
 	if s.repo != nil {
 		table = append(table,
@@ -316,6 +336,8 @@ func newServer(opts Options) *server {
 		updates:        opts.Updates,
 		updatesEnabled: opts.UpdatesEnabled,
 		helper:         opts.Helper,
+		backup:         opts.Backup,
+		metricsOn:      opts.MetricsEnabled,
 		settings:       opts.Settings,
 		notifier:       opts.Notifications,
 	}

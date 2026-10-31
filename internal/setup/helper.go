@@ -18,7 +18,8 @@ import (
 // panel (a process without rights) leaves a request file; systemd starts the helper, which
 // reads one word from it and does that one thing. Nothing else in the file is used, and the
 // helper never takes a version, a path or a command from it: "update" installs the newest
-// release of this repository after checking its checksum, "restart" restarts netscribe.
+// release of this repository after checking its checksum, "restart" restarts netscribe, and
+// "restore" puts the backup the panel staged in place (the stage is always StageDir).
 
 // HelperStatusPath is where the helper tells how the last request went. The directory
 // belongs to root, so only the helper can write there, and everybody can read it.
@@ -63,7 +64,7 @@ func ReadRequest(path string) (string, error) {
 	}
 	verb := strings.TrimSpace(string(b))
 	switch verb {
-	case HelperUpdate, HelperRestart:
+	case HelperUpdate, HelperRestart, HelperRestore:
 		return verb, nil
 	}
 	return "", errors.New("the request is not one the helper knows")
@@ -95,6 +96,8 @@ func runHelperAction(ctx context.Context, env Env, o Options, verb string) error
 	s := newSession(env, o)
 	s.p.yes = true
 	switch verb {
+	case HelperRestore:
+		return s.restore(ctx)
 	case HelperRestart:
 		return s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"restart", "netscribe"}})
 	case HelperUpdate:

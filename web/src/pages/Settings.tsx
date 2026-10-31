@@ -11,6 +11,7 @@ import {
   type SettingsSaved,
   type VersionInfo,
 } from "@/api/client"
+import { BackupCard } from "@/components/BackupCard"
 import { NotificationsCard } from "@/components/NotificationsCard"
 import { UpdateDialog } from "@/components/UpdateDialog"
 import { Alert } from "@/components/ui/alert"
@@ -284,6 +285,8 @@ export function Settings() {
       ))}
 
       <NotificationsCard />
+
+      <BackupCard />
 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {saved ? (

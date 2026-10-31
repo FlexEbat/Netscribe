@@ -50,6 +50,8 @@ commands:
   config    change the configuration: interactively, with get, set, show or edit
   doctor    check an install and say what to fix
   update    look for a newer release and install it (--check only looks)
+  backup    write the database and the config to one archive: --out <file>
+  restore   replace the data with a backup: restore <file> (as root)
   version   print the version of this build
 
 run "netscribe <command> -h" for the flags of a command`
@@ -91,6 +93,8 @@ func run(args []string, e streams) int {
 		"config":  runConfig,
 		"update":  runUpdate,
 		"helper":  runHelper,
+		"backup":  runBackup,
+		"restore": runRestore,
 	}
 	if cmd, ok := commands[args[0]]; ok {
 		if err := cmd(args[1:], e); err != nil {
@@ -234,7 +238,7 @@ func serve(args []string, e streams) error {
 	go notifyOnScans(ctx, hub, notifier)
 	router := api.NewRouter(api.Options{
 		Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
-		Helper: newHelperClient(cfg.Database), Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
+		Helper: newHelperClient(cfg.Database), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},

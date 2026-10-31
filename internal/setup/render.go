@@ -164,7 +164,7 @@ func overlaps(a, b netip.Prefix) bool { return a.Contains(b.Addr()) || b.Contain
 // the strings of the helper units that depend on where the install lives.
 const (
 	helperExec     = "ExecStart=/usr/local/bin/netscribe helper --request /var/lib/netscribe/helper.request"
-	helperWritable = "ReadWritePaths=/usr/local/bin /etc/systemd/system /var/lib/netscribe"
+	helperWritable = "ReadWritePaths=/usr/local/bin /etc/systemd/system /var/lib/netscribe /etc/netscribe"
 	helperWatch    = "PathExists=/var/lib/netscribe/helper.request"
 )
 
@@ -179,7 +179,7 @@ func RenderHelperService(o Options) (string, error) {
 		}
 	}
 	u := strings.Replace(helperServiceTemplate, helperExec, fmt.Sprintf("ExecStart=%s helper --request %s", o.BinPath, RequestPath(o)), 1)
-	paths := uniqueStrings([]string{filepath.Dir(o.BinPath), o.UnitDir, o.StateDir})
+	paths := uniqueStrings([]string{filepath.Dir(o.BinPath), o.UnitDir, o.StateDir, filepath.Dir(o.ConfigPath)})
 	return strings.Replace(u, helperWritable, "ReadWritePaths="+strings.Join(paths, " "), 1), nil
 }
 
