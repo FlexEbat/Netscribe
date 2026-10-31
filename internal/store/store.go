@@ -46,10 +46,13 @@ type Repo interface {
 	DeviceHistory(ctx context.Context, id int64) (model.DeviceHistory, error)  // ErrNotFound
 	Overview(ctx context.Context) (model.Overview, error)
 	ListGroups(ctx context.Context) ([]model.Group, error)
-	GetGroup(ctx context.Context, id int64) (model.Group, error)                                   // ErrNotFound
-	CreateGroup(ctx context.Context, in model.ManualGroup) (model.Group, error)                    // ErrConflict
-	UpdateGroup(ctx context.Context, id int64, e model.GroupEdit) (model.Group, error)             // ErrNotFound, ErrVersionConflict, ErrConflict
-	DeleteGroup(ctx context.Context, id int64) error                                               // ErrNotFound
+	GetGroup(ctx context.Context, id int64) (model.Group, error)                                         // ErrNotFound
+	CreateGroup(ctx context.Context, in model.ManualGroup) (model.Group, error)                          // ErrConflict
+	UpdateGroup(ctx context.Context, id int64, e model.GroupEdit) (model.Group, error)                   // ErrNotFound, ErrVersionConflict, ErrConflict
+	DeleteGroup(ctx context.Context, id int64) error                                                     // ErrNotFound
+	CreateFilter(ctx context.Context, userID int64, page, name, query string) (model.SavedFilter, error) // ErrConflict, ErrTooManyFilters
+	ListFilters(ctx context.Context, userID int64, page string) ([]model.SavedFilter, error)
+	DeleteFilter(ctx context.Context, userID, id int64) error                                      // ErrNotFound
 	BulkEdit(ctx context.Context, ids []int64, c BulkChange, userID int64) (int, error)            // ErrNotFound, ErrNoSuchGroup
 	ImportDevices(ctx context.Context, items []ImportItem, dryRun bool, userID int64) (int, error) // *ImportConflict
 

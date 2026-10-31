@@ -3,6 +3,7 @@
 **Version: v0 (draft)** (2026-10-23)
 
 Changelog:
+- v0 (amendment 40) - slice 30: saved filters. A person can save the filter of the inventory, the services page or the containers page under a name and apply it again later. A new table `saved_filters` (migration `0014_saved_filters.sql`) holds them per user; the routes `GET /api/filters?page=`, `POST /api/filters` and `DELETE /api/filters/{id}` work on the filters of the person who asks and need only `topology:read`, so a viewer may keep his own views. A filter is a short query string with a fixed list of keys per page, checked on the server. Saving and deleting a filter is not written to the audit log. The inventory, services and containers pages get a "Saved filters" control.
 - v0 (amendment 39) - slice 29: groups, bulk edit and CSV import. A new table `device_groups` (name, optional VLAN number, optional address ranges, migration `0013_groups.sql`) and a nullable `devices.group_id`. A device shows one effective group: the one a person set, else the first group (lowest id) whose ranges contain its address. Groups are managed through `GET/POST /api/groups` and `PATCH/DELETE /api/groups/{id}` (reading needs `topology:read`, the rest `devices:write`); `PATCH /api/devices/{id}` takes `groupId` (`0` clears it). `POST /api/devices/bulk` changes `trusted`, `kind` or `groupId` of up to 200 devices in one transaction. `POST /api/devices/import` creates manual devices from a CSV file, all or none, with `?dryRun=true` to check a file first. Search and saved filters are not part of this slice: they move to slice 30.
 - v0 (amendment 38) - slice 28: an overview page and the history of a device. A new table `device_presence` (migration `0012_device_presence.sql`) gets one row per scanned, non-manual device for every completed scan, written by `ApplyResult` in the same transaction, and goes away with its scan (`history.keepScans` is the limit). There is no backfill: the history of a device starts at the upgrade. `GET /api/overview` answers the counts of the overview page and `GET /api/devices/{id}/history` answers uptime, IP changes and outages of one device, both for `topology:read`. The web gets the page `/overview` (a new item in the navigation, the landing page does not change) and a tab "History" in the device panel.
 - v0 (amendment 37) - slice 27: trusted devices, notifications and risky services (built and reviewed on the branch `dev`, then merged into `main`). A device has a flag `trusted`, set by a person through `PATCH /api/devices/{id}`; manual devices and every device that exists when the migration runs are trusted. The list can be filtered by `trusted=`. A new package `internal/notify` sends one summary message per scan to the channels of the new config block `notify` (`webhook`, `telegram`, `email`) for the events `device_added`, `device_offline`, `port_opened`, `risky_service` and `scan_failed`. Channel addresses, tokens and passwords are `config.Secret`, live only in the config and never reach the page, the audit log or an export. The block applies without a restart. `GET /api/notifications` lists the channels without secrets and `POST /api/notifications/test` sends a test message, both for `system:manage`. A service gets a computed field `risk` from a fixed rule table (`internal/model/risk.go`), `GET /api/services` takes `risky=true`. The default `scan.ports` gain `21`, `23` and `5900` so that the risk rules can fire on a fresh install; a config that lists its own ports is not changed. The audit log gets `notify_test`.
@@ -328,6 +329,16 @@ CREATE TABLE changes (
 	entity_id TEXT NOT NULL,
 	summary   TEXT NOT NULL,
 	at        TEXT NOT NULL
+);
+
+CREATE TABLE saved_filters (                  -- slice 30, migration 0014_saved_filters.sql
+	id         INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	page       TEXT NOT NULL,                      -- inventory, services, containers
+	name       TEXT NOT NULL COLLATE NOCASE,       -- 1 to 40 characters, no control characters
+	query      TEXT NOT NULL,                      -- a canonical query string, at most 300 characters
+	created_at TEXT NOT NULL,
+	UNIQUE (user_id, page, name)
 );
 
 CREATE TABLE device_groups (                  -- slice 29, migration 0013_groups.sql ("groups" is an SQLite keyword)
@@ -918,6 +929,9 @@ There is no separate showcase route. A component that no slice uses is not writt
 | `GET /api/devices?online=&kind=&q=&trusted=&group=` | list of devices, the answer is `{ "devices": [...] }`   | `topology:read` | 200, 400               |
 | `POST /api/devices`                  | manual add; 409 if the MAC or IP is taken by another record       | `devices:write` | 201, 400, 409          |
 | `GET /api/devices/{id}`              | a device, its interfaces and services                             | `topology:read` | 200, 404               |
+| `GET /api/filters?page=`             | the saved filters of the caller for one page, `{ "filters": [...] }`, newest first | `topology:read` | 200, 400               |
+| `POST /api/filters`                  | body `{ page, name, query }`, at most 20 per user and page          | `topology:read` | 201, 400, 409          |
+| `DELETE /api/filters/{id}`           | only the caller's own; another person's filter is 404               | `topology:read` | 204, 404               |
 | `POST /api/devices/bulk`             | body `{ "ids": [1, 2], "trusted": true, "kind": "camera", "groupId": 3 }`, every field but `ids` optional, `groupId` 0 clears; all or none | `devices:write` | 200, 400, 404 |
 | `POST /api/devices/import`           | body is CSV (`Content-Type: text/csv`, at most 1 MiB and 1000 rows), creates manual devices, all or none; `?dryRun=true` only checks | `devices:write` | 201, 200 for a dry run, 400, 409, 413 |
 | `GET /api/groups`                    | the groups with the number of devices in each, `{ "groups": [...] }` | `topology:read` | 200                    |
@@ -1309,7 +1323,7 @@ Do not write code with an invented type. Do not extend or weaken on your own the
 
 ## 16. Stages and slices
 
-Status: slices 0-29 are merged into `main`.
+Status: slices 0-30 are merged into `main`.
 
 The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
@@ -1983,6 +1997,24 @@ Acceptance criteria.
 7. An import with a row whose `=cmd()` cell is stored as that text, an unknown `group` is a row problem, and a duplicate MAC inside the file is a row problem.
 8. The parser handles quoted cells with commas, quotes and line breaks, a byte order mark, and CRLF line endings, and refuses a file without a header.
 9. The inventory filter by group sends `group=` and the selection bar changes only the selected rows.
+
+### Slice 30 - saved filters
+
+The goal: the view a person uses every day, "unknown devices of the office VLAN", is one click away instead of four.
+
+Files: `internal/store/migrations/0014_saved_filters.sql`, `internal/store/queries/filters.sql`, `internal/store/filters.go`, `internal/model/filter.go` (the rules, pure), `internal/api/filters.go`, `internal/api/router.go`, `web/src/components/SavedFilters.tsx`, `web/src/pages/Inventory.tsx`, `web/src/pages/Services.tsx`, `web/src/pages/Containers.tsx`.
+
+- **Rules.** `page` is `inventory`, `services` or `containers`. `name` is trimmed, 1 to 40 characters, without control characters, unique per user and page without regard to case. `query` is a query string of at most 300 characters. The keys allowed are `q` (all pages, at most 100 characters), and for the inventory also `status` (`online` or `offline`), `trust` (`unknown` or `trusted`) and `group` (`none` or a positive whole number). A key may appear once, an unknown key is refused, an empty value is dropped. The server stores the canonical form (keys in alphabetical order, encoded by `url.Values.Encode`) and returns it, so the same filter saved twice looks the same. A query with nothing left in it is refused: a filter must filter something. A person has at most 20 filters per page.
+- **Ownership.** Every route works on the filters of the session or token that asks. Another person's id is 404, never 403, so ids do not leak. Deleting a user deletes his filters.
+- **Web.** The control sits next to the search field: a menu of the saved filters (choosing one applies it to the page), a "Save current filter" action that asks for a name, and a delete button for each saved filter. A filter that names a group that no longer exists still applies and shows no devices; the page says nothing special about it.
+
+Acceptance criteria.
+1. A filter is saved in canonical form, listed newest first, and listed only for the person who saved it.
+2. A second person gets 404 on the first person's filter id and does not see it in the list; deleting it leaves it in place.
+3. The same name in other capitals on the same page gives 409; the same name on another page or for another person is fine.
+4. Each rule of the list above has a test with a bad value: unknown page, empty and overlong name, control characters, unknown key, repeated key, bad `status`, `trust` or `group`, a query of 301 characters, a query with only empty values, and the 21st filter.
+5. A viewer may save and delete his own filters; no session gets 401; a token with the read scope cannot save (it is a write).
+6. The control applies a saved filter to all the fields of the page it belongs to and clears the fields it does not name.
 
 ---
 

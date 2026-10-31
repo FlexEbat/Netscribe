@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { listDevices, listServices, type Device, type Service } from "@/api/client"
 import { EmptyState } from "@/components/EmptyState"
+import { SavedFilters } from "@/components/SavedFilters"
 import { RiskBadge } from "@/components/RiskBadge"
 import { Alert } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
@@ -45,14 +46,21 @@ export function Services() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Services</h1>
-      <Input
-        type="search"
-        aria-label="Filter by service name or banner"
-        placeholder="Filter by service name or banner"
-        className="max-w-sm"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          aria-label="Filter by service name or banner"
+          placeholder="Filter by service name or banner"
+          className="max-w-sm"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <SavedFilters
+          page="services"
+          current={query.trim() === "" ? "" : new URLSearchParams({ q: query.trim() }).toString()}
+          onApply={(q) => setQuery(new URLSearchParams(q).get("q") ?? "")}
+        />
+      </div>
       <Results state={state} query={query} />
     </div>
   )

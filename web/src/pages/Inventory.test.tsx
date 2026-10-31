@@ -388,6 +388,15 @@ describe("Inventory groups", () => {
     group: { id: 2, name: "Lab", vlan: null },
   })
   const loose = device({ id: 3, hostname: "tv", ip: "10.0.0.5" })
+  const savedFilters = [
+    {
+      id: 1,
+      page: "inventory",
+      name: "Cameras",
+      query: "q=cam",
+      createdAt: "2026-10-08T12:00:00Z",
+    },
+  ]
 
   function openWithGroups(
     devices: (path: string, init?: RequestInit) => Response,
@@ -399,6 +408,9 @@ describe("Inventory groups", () => {
       init?: RequestInit,
     ) => Promise<Response>
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/filters")) {
+        return json(200, { filters: savedFilters })
+      }
       if (String(input) === "/api/groups") {
         mock.calls.push({ method: "GET", path: "/api/groups", init: init ?? {} })
         return json(200, { groups: [office, lab] })
@@ -490,5 +502,28 @@ describe("Inventory groups", () => {
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Import CSV" })).not.toBeInTheDocument()
     expect(within(screen.getByRole("table")).getByText("Office")).toBeInTheDocument()
+  })
+
+  it("applies a saved filter to every field and clears what it does not name", async () => {
+    const mock = openWithGroups(() => json(200, { devices: [inRange] }), {
+      entry: "/inventory?status=offline&trust=unknown&group=2",
+    })
+    const user = userEvent.setup()
+    await screen.findByRole("table")
+    expect(screen.getByLabelText("Filter by trust")).toHaveValue("unknown")
+
+    await user.click(screen.getByRole("button", { name: "Saved filters" }))
+    await user.click(await screen.findByRole("button", { name: "Apply Cameras" }))
+
+    expect(screen.getByLabelText("Search devices")).toHaveValue("cam")
+    expect(screen.getByLabelText("Filter by trust")).toHaveValue("all")
+    expect(screen.getByLabelText("Filter by group")).toHaveValue("all")
+    await waitFor(() => {
+      const last = mock.calls.filter((c) => c.path.startsWith("/api/devices")).at(-1)!
+      expect(last.path).toContain("q=cam")
+      expect(last.path).not.toContain("trusted=")
+      expect(last.path).not.toContain("group=")
+      expect(last.path).not.toContain("online=")
+    })
   })
 })

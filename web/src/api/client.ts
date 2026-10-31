@@ -723,3 +723,34 @@ export async function importDevices(csv: string, dryRun: boolean): Promise<numbe
   const body = await api<{ created?: number; wouldCreate?: number }>("POST", path, { csv })
   return (dryRun ? body.wouldCreate : body.created) ?? 0
 }
+
+export type FilterPage = "inventory" | "services" | "containers"
+
+export interface SavedFilter {
+  id: number
+  page: FilterPage
+  name: string
+  /** A query string such as `status=offline&trust=unknown`. */
+  query: string
+  createdAt: string
+}
+
+export async function listFilters(page: FilterPage): Promise<SavedFilter[]> {
+  const body = await api<{ filters: SavedFilter[] }>("GET", `/api/filters?page=${page}`)
+  return body.filters
+}
+
+export async function createFilter(
+  page: FilterPage,
+  name: string,
+  query: string,
+): Promise<SavedFilter> {
+  const body = await api<{ filter: SavedFilter }>("POST", "/api/filters", {
+    body: { page, name, query },
+  })
+  return body.filter
+}
+
+export function deleteFilter(id: number): Promise<void> {
+  return api("DELETE", `/api/filters/${id}`)
+}

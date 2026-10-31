@@ -117,6 +117,15 @@ type Link struct {
 	LastSeenAt string
 }
 
+type SavedFilter struct {
+	ID        int64
+	UserID    int64
+	Page      string
+	Name      string
+	Query     string
+	CreatedAt string
+}
+
 type Scan struct {
 	ID             int64
 	Target         string
