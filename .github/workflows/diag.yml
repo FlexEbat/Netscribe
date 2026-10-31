@@ -29,7 +29,7 @@ jobs:
             name=$1; shift
             "$@" > /tmp/$name.log 2>&1; rc=$?
             msg="out: $(grep -vE '^(ok|\?)\s' /tmp/$name.log | tail -c 3000 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
-            if [ $rc -eq 0 ]; then echo "::notice title=$name ok::$msg"; else echo "::error title=$name rc=$rc::$msg"; fi
+            if [ $rc -eq 0 ]; then echo "::notice title=$name ok::$msg"; else echo "::error title=$name rc=$rc::$msg"; echo $name >> /tmp/failed; fi
           }
           P="./cmd/... ./internal/... ./web"
           emit fmt sh -c 'out=$(gofmt -l cmd internal web/embed.go); echo "$out"; test -z "$out"'
@@ -38,3 +38,4 @@ jobs:
           emit sqlc sqlc diff
           emit gotest go test -race $P
           emit webcheck sh -c 'cd web && npm run typecheck && npm run lint && npm run format:check && npm test'
+          test ! -s /tmp/failed

@@ -16,8 +16,6 @@ func mkGroup(t *testing.T, s *Store, name string, vlan *int, ranges ...string) m
 	return g
 }
 
-func ptr[T any](v T) *T { return &v }
-
 func TestAGroupThatListsTheRangeIsTheEffectiveGroupUntilAPersonChoosesOne(t *testing.T) {
 	s := newTestStore(t)
 	office := mkGroup(t, s, "Office", ptr(10), "192.168.1.0/24")

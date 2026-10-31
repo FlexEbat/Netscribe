@@ -4,12 +4,20 @@ export class ApiError extends Error {
   readonly status: number
   /** Seconds to wait, from a Retry-After header. */
   readonly retryAfter: number | null
+  /** The lines of an import file that have a problem, when the server names them. */
+  readonly rows: ImportProblem[]
 
-  constructor(status: number, message: string, retryAfter: number | null = null) {
+  constructor(
+    status: number,
+    message: string,
+    retryAfter: number | null = null,
+    rows: ImportProblem[] = [],
+  ) {
     super(message)
     this.name = "ApiError"
     this.status = status
     this.retryAfter = retryAfter
+    this.rows = rows
   }
 }
 
@@ -30,6 +38,8 @@ const safeMethods = new Set(["GET", "HEAD", "OPTIONS"])
 
 interface Options {
   body?: unknown
+  /** A CSV file to send as it is, instead of a JSON body. */
+  csv?: string
   /** Requests that are allowed to answer 401 without ending the session, such as the sign-in itself. */
   expectUnauthorized?: boolean
 }
@@ -37,10 +47,11 @@ interface Options {
 export async function api<T = void>(
   method: string,
   path: string,
-  { body, expectUnauthorized = false }: Options = {},
+  { body, csv, expectUnauthorized = false }: Options = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" }
   if (body !== undefined) headers["Content-Type"] = "application/json"
+  if (csv !== undefined) headers["Content-Type"] = "text/csv; charset=utf-8"
   if (!safeMethods.has(method.toUpperCase()) && csrfToken) headers["X-CSRF-Token"] = csrfToken
 
   let response: Response
@@ -49,7 +60,7 @@ export async function api<T = void>(
       method,
       headers,
       credentials: "same-origin",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: csv !== undefined ? csv : body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
     throw new ApiError(0, "Cannot reach the server")
@@ -57,7 +68,8 @@ export async function api<T = void>(
 
   if (response.status === 401 && !expectUnauthorized) onUnauthorized?.()
   if (!response.ok) {
-    throw new ApiError(response.status, await errorMessage(response), retryAfter(response))
+    const detail = await errorDetail(response)
+    throw new ApiError(response.status, detail.message, retryAfter(response), detail.rows)
   }
   // A 204, or a 202 that carries no body, has nothing to parse.
   if (response.status === 204) return undefined as T
@@ -66,21 +78,29 @@ export async function api<T = void>(
   return JSON.parse(text) as T
 }
 
-async function errorMessage(response: Response): Promise<string> {
+export interface ImportProblem {
+  line: number
+  error: string
+}
+
+async function errorDetail(
+  response: Response,
+): Promise<{ message: string; rows: ImportProblem[] }> {
   try {
     const data: unknown = await response.json()
-    if (
-      typeof data === "object" &&
-      data !== null &&
-      "error" in data &&
-      typeof data.error === "string"
-    ) {
-      return data.error
+    if (typeof data === "object" && data !== null && "error" in data) {
+      const rows =
+        "rows" in data && Array.isArray(data.rows)
+          ? (data.rows as ImportProblem[]).filter(
+              (r) => typeof r?.line === "number" && typeof r?.error === "string",
+            )
+          : []
+      if (typeof data.error === "string") return { message: data.error, rows }
     }
   } catch {
     // The body is not JSON: fall through to the generic text.
   }
-  return `Request failed (${response.status})`
+  return { message: `Request failed (${response.status})`, rows: [] }
 }
 
 function retryAfter(response: Response): number | null {
@@ -119,6 +139,12 @@ export interface Device {
   kindLocked: boolean
   /** A person marked the device as known. A scan creates devices untrusted. */
   trusted: boolean
+  /** The group a person chose, or null. */
+  groupId: number | null
+  /** The effective group: the chosen one, else the first group whose ranges hold the address. */
+  group: GroupRef | null
+  /** True when `group` comes from the ranges and nobody chose it. */
+  groupAuto: boolean
   version: number
   firstSeenAt: string
   lastSeenAt: string
@@ -130,6 +156,8 @@ export interface DeviceQuery {
   q?: string
   online?: boolean
   trusted?: boolean
+  /** A group id, or "none" for the devices without a group. */
+  group?: number | "none"
 }
 
 export function listDevices(query: DeviceQuery = {}): Promise<Device[]> {
@@ -137,6 +165,7 @@ export function listDevices(query: DeviceQuery = {}): Promise<Device[]> {
   if (query.q) params.set("q", query.q)
   if (query.online !== undefined) params.set("online", String(query.online))
   if (query.trusted !== undefined) params.set("trusted", String(query.trusted))
+  if (query.group !== undefined) params.set("group", String(query.group))
   const suffix = params.size > 0 ? `?${params.toString()}` : ""
   return api<{ devices: Device[] }>("GET", `/api/devices${suffix}`).then((body) => body.devices)
 }
@@ -242,7 +271,7 @@ export async function downloadExport(format: string): Promise<{ blob: Blob; file
     throw new ApiError(0, "Cannot reach the server")
   }
   if (response.status === 401) onUnauthorized?.()
-  if (!response.ok) throw new ApiError(response.status, await errorMessage(response))
+  if (!response.ok) throw new ApiError(response.status, (await errorDetail(response)).message)
   const name = /filename="?([^";]+)"?/.exec(response.headers.get("Content-Disposition") ?? "")?.[1]
   return { blob: await response.blob(), filename: name ?? `netscribe.${format}` }
 }
@@ -365,6 +394,8 @@ export interface DeviceChanges {
   notes?: string
   kind?: DeviceKind
   trusted?: boolean
+  /** A group id, or 0 to remove the group. */
+  groupId?: number
   version: number
 }
 
@@ -626,4 +657,69 @@ export interface Overview {
 export async function getOverview(): Promise<Overview> {
   const body = await api<{ overview: Overview }>("GET", "/api/overview")
   return body.overview
+}
+
+export interface GroupRef {
+  id: number
+  name: string
+  vlan: number | null
+}
+
+export interface Group extends GroupRef {
+  description: string
+  ranges: string[]
+  deviceCount: number
+  version: number
+}
+
+export interface GroupInput {
+  name: string
+  description: string
+  /** A VLAN number from 1 to 4094, or null. On an edit, 0 removes it. */
+  vlan: number | null
+  ranges: string[]
+}
+
+export async function listGroups(): Promise<Group[]> {
+  const body = await api<{ groups: Group[] }>("GET", "/api/groups")
+  return body.groups
+}
+
+export async function createGroup(input: GroupInput): Promise<Group> {
+  const body = await api<{ group: Group }>("POST", "/api/groups", { body: input })
+  return body.group
+}
+
+export async function updateGroup(
+  id: number,
+  input: Partial<GroupInput> & { version: number },
+): Promise<Group> {
+  const body = await api<{ group: Group }>("PATCH", `/api/groups/${id}`, { body: input })
+  return body.group
+}
+
+export function deleteGroup(id: number): Promise<void> {
+  return api("DELETE", `/api/groups/${id}`)
+}
+
+export interface BulkChange {
+  trusted?: boolean
+  kind?: DeviceKind
+  /** A group id, or 0 to remove the group. */
+  groupId?: number
+}
+
+/** Changes every listed device or none. */
+export async function bulkEdit(ids: number[], change: BulkChange): Promise<number> {
+  const body = await api<{ updated: number }>("POST", "/api/devices/bulk", {
+    body: { ids, ...change },
+  })
+  return body.updated
+}
+
+/** How many devices a CSV file creates; with `dryRun` it only checks the file. */
+export async function importDevices(csv: string, dryRun: boolean): Promise<number> {
+  const path = dryRun ? "/api/devices/import?dryRun=true" : "/api/devices/import"
+  const body = await api<{ created?: number; wouldCreate?: number }>("POST", path, { csv })
+  return (dryRun ? body.wouldCreate : body.created) ?? 0
 }
