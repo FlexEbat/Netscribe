@@ -185,7 +185,8 @@ func stage(r io.Reader, dir string) (Manifest, error) {
 	if err := os.Mkdir(dir, 0o700); err != nil {
 		return Manifest{}, fmt.Errorf("prepare the stage: %w", err)
 	}
-	tr := tar.NewReader(io.LimitReader(gz, maxTotal))
+	limited := io.LimitReader(gz, maxTotal)
+	tr := tar.NewReader(limited)
 	seen := map[string]bool{}
 	for {
 		hdr, err := tr.Next()
@@ -213,6 +214,14 @@ func stage(r io.Reader, dir string) (Manifest, error) {
 		if err := writeStaged(filepath.Join(dir, hdr.Name), tr, hdr.Size); err != nil { //nolint:gosec // not a path from the archive, see above
 			return Manifest{}, err
 		}
+	}
+	// The tar ends before the gzip trailer. Reading on makes gzip check its checksum, so a
+	// cut off archive is found even when every entry arrived.
+	if _, err := io.Copy(io.Discard, io.LimitReader(limited, 1<<20)); err != nil {
+		if isContent(err) {
+			return Manifest{}, bad("the archive is damaged")
+		}
+		return Manifest{}, err
 	}
 	for _, n := range []string{NameManifest, NameDB, NameConfig} {
 		if !seen[n] {

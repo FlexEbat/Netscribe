@@ -31,7 +31,7 @@ jobs:
           set +e
           go vet ./... > vet.txt 2>&1
           go test -race ./... > test.txt 2>&1
-          (cat vet.txt; grep -v '^ok\|no test files' test.txt) | head -c 6000 > summary.txt
+          (cat vet.txt; grep -v '^ok\|no test files' test.txt | sed 's#/tmp/[A-Za-z0-9_]*/001#T#g') | head -c 14000 > summary.txt
           msg=$(sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g' summary.txt)
           echo "::error title=diag::${msg}"
           exit 0

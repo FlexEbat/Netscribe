@@ -60,25 +60,27 @@ func (s *session) restore(ctx context.Context) error {
 	if err := s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"stop", "netscribe"}}); err != nil {
 		return err
 	}
+	var kept []string // the files whose old copy exists, which a rollback can put back
 	for _, p := range paths {
 		if _, err := s.env.Stat(p); err == nil {
 			if err := s.runChecked(ctx, Command{Name: "cp", Args: []string{"-p", "--", p, p + beforeRestore}}); err != nil {
 				return fmt.Errorf("keep the old %s: %w", filepath.Base(p), err)
 			}
+			kept = append(kept, p)
 		}
 	}
 	if err := s.putRestored(ctx, stage, db); err != nil {
-		return s.rollBack(ctx, paths, db, err)
+		return s.rollBack(ctx, kept, db, err)
 	}
 	if err := s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"start", "netscribe"}}); err != nil {
-		return s.rollBack(ctx, paths, db, err)
+		return s.rollBack(ctx, kept, db, err)
 	}
 	s.cfg = &staged
 	if s.o.HealthTimeout <= 0 {
 		s.o.HealthTimeout = defaultRestoreWait
 	}
 	if err := s.waitHealthy(ctx); err != nil {
-		return s.rollBack(ctx, paths, db, err)
+		return s.rollBack(ctx, kept, db, err)
 	}
 	// The stage held every secret of the backup: it does not stay.
 	if err := s.runChecked(ctx, Command{Name: "rm", Args: []string{"-rf", "--", stage}}); err != nil {
@@ -115,16 +117,13 @@ func (s *session) putRestored(ctx context.Context, stage, db string) error {
 
 // rollBack puts the old files back and starts the service on them. It returns the error
 // that made the restore fail, with a sentence about what it did.
-func (s *session) rollBack(ctx context.Context, paths []string, db string, cause error) error {
+func (s *session) rollBack(ctx context.Context, kept []string, db string, cause error) error {
 	s.ui.note("the restore failed, so the old data goes back: %v", cause)
 	// A stop of a service that never started is not an error worth reporting.
 	_ = s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"stop", "netscribe"}})
 	_ = s.runChecked(ctx, Command{Name: "rm", Args: []string{"-f", "--", db + "-wal", db + "-shm"}})
 	var failed []error
-	for _, p := range paths {
-		if _, err := s.env.Stat(p + beforeRestore); err != nil {
-			continue
-		}
+	for _, p := range kept {
 		if err := s.runChecked(ctx, Command{Name: "cp", Args: []string{"-p", "--", p + beforeRestore, p}}); err != nil {
 			failed = append(failed, err)
 		}
