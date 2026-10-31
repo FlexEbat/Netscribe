@@ -92,6 +92,7 @@ type envOptions struct {
 	updates  *update.Checker
 	helper   SystemHelper
 	backup   BackupService
+	metrics  func() bool
 	settings SettingsEditor
 	notifier Notifications
 	export   render.Options
@@ -135,7 +136,7 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 		repo = o.wrapRepo(st)
 	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Version: o.version, Updates: o.updates, Helper: o.helper, Backup: o.backup, Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
+		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Version: o.version, Updates: o.updates, Helper: o.helper, Backup: o.backup, MetricsEnabled: o.metrics, Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}

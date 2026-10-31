@@ -50,7 +50,7 @@ var example = map[string]string{
 	"auth.minPasswordLength": "14", "auth.maxFailedLogins": "4", "auth.lockoutDuration": "20m",
 	"auth.sessionIdleTimeout": "20m", "auth.sessionMaxAge": "8h", "export.chromePath": "/usr/bin/chromium",
 	"discovery.nmapPath": "/usr/bin/nmap", "ssh.knownHosts": "/etc/ssh/ssh_known_hosts",
-	"updates.check": "false",
+	"updates.check": "false", "metrics.enabled": "true",
 }
 
 func TestEverySettingIsAKeyOfTheConfigAndLoads(t *testing.T) {

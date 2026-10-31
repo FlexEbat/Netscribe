@@ -70,6 +70,9 @@ export:
 updates:
   check: true # ask GitHub once in a while whether a newer release exists; nothing about this host is sent
 
+metrics:
+  enabled: false # serve /metrics for Prometheus; reading it needs an access token with the read scope
+
 notify: # messages about what a scan found, one summary per scan; applied without a restart
   events: [device_added, scan_failed] # also: device_offline, port_opened, risky_service
   channels: [] # an empty list turns notifications off

@@ -77,6 +77,7 @@ type Config struct {
 	Discovery          DiscoveryConfig `yaml:"discovery"`
 	Export             ExportConfig    `yaml:"export"`
 	Updates            UpdatesConfig   `yaml:"updates"`
+	Metrics            MetricsConfig   `yaml:"metrics"`
 	Notify             NotifyConfig    `yaml:"notify"`
 }
 
@@ -160,6 +161,11 @@ type ExportConfig struct {
 // address and sends nothing about this installation.
 type UpdatesConfig struct {
 	Check bool `yaml:"check"`
+}
+
+// MetricsConfig switches the Prometheus route on. It is off until somebody wants it.
+type MetricsConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // The events a channel can be told about.

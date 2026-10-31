@@ -2047,14 +2047,14 @@ The goal: the owner watches Netscribe in the tool he already has.
 Files: `internal/metrics/` (new package, imports only `model`; the text format is written by hand, there is no dependency), `internal/store/metrics.go`, `internal/api/metrics.go`, `internal/api/router.go`, `internal/config/` (the `metrics` block), `cmd/netscribe/`, `web/src/pages/Settings.tsx`.
 
 - **Route.** `GET /metrics` needs `topology:read`, so a Prometheus job uses a read token (`authorization: { credentials: ndt_... }`). It answers `text/plain; version=0.0.4`. It is registered only when `metrics.enabled` is true (default `false`, applied without a restart).
-- **Series.** `netscribe_build_info{version}`, `netscribe_devices{status="online|offline"}`, `netscribe_devices_untrusted`, `netscribe_services{risk="none|medium|high"}`, `netscribe_containers`, `netscribe_scans_total{status="completed|failed"}` over the stored scans, `netscribe_last_scan_timestamp_seconds`, `netscribe_last_scan_duration_seconds`, `netscribe_last_scan_ok` (1 or 0), `netscribe_database_bytes`. Every series is a gauge.
+- **Series.** `netscribe_build_info{version}`, `netscribe_devices{status="online|offline"}`, `netscribe_devices_untrusted`, `netscribe_devices_new_this_week`, `netscribe_risky_services`, `netscribe_recent_scans{status="done|failed"}` (the latest finished scans the overview looks at), `netscribe_last_scan_timestamp_seconds`, `netscribe_last_scan_duration_seconds` and `netscribe_last_scan_ok` (1 or 0). They are all taken from the same numbers as `GET /api/overview`, so the two cannot disagree. Every series is a gauge. Series for containers and for the size of the database can follow when somebody needs them.
 - **Labels.** Only the fixed words above. Nothing from the network (a host name, a banner, a container name) is ever a label or a value, so cardinality is bounded and the output cannot be injected.
 - **Cost.** One read transaction, a few `COUNT` queries, no scan of a large table in a loop. The answer is cached for 5 seconds.
 - **Web.** The switch is a setting of the Settings page and `netscribe config`, with the line `prometheus.yml` the person pastes.
 
 Acceptance criteria.
 1. With `metrics.enabled: false` the route answers 404 for everyone.
-2. No session gets 401, a read token gets 200, and the output parses with the Prometheus text parser in the test.
+2. No session gets 401, a read token gets 200, and every line of the output is a HELP line, a TYPE line or a sample line of the text format (checked with a line pattern in the test, because the Prometheus parser would be a new dependency).
 3. A database with a device named `a"b\n# HELP x` produces an output that is still valid and does not contain that name.
 4. The counts equal the counts of `GET /api/overview` for the same data.
 5. Two requests within 5 seconds read the database once.
