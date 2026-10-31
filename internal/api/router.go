@@ -133,6 +133,9 @@ type Options struct {
 	Updates *update.Checker
 	// UpdatesEnabled tells whether the check is switched on in the config. Nil means it is.
 	UpdatesEnabled func() bool
+	// Backup makes and checks backups. Without it GET /api/backup and POST /api/backup/restore
+	// are not registered.
+	Backup BackupService
 	// Helper takes the update and restart requests. Without it POST /api/update and
 	// POST /api/system/restart are not registered.
 	Helper SystemHelper
@@ -172,6 +175,8 @@ type server struct {
 	helper         SystemHelper
 	settings       SettingsEditor
 	notifier       Notifications
+	backup         BackupService
+	backupMu       sync.Mutex // one backup or restore at a time
 	settingsMu     sync.Mutex // one change of the config file at a time
 	recheckMu      sync.Mutex
 	lastRecheck    time.Time
@@ -207,6 +212,12 @@ func (s *server) routes() []Route {
 		table = append(table,
 			route(http.MethodPost, "/api/update", model.PermSystemManage, s.startUpdate),
 			route(http.MethodPost, "/api/system/restart", model.PermSystemManage, s.restartService),
+		)
+	}
+	if s.backup != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/backup", model.PermSystemManage, s.getBackup),
+			route(http.MethodPost, "/api/backup/restore", model.PermSystemManage, s.restoreBackup),
 		)
 	}
 	if s.settings != nil {
@@ -316,6 +327,7 @@ func newServer(opts Options) *server {
 		updates:        opts.Updates,
 		updatesEnabled: opts.UpdatesEnabled,
 		helper:         opts.Helper,
+		backup:         opts.Backup,
 		settings:       opts.Settings,
 		notifier:       opts.Notifications,
 	}

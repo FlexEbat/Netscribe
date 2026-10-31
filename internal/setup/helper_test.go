@@ -159,7 +159,7 @@ func TestHelperUnitsAreRenderedForTheInstall(t *testing.T) {
 	}
 	for _, want := range []string{
 		"ExecStart=/opt/ns/bin/netscribe helper --request /srv/ns/data/helper.request",
-		"ReadWritePaths=/opt/ns/bin /etc/systemd/system /srv/ns/data",
+		"ReadWritePaths=/opt/ns/bin /etc/systemd/system /srv/ns/data /etc/netscribe",
 	} {
 		if !strings.Contains(svc, want) {
 			t.Errorf("service lacks %q:\n%s", want, svc)

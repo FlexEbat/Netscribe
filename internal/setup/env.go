@@ -100,6 +100,8 @@ type Env struct {
 	ReadFile   func(path string) ([]byte, error)
 	ReadDir    func(path string) ([]fs.DirEntry, error)
 	Stat       func(path string) (fs.FileInfo, error)
+	// Lstat is Stat that does not follow a link.
+	Lstat      func(path string) (fs.FileInfo, error)
 	FreeBytes  func(path string) (uint64, error)
 	LookPath   func(name string) (string, error)
 	Interfaces func() ([]NetIface, error)
@@ -142,6 +144,7 @@ func NewEnv(in io.Reader, out io.Writer, interactive, color bool) Env {
 		ReadFile:       os.ReadFile,
 		ReadDir:        os.ReadDir,
 		Stat:           os.Stat,
+		Lstat:          os.Lstat,
 		FreeBytes:      freeBytes,
 		LookPath:       exec.LookPath,
 		Interfaces:     interfaces,

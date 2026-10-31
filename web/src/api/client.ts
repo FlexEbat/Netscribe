@@ -567,6 +567,67 @@ export function restartService(): Promise<VersionInfo> {
   return api<VersionInfo>("POST", "/api/system/restart")
 }
 
+export interface BackupSummary {
+  version: string
+  createdAt: string
+  schema: number
+  devices: number
+  users: number
+}
+
+/** The password as the server expects it in a header: UTF-8 bytes, base64 encoded. */
+function confirmHeaders(password: string): Record<string, string> {
+  let binary = ""
+  for (const byte of new TextEncoder().encode(password)) binary += String.fromCharCode(byte)
+  return { "X-Confirm-Password": btoa(binary) }
+}
+
+async function failFrom(response: Response): Promise<never> {
+  if (response.status === 401) onUnauthorized?.()
+  const detail = await errorDetail(response)
+  throw new ApiError(response.status, detail.message, retryAfter(response), detail.rows)
+}
+
+/** Asks for the backup archive. The password is checked again by the server. */
+export async function downloadBackup(password: string): Promise<{ blob: Blob; filename: string }> {
+  let response: Response
+  try {
+    response = await fetch("/api/backup", {
+      method: "GET",
+      headers: confirmHeaders(password),
+      credentials: "same-origin",
+    })
+  } catch {
+    throw new ApiError(0, "Cannot reach the server")
+  }
+  if (!response.ok) return failFrom(response)
+  const named = /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")
+  return { blob: await response.blob(), filename: named?.[1] ?? "netscribe-backup.tar.gz" }
+}
+
+/** Sends a backup to be checked and restored. 202 means the helper took it, not that it is done. */
+export async function restoreBackup(file: File, password: string): Promise<BackupSummary> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/gzip",
+    ...confirmHeaders(password),
+  }
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken
+  let response: Response
+  try {
+    response = await fetch("/api/backup/restore", {
+      method: "POST",
+      headers,
+      credentials: "same-origin",
+      body: file,
+    })
+  } catch {
+    throw new ApiError(0, "Cannot reach the server")
+  }
+  if (!response.ok) return failFrom(response)
+  return (await response.json()) as BackupSummary
+}
+
 export type SettingType =
   "bool" | "int" | "duration" | "text" | "list" | "ports" | "enum" | "secrets"
 
