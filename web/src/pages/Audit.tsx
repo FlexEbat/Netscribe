@@ -39,6 +39,11 @@ const actions = [
   "config_reload",
   "config_reload_failed",
   "notify_test",
+  "group_create",
+  "group_edit",
+  "group_delete",
+  "device_bulk_edit",
+  "device_import",
   "access_denied",
 ]
 

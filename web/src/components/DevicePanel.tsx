@@ -6,9 +6,11 @@ import {
   getDeviceDetail,
   getNmap,
   identifyDevice,
+  listGroups,
   updateDevice,
   type Device,
   type DeviceDetail,
+  type Group,
 } from "@/api/client"
 import { openEvents } from "@/api/events"
 import { DeleteDeviceButton } from "@/components/DeleteDeviceButton"
@@ -51,6 +53,19 @@ export function DevicePanel({
   const state: State = loaded?.id === deviceId ? loaded.state : { status: "loading" }
   const [editing, setEditing] = useState(false)
   const [reloads, setReloads] = useState(0)
+  const [groups, setGroups] = useState<Group[]>([])
+
+  // Only an editor can change the group, so only an editor needs the list.
+  useEffect(() => {
+    if (!canEdit) return
+    let cancelled = false
+    listGroups()
+      .then((g) => !cancelled && setGroups(g))
+      .catch(() => !cancelled && setGroups([]))
+    return () => {
+      cancelled = true
+    }
+  }, [canEdit])
 
   useEffect(() => {
     let cancelled = false
@@ -142,6 +157,32 @@ export function DevicePanel({
                 >
                   {state.device.trusted ? "Mark as unknown" : "Mark as trusted"}
                 </Button>
+                <select
+                  aria-label="Group of the device"
+                  className="h-8 rounded-lg border bg-input px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  value={state.device.groupId === null ? "" : String(state.device.groupId)}
+                  onChange={(e) => {
+                    const d = state.device
+                    updateDevice(d.id, {
+                      groupId: e.target.value === "" ? 0 : Number(e.target.value),
+                      version: d.version,
+                    })
+                      .then(() => {
+                        setReloads((n) => n + 1)
+                        onChanged?.()
+                      })
+                      .catch(() => setReloads((n) => n + 1))
+                  }}
+                >
+                  <option value="">
+                    {state.device.groupAuto ? "Group from its range" : "No group"}
+                  </option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={String(g.id)}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
                 <DeleteDeviceButton
                   name={displayName(state.device)}
                   onConfirm={async () => {
@@ -266,6 +307,12 @@ function Details({ device: d }: { device: Device }) {
   const rows: [string, React.ReactNode][] = [
     ["Status", <StatusBadge key="s" online={d.online} />],
     ["Trust", d.trusted ? "Trusted" : <UnknownBadge key="t" />],
+    [
+      "Group",
+      d.group
+        ? `${d.group.name}${d.group.vlan ? ` (VLAN ${d.group.vlan})` : ""}${d.groupAuto ? ", from its address range" : ""}`
+        : "None",
+    ],
     ["Kind", kindLabels[d.kind]],
     ["IP", d.ip || "–"],
     ["MAC", d.mac || "–"],

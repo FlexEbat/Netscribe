@@ -142,6 +142,7 @@ type editBody struct {
 	Notes   *string `json:"notes"`
 	Kind    *string `json:"kind"`
 	Trusted *bool   `json:"trusted"`
+	GroupID *int64  `json:"groupId"`
 	Version int64   `json:"version"`
 }
 
@@ -173,6 +174,12 @@ func (b editBody) deviceEdit() (model.DeviceEdit, error) {
 		e.Kind = &k
 	}
 	e.Trusted = b.Trusted
+	if b.GroupID != nil {
+		if *b.GroupID < 0 {
+			return model.DeviceEdit{}, errors.New("groupId must be 0 or a group id")
+		}
+		e.GroupID = b.GroupID
+	}
 	return e, nil
 }
 

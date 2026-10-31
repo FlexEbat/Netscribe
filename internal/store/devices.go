@@ -29,12 +29,20 @@ func (s *Store) ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device
 	if err != nil {
 		return nil, fmt.Errorf("list devices: %w", err)
 	}
+	groups, _, err := s.loadGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
 	query := strings.ToLower(strings.TrimSpace(f.Query))
 	out := make([]model.Device, 0, len(rows))
 	for _, r := range rows {
 		d, err := toDevice(r)
 		if err != nil {
 			return nil, err
+		}
+		resolveGroup(&d, groups)
+		if f.Group != nil && groupID(d) != *f.Group {
+			continue
 		}
 		if f.Online != nil && d.Online != *f.Online {
 			continue
@@ -63,7 +71,19 @@ func (s *Store) GetDevice(ctx context.Context, id int64) (model.Device, error) {
 	if err != nil {
 		return model.Device{}, fmt.Errorf("get device: %w", err)
 	}
-	return toDevice(row)
+	d, err := toDevice(row)
+	if err != nil {
+		return model.Device{}, err
+	}
+	return s.withGroup(ctx, d)
+}
+
+// groupID is the id of the effective group of a device, 0 for none.
+func groupID(d model.Device) int64 {
+	if d.Group == nil {
+		return 0
+	}
+	return d.Group.ID
 }
 
 // SetDevicePosition stores the canvas position of a device, or returns ErrNotFound.
@@ -156,6 +176,7 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		Notes:       r.Notes,
 		KindLocked:  r.KindLocked != 0,
 		Trusted:     r.Trusted != 0,
+		GroupID:     nullInt(r.GroupID),
 		Version:     r.Version,
 		FirstSeenAt: first,
 		LastSeenAt:  last,
@@ -268,4 +289,12 @@ func toScan(r dbgen.Scan) (model.Scan, error) {
 		sc.FinishedAt = &fin
 	}
 	return sc, nil
+}
+
+func nullInt(v sql.NullInt64) *int64 {
+	if !v.Valid {
+		return nil
+	}
+	n := v.Int64
+	return &n
 }

@@ -2,6 +2,7 @@ import {
   ClockCounterClockwise,
   Cube,
   Gauge,
+  Stack,
   List,
   ListBullets,
   Moon,
@@ -33,6 +34,7 @@ import { Account } from "@/pages/Account"
 import { Audit } from "@/pages/Audit"
 import { Users } from "@/pages/Users"
 import { Inventory } from "@/pages/Inventory"
+import { Groups } from "@/pages/Groups"
 import { Overview } from "@/pages/Overview"
 import { Login } from "@/pages/Login"
 import { Changes } from "@/pages/Changes"
@@ -62,6 +64,13 @@ const navItems: NavItem[] = [
     to: "/overview",
     label: "Overview",
     icon: Gauge,
+    permission: "topology:read",
+    group: "workspace",
+  },
+  {
+    to: "/groups",
+    label: "Groups",
+    icon: Stack,
     permission: "topology:read",
     group: "workspace",
   },
@@ -341,6 +350,14 @@ export const routes: RouteObject[] = [
         element: (
           <RequirePermission permission="topology:read">
             <Overview />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: "groups",
+        element: (
+          <RequirePermission permission="topology:read">
+            <Groups />
           </RequirePermission>
         ),
       },

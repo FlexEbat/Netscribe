@@ -4,9 +4,13 @@ import {
   ApiError,
   getNmap,
   listDevices,
+  bulkEdit,
+  listGroups,
   listScans,
   startScan,
   updateDevice,
+  type BulkChange,
+  type Group,
   type Device,
   type NmapState,
   type Scan,
@@ -14,7 +18,9 @@ import {
 import { openEvents, type ScanProgress } from "@/api/events"
 import { useSession } from "@/api/session"
 import { AddDeviceDialog } from "@/components/AddDeviceDialog"
+import { BulkBar } from "@/components/BulkBar"
 import { EmptyState } from "@/components/EmptyState"
+import { ImportDialog } from "@/components/ImportDialog"
 import { ScanBar } from "@/components/ScanBar"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -59,6 +65,12 @@ export function Inventory() {
     const v = params.get("trust")
     return v === "unknown" || v === "trusted" ? v : "all"
   })
+  const [groupFilter, setGroupFilter] = useState(() => {
+    const v = params.get("group")
+    return v === "none" || (v !== null && /^[1-9][0-9]*$/.test(v)) ? v : "all"
+  })
+  const [groups, setGroups] = useState<Group[]>([])
+  const [selected, setSelected] = useState<Set<number>>(new Set())
   const [state, setState] = useState<State>({ status: "loading" })
   const [refresh, setRefresh] = useState(0)
   const [scan, setScan] = useState<Scan | null>(null)
@@ -77,6 +89,17 @@ export function Inventory() {
       cancelled = true
     }
   }, [canRun])
+
+  // The groups fill the filter and the bulk bar. A failure leaves the lists without them.
+  useEffect(() => {
+    let cancelled = false
+    listGroups()
+      .then((g) => !cancelled && setGroups(g))
+      .catch(() => !cancelled && setGroups([]))
+    return () => {
+      cancelled = true
+    }
+  }, [refresh])
 
   // "/" jumps to the search field, unless the user is already typing somewhere.
   useEffect(() => {
@@ -100,7 +123,9 @@ export function Inventory() {
     let cancelled = false
     const online = filter === "all" ? undefined : filter === "online"
     const trusted = trust === "all" ? undefined : trust === "trusted"
-    listDevices({ q: search.trim(), online, trusted })
+    const group =
+      groupFilter === "all" ? undefined : groupFilter === "none" ? "none" : Number(groupFilter)
+    listDevices({ q: search.trim(), online, trusted, group })
       .then((devices) => {
         if (!cancelled) setState({ status: "ready", devices: sortByIp(devices) })
       })
@@ -110,7 +135,7 @@ export function Inventory() {
     return () => {
       cancelled = true
     }
-  }, [search, filter, trust, refresh])
+  }, [search, filter, trust, groupFilter, refresh])
 
   useEffect(() => {
     let cancelled = false
@@ -160,13 +185,19 @@ export function Inventory() {
     }
   }, [useNmap])
 
-  const filtering = search.trim() !== "" || filter !== "all" || trust !== "all"
+  const filtering =
+    search.trim() !== "" || filter !== "all" || trust !== "all" || groupFilter !== "all"
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Inventory</h1>
-        {canWrite ? <AddDeviceDialog onCreated={() => setRefresh((n) => n + 1)} /> : null}
+        {canWrite ? (
+          <div className="flex gap-2">
+            <ImportDialog onImported={() => setRefresh((n) => n + 1)} />
+            <AddDeviceDialog onCreated={() => setRefresh((n) => n + 1)} />
+          </div>
+        ) : null}
       </div>
       <ScanBar
         scan={scan}
@@ -210,11 +241,39 @@ export function Inventory() {
           <option value="unknown">Unknown only</option>
           <option value="trusted">Trusted only</option>
         </select>
+        <select
+          aria-label="Filter by group"
+          className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value)}
+        >
+          <option value="all">All groups</option>
+          <option value="none">No group</option>
+          {groups.map((g) => (
+            <option key={g.id} value={String(g.id)}>
+              {g.name}
+            </option>
+          ))}
+        </select>
       </div>
+      {canWrite && selected.size > 0 ? (
+        <BulkBar
+          count={selected.size}
+          groups={groups}
+          onClear={() => setSelected(new Set())}
+          onApply={async (change: BulkChange) => {
+            await bulkEdit([...selected], change)
+            setSelected(new Set())
+            setRefresh((n) => n + 1)
+          }}
+        />
+      ) : null}
       <Results
         state={state}
         filtering={filtering}
         canWrite={canWrite}
+        selected={selected}
+        onSelect={setSelected}
         onTrusted={() => setRefresh((n) => n + 1)}
         firstScan={canRun && scan === null ? () => void run() : undefined}
       />
@@ -226,12 +285,16 @@ function Results({
   state,
   filtering,
   canWrite,
+  selected,
+  onSelect,
   onTrusted,
   firstScan,
 }: {
   state: State
   filtering: boolean
   canWrite: boolean
+  selected: Set<number>
+  onSelect: (next: Set<number>) => void
   onTrusted: () => void
   firstScan?: () => void
 }) {
@@ -263,10 +326,23 @@ function Results({
       <TableCaption>Devices ({state.devices.length})</TableCaption>
       <TableHeader>
         <TableRow>
+          {canWrite ? (
+            <TableHead className="w-8">
+              <input
+                type="checkbox"
+                aria-label="Select all devices"
+                checked={state.devices.length > 0 && state.devices.every((d) => selected.has(d.id))}
+                onChange={(e) =>
+                  onSelect(e.target.checked ? new Set(state.devices.map((d) => d.id)) : new Set())
+                }
+              />
+            </TableHead>
+          ) : null}
           <TableHead>IP</TableHead>
           <TableHead>MAC</TableHead>
           <TableHead>Hostname</TableHead>
           <TableHead>Kind</TableHead>
+          <TableHead>Group</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Trust</TableHead>
         </TableRow>
@@ -274,10 +350,37 @@ function Results({
       <TableBody>
         {state.devices.map((d) => (
           <TableRow key={d.id}>
+            {canWrite ? (
+              <TableCell>
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${d.label || d.hostname || d.ip || d.mac}`}
+                  checked={selected.has(d.id)}
+                  onChange={(e) => {
+                    const next = new Set(selected)
+                    if (e.target.checked) next.add(d.id)
+                    else next.delete(d.id)
+                    onSelect(next)
+                  }}
+                />
+              </TableCell>
+            ) : null}
             <TableCell className="font-mono">{d.ip || "–"}</TableCell>
             <TableCell className="font-mono">{d.mac || "–"}</TableCell>
             <TableCell>{d.label || d.hostname || "–"}</TableCell>
             <TableCell className="capitalize">{d.kind}</TableCell>
+            <TableCell>
+              {d.group ? (
+                <span>
+                  {d.group.name}
+                  {d.groupAuto ? (
+                    <span className="text-xs text-muted-foreground"> (range)</span>
+                  ) : null}
+                </span>
+              ) : (
+                "–"
+              )}
+            </TableCell>
             <TableCell>
               <StatusBadge online={d.online} />
             </TableCell>

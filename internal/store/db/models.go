@@ -78,6 +78,17 @@ type Device struct {
 	UpdatedBy   sql.NullInt64
 	OsGuess     string
 	Trusted     int64
+	GroupID     sql.NullInt64
+}
+
+type DeviceGroup struct {
+	ID          int64
+	Name        string
+	Description string
+	Vlan        sql.NullInt64
+	Ranges      string
+	Version     int64
+	CreatedAt   string
 }
 
 type DevicePresence struct {

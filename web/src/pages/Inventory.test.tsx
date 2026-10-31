@@ -30,6 +30,9 @@ function device(overrides: Partial<Device>): Device {
     osGuess: "",
     kindLocked: false,
     trusted: true,
+    groupId: null,
+    group: null,
+    groupAuto: false,
     version: 1,
     firstSeenAt: "2026-10-09T12:00:00.000Z",
     lastSeenAt: "2026-10-09T12:00:00.000Z",
@@ -83,7 +86,7 @@ interface OpenOptions {
   nmap?: NmapState
 }
 
-function open(devices: (path: string) => Response, options: OpenOptions = {}) {
+function open(devices: (path: string, init?: RequestInit) => Response, options: OpenOptions = {}) {
   FakeEventSource.instances = []
   vi.stubGlobal("EventSource", FakeEventSource)
   const mock = mockFetch({
@@ -100,8 +103,8 @@ function open(devices: (path: string) => Response, options: OpenOptions = {}) {
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input)
     if (path.startsWith("/api/devices")) {
-      mock.calls.push({ method: "GET", path, init: init ?? {} })
-      return devices(path)
+      mock.calls.push({ method: (init?.method ?? "GET").toUpperCase(), path, init: init ?? {} })
+      return devices(path, init)
     }
     return base(input, init)
   })
@@ -348,5 +351,144 @@ describe("Inventory trust", () => {
     const list = mock.calls.filter((c) => c.path.startsWith("/api/devices"))[0]!
     expect(list.path).not.toContain("online=")
     expect(list.path).not.toContain("trusted=")
+  })
+})
+
+describe("Inventory groups", () => {
+  const office = {
+    id: 1,
+    name: "Office",
+    vlan: 10,
+    description: "",
+    ranges: ["192.168.1.0/24"],
+    deviceCount: 2,
+    version: 1,
+  }
+  const lab = {
+    id: 2,
+    name: "Lab",
+    vlan: null,
+    description: "",
+    ranges: [],
+    deviceCount: 1,
+    version: 1,
+  }
+  const inRange = device({
+    id: 1,
+    hostname: "cam1",
+    ip: "192.168.1.9",
+    group: { id: 1, name: "Office", vlan: 10 },
+    groupAuto: true,
+  })
+  const chosen = device({
+    id: 2,
+    hostname: "nas",
+    ip: "192.168.1.10",
+    groupId: 2,
+    group: { id: 2, name: "Lab", vlan: null },
+  })
+  const loose = device({ id: 3, hostname: "tv", ip: "10.0.0.5" })
+
+  function openWithGroups(
+    devices: (path: string, init?: RequestInit) => Response,
+    options: { role?: Role; entry?: string } = {},
+  ) {
+    const mock = open(devices, options)
+    const base = globalThis.fetch as unknown as (
+      i: RequestInfo | URL,
+      init?: RequestInit,
+    ) => Promise<Response>
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/groups") {
+        mock.calls.push({ method: "GET", path: "/api/groups", init: init ?? {} })
+        return json(200, { groups: [office, lab] })
+      }
+      return base(input, init)
+    })
+    return mock
+  }
+
+  it("shows the group of every device and says when it comes from the range", async () => {
+    openWithGroups(() => json(200, { devices: [inRange, chosen, loose] }))
+    const table = within(await screen.findByRole("table"))
+    const row = (name: string) =>
+      table.getAllByRole("row").find((r) => within(r).queryByText(name))!
+    expect(within(row("cam1")).getByText("Office")).toBeInTheDocument()
+    expect(within(row("cam1")).getByText("(range)")).toBeInTheDocument()
+    expect(within(row("nas")).getByText("Lab")).toBeInTheDocument()
+    expect(within(row("nas")).queryByText("(range)")).not.toBeInTheDocument()
+    expect(within(row("tv")).queryByText("Office")).not.toBeInTheDocument()
+    expect(within(row("tv")).queryByText("Lab")).not.toBeInTheDocument()
+  })
+
+  it("asks the server for the devices of one group, or of none", async () => {
+    const mock = openWithGroups(() => json(200, { devices: [inRange] }))
+    await screen.findByRole("table")
+    const select = screen.getByLabelText("Filter by group")
+    await waitFor(() =>
+      expect(within(select).getByRole("option", { name: "Lab" })).toBeInTheDocument(),
+    )
+    await userEvent.setup().selectOptions(select, "Lab")
+    await waitFor(() => expect(mock.calls.some((c) => c.path.includes("group=2"))).toBe(true))
+    await userEvent.setup().selectOptions(select, "No group")
+    await waitFor(() => expect(mock.calls.some((c) => c.path.includes("group=none"))).toBe(true))
+  })
+
+  it("starts with the group of the address", async () => {
+    const mock = openWithGroups(() => json(200, { devices: [chosen] }), {
+      entry: "/inventory?group=2",
+    })
+    await screen.findByRole("table")
+    expect(mock.calls.find((c) => c.path.startsWith("/api/devices"))!.path).toContain("group=2")
+  })
+
+  it("changes the selected devices together and only them", async () => {
+    const posted: unknown[] = []
+    openWithGroups((path, init) => {
+      if (path === "/api/devices/bulk") {
+        posted.push(JSON.parse(String(init?.body)))
+        return json(200, { updated: 2 })
+      }
+      return json(200, { devices: [inRange, chosen, loose] })
+    })
+    const user = userEvent.setup()
+    await screen.findByRole("table")
+    await user.click(screen.getByRole("checkbox", { name: "Select cam1" }))
+    await user.click(screen.getByRole("checkbox", { name: "Select tv" }))
+    expect(screen.getByText("2 devices selected")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Mark as trusted" }))
+    await waitFor(() => expect(posted).toHaveLength(1))
+    expect(posted[0]).toEqual({ ids: [1, 3], trusted: true })
+    await waitFor(() => expect(screen.queryByText("2 devices selected")).not.toBeInTheDocument())
+  })
+
+  it("sets a group for the selection and shows why a change failed", async () => {
+    const posted: unknown[] = []
+    openWithGroups((path, init) => {
+      if (path === "/api/devices/bulk") {
+        posted.push(JSON.parse(String(init?.body)))
+        return json(404, { error: "a listed device does not exist, nothing was changed" })
+      }
+      return json(200, { devices: [inRange] })
+    })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole("checkbox", { name: "Select all devices" }))
+    const set = screen.getByLabelText("Set the group of the selection")
+    await waitFor(() =>
+      expect(within(set).getByRole("option", { name: "Lab" })).toBeInTheDocument(),
+    )
+    await user.selectOptions(set, "Lab")
+    expect(await screen.findByRole("alert")).toHaveTextContent("nothing was changed")
+    expect(posted[0]).toEqual({ ids: [1], groupId: 2 })
+    expect(screen.getByText("1 device selected")).toBeInTheDocument()
+  })
+
+  it("offers a viewer neither the checkboxes nor the import", async () => {
+    openWithGroups(() => json(200, { devices: [inRange] }), { role: "viewer" })
+    await screen.findByRole("table")
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Import CSV" })).not.toBeInTheDocument()
+    expect(within(screen.getByRole("table")).getByText("Office")).toBeInTheDocument()
   })
 })
