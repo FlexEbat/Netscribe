@@ -8,6 +8,7 @@ import {
 } from "@/api/client"
 import { openEvents } from "@/api/events"
 import { EmptyState } from "@/components/EmptyState"
+import { SavedFilters } from "@/components/SavedFilters"
 import { Alert } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -50,14 +51,21 @@ export function Containers() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Containers</h1>
-      <Input
-        type="search"
-        aria-label="Filter containers"
-        placeholder="Filter by name, image, state or project"
-        className="max-w-sm"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="search"
+          aria-label="Filter containers"
+          placeholder="Filter by name, image, state or project"
+          className="max-w-sm"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <SavedFilters
+          page="containers"
+          current={query.trim() === "" ? "" : new URLSearchParams({ q: query.trim() }).toString()}
+          onApply={(q) => setQuery(new URLSearchParams(q).get("q") ?? "")}
+        />
+      </div>
       <Results state={state} query={query} />
     </div>
   )

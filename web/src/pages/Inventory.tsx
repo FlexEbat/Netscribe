@@ -21,6 +21,7 @@ import { AddDeviceDialog } from "@/components/AddDeviceDialog"
 import { BulkBar } from "@/components/BulkBar"
 import { EmptyState } from "@/components/EmptyState"
 import { ImportDialog } from "@/components/ImportDialog"
+import { SavedFilters } from "@/components/SavedFilters"
 import { ScanBar } from "@/components/ScanBar"
 import { Button } from "@/components/ui/button"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -185,6 +186,14 @@ export function Inventory() {
     }
   }, [useNmap])
 
+  const currentFilter = (() => {
+    const p = new URLSearchParams()
+    if (search.trim() !== "") p.set("q", search.trim())
+    if (filter !== "all") p.set("status", filter)
+    if (trust !== "all") p.set("trust", trust)
+    if (groupFilter !== "all") p.set("group", groupFilter)
+    return p.toString()
+  })()
   const filtering =
     search.trim() !== "" || filter !== "all" || trust !== "all" || groupFilter !== "all"
 
@@ -255,6 +264,20 @@ export function Inventory() {
             </option>
           ))}
         </select>
+        <SavedFilters
+          page="inventory"
+          current={currentFilter}
+          onApply={(query) => {
+            // A saved filter sets every field of the page: what it does not name is cleared.
+            const p = new URLSearchParams(query)
+            setSearch(p.get("q") ?? "")
+            const status = p.get("status")
+            setFilter(status === "online" || status === "offline" ? status : "all")
+            const trusted = p.get("trust")
+            setTrust(trusted === "unknown" || trusted === "trusted" ? trusted : "all")
+            setGroupFilter(p.get("group") ?? "all")
+          }}
+        />
       </div>
       {canWrite && selected.size > 0 ? (
         <BulkBar
