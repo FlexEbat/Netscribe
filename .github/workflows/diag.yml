@@ -1,0 +1,41 @@
+name: diag
+# Temporary: prints the output of each check as annotations. Delete before merging dev.
+on:
+  push:
+    branches: [dev]
+permissions:
+  contents: read
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22
+      - run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+          mkdir -p web/dist && touch web/dist/.gitkeep
+          (cd web && npm ci >/dev/null 2>&1)
+          set +e
+          emit() {
+            name=$1; shift
+            "$@" > /tmp/$name.log 2>&1; rc=$?
+            msg="out: $(grep -vE '^(ok|\?)\s' /tmp/$name.log | tail -c 3000 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')"
+            if [ $rc -eq 0 ]; then echo "::notice title=$name ok::$msg"; else echo "::error title=$name rc=$rc::$msg"; echo $name >> /tmp/failed; fi
+          }
+          P="./cmd/... ./internal/... ./web"
+          emit fmt sh -c 'out=$(gofmt -l cmd internal web/embed.go); echo "$out"; test -z "$out"'
+          emit vet go vet $P
+          emit lint golangci-lint run $P
+          emit sqlc sqlc diff
+          emit gotest go test -race $P
+          emit webcheck sh -c 'cd web && npm run typecheck && npm run lint && npm run format:check && npm test'
+          test ! -s /tmp/failed
