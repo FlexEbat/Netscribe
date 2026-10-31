@@ -209,7 +209,8 @@ func stage(r io.Reader, dir string) (Manifest, error) {
 		if hdr.Size < 0 || hdr.Size > limit {
 			return Manifest{}, bad("%s in the archive is too large", hdr.Name)
 		}
-		if err := writeStaged(filepath.Join(dir, hdr.Name), tr, hdr.Size); err != nil {
+		// hdr.Name is one of the four allowed names: the lookup above refused anything else.
+		if err := writeStaged(filepath.Join(dir, hdr.Name), tr, hdr.Size); err != nil { //nolint:gosec // not a path from the archive, see above
 			return Manifest{}, err
 		}
 	}

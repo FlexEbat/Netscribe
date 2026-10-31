@@ -71,7 +71,7 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("manifest %+v", m)
 	}
 	for name, want := range map[string]string{NameDB: "db-bytes", NameConfig: "listen: x"} {
-		got, err := os.ReadFile(filepath.Join(dir, name))
+		got, err := os.ReadFile(filepath.Join(dir, name)) //nolint:gosec // a path inside the test directory
 		if err != nil || string(got) != want {
 			t.Errorf("%s = %q, %v", name, got, err)
 		}
