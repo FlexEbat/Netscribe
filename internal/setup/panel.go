@@ -85,6 +85,7 @@ var panelGetters = map[string]func(c config.Config) any{
 	"export.chromePath":            func(c config.Config) any { return c.Export.ChromePath },
 	"ssh.knownHosts":               func(c config.Config) any { return c.SSH.KnownHosts },
 	"updates.check":                func(c config.Config) any { return c.Updates.Check },
+	"metrics.enabled":              func(c config.Config) any { return c.Metrics.Enabled },
 }
 
 func nonNil(l []string) []string {
