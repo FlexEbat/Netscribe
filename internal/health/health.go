@@ -245,11 +245,12 @@ func updateHelper(in Input) Check {
 func Worst(list []Check) Status {
 	worst := OK
 	for _, c := range list {
-		switch {
-		case c.Status == Fail:
+		switch c.Status {
+		case Fail:
 			return Fail
-		case c.Status == Warn:
+		case Warn:
 			worst = Warn
+		case OK:
 		}
 	}
 	return worst
