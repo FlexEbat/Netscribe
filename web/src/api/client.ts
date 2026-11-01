@@ -567,6 +567,25 @@ export function restartService(): Promise<VersionInfo> {
   return api<VersionInfo>("POST", "/api/system/restart")
 }
 
+export type HealthStatus = "ok" | "warn" | "fail"
+
+export interface HealthCheck {
+  id: string
+  status: HealthStatus
+  title: string
+  detail: string
+  fix: string
+}
+
+export interface HealthReport {
+  checks: HealthCheck[]
+  ranAt: string
+  worst: HealthStatus
+}
+
+export const getHealth = () => api<HealthReport>("GET", "/api/health")
+export const runHealth = () => api<HealthReport>("POST", "/api/health/run")
+
 export interface BackupSummary {
   version: string
   createdAt: string

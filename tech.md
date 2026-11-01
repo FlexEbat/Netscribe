@@ -2067,17 +2067,18 @@ The goal: what `netscribe doctor` says in a terminal, an administrator reads in 
 Files: `internal/setup/doctor.go` (the checks become data: `Check{ID, Status, Title, Detail, Fix}`), `internal/api/health.go`, `internal/api/router.go`, `cmd/netscribe/health.go` (the adapter), `web/src/pages/Health.tsx`, `web/src/App.tsx`.
 
 - **Route.** `GET /api/health` (`system:manage`) runs the checks that need no root and answers `{ "checks": [ { "id", "status": "ok|warn|fail", "title", "detail", "fix" } ], "ranAt" }`. The same list is what `netscribe doctor` prints, from the same code. `POST /api/health/run` does a fresh run, at most one per 10 seconds (429 after that); `GET` returns the last result.
-- **Checks.** The ones of `doctor` that the sandboxed service can do: config file mode and parse, database writable and its size, free disk space, scan targets valid and private, nmap found (when switched on), Chromium found (for PDF), Docker socket readable (when switched on), ICMP and raw socket permissions, time since the last completed scan against `scan.interval`, update helper present, TLS certificate expiry (when TLS is on), notification channels configured. A check that needs root says `skipped` in `detail` and counts as `ok`.
+- **Checks.** Not the whole of `doctor`: the install checks of `doctor` (root, the service account, the unit) make no sense for a service that runs without root, so the panel has its own package `internal/health` with the checks that the running service can make about itself: config file permissions, free disk space where the database lives, scan targets set, time since the last scan against `scan.interval` (and a failed last scan), nmap found when switched on, a browser for PDF export, the Docker socket when switched on, TLS certificate expiry (warn under 14 days, fail when expired) and whether the update helper is installed. Notification channels and the ICMP and raw socket rights can follow. Every check reads through a `Probe` of injected functions, so tests answer for the machine.
 - **Read only.** A check changes nothing and sends nothing outside the machine, except the address check of an update (already allowed by slice 24). `fix` is a sentence or a command to copy, never run by the panel.
 - **Web.** The page `/health` groups failures first, shows the time of the run, a "Run again" button and the fix next to each problem. The navigation item shows a dot when a check fails.
 
 Acceptance criteria.
-1. `GET /api/health` answers the same ids and statuses as `netscribe doctor --json` for the same machine.
+1. The checks list is fixed and each check has a stable id, a title, a status and, for a problem, a detail and a fix; a healthy install shows no warning.
 2. Viewer, operator and token get 403, no session 401.
 3. A failing check shows `fail` with a `fix`; a stale last scan (older than three intervals) shows `warn`.
 4. `POST /api/health/run` twice within 10 seconds answers 429 the second time.
 5. No answer, log line or `detail` holds a secret or the content of the config.
 6. A check that panics or hangs ends with `fail` after 5 seconds and does not stop the others.
+7. The navigation dot for a failing check is not built yet; the page sorts problems first.
 
 ### Slice 34 - API reference page
 
