@@ -567,6 +567,23 @@ export function restartService(): Promise<VersionInfo> {
   return api<VersionInfo>("POST", "/api/system/restart")
 }
 
+export interface ApiOperation {
+  summary: string
+  description: string
+  "x-permission": string
+  "x-token": boolean
+  parameters?: { name: string; in: string; description?: string }[]
+  requestBody?: { description: string }
+  responses: Record<string, { description: string }>
+}
+
+export interface ApiDocument {
+  info: { title: string; version: string }
+  paths: Record<string, Record<string, ApiOperation>>
+}
+
+export const getApiDocument = () => api<ApiDocument>("GET", "/api/openapi.json")
+
 export type HealthStatus = "ok" | "warn" | "fail"
 
 export interface HealthCheck {
