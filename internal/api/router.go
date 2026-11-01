@@ -134,6 +134,9 @@ type Options struct {
 	Updates *update.Checker
 	// UpdatesEnabled tells whether the check is switched on in the config. Nil means it is.
 	UpdatesEnabled func() bool
+	// Sessions lists and ends the sessions of the caller. Without it the routes under
+	// /api/auth/sessions are not registered.
+	Sessions SessionStore
 	// Health runs the health checks. Without it the health routes are not registered.
 	Health HealthRunner
 	// MetricsEnabled tells whether GET /metrics answers. Nil means it does not.
@@ -184,6 +187,7 @@ type server struct {
 	backupMu       sync.Mutex // one backup or restore at a time
 	metricsOn      func() bool
 	health         HealthRunner
+	sessions       SessionStore
 	healthMu       sync.Mutex
 	healthRan      time.Time
 	healthLast     []health.Check
@@ -208,6 +212,13 @@ func (s *server) routes() []Route {
 		route(http.MethodPut, "/api/auth/password", permSession, s.changePassword),
 		route(http.MethodGet, "/api/version", permSession, s.getVersion),
 		route(http.MethodGet, "/api/openapi.json", model.PermTopologyRead, s.getOpenAPI),
+	}
+	if s.sessions != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/auth/sessions", permSession, s.listSessions),
+			route(http.MethodDelete, "/api/auth/sessions/{id}", permSession, s.revokeSession),
+			route(http.MethodDelete, "/api/auth/sessions", permSession, s.revokeOtherSessions),
+		)
 	}
 	table = append(table,
 		route(http.MethodGet, "/api/users", model.PermUsersManage, s.listUsers),
@@ -353,6 +364,7 @@ func newServer(opts Options) *server {
 		backup:         opts.Backup,
 		metricsOn:      opts.MetricsEnabled,
 		health:         opts.Health,
+		sessions:       opts.Sessions,
 		settings:       opts.Settings,
 		notifier:       opts.Notifications,
 	}

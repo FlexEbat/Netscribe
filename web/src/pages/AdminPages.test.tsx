@@ -21,6 +21,7 @@ function open(
   vi.stubGlobal("EventSource", undefined)
   const mock = mockFetch({
     "GET /api/auth/me": () => json(200, meBody(makeUser({ role }))),
+    "GET /api/auth/sessions": () => json(200, []),
     ...handlers,
   })
   const router = createMemoryRouter(routes, { initialEntries: [entry] })
