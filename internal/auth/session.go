@@ -369,6 +369,31 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 	return s.repo.SetPassword(ctx, rec.ID, hash, false)
 }
 
+// ConfirmPassword checks the password of the caller before a step that hands out secrets,
+// such as a backup. A wrong password counts as a failed login, so a stolen session cannot
+// be used to guess it without limit.
+func (s *Service) ConfirmPassword(ctx context.Context, p Principal, password string) error {
+	rec, err := s.repo.GetUserByName(ctx, p.User.Username)
+	if err != nil {
+		return fmt.Errorf("find user: %w", err)
+	}
+	if rec.LockedUntil != nil && s.now().Before(*rec.LockedUntil) {
+		s.spendTime(password)
+		return ErrWrongPassword
+	}
+	ok, err := Verify(password, rec.PasswordHash)
+	if err != nil {
+		return fmt.Errorf("verify password: %w", err)
+	}
+	if !ok {
+		if err := s.repo.RecordLogin(ctx, rec.ID, false, s.cfg.MaxFailedLogins, s.cfg.LockoutDuration.Std()); err != nil {
+			return fmt.Errorf("record failed attempt: %w", err)
+		}
+		return ErrWrongPassword
+	}
+	return nil
+}
+
 // CSRFMatches compares a submitted token with the session's in constant time.
 func CSRFMatches(want, got string) bool {
 	return want != "" && subtle.ConstantTimeCompare([]byte(want), []byte(got)) == 1

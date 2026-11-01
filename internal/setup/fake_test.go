@@ -118,6 +118,7 @@ func (f *fakeSys) env(in string) Env {
 			return os.ReadFile(p) //nolint:gosec // test paths
 		},
 		ReadDir: os.ReadDir,
+		Lstat:   os.Lstat,
 		Stat: func(p string) (fs.FileInfo, error) {
 			if p == "/run/systemd/system" {
 				if f.systemd {

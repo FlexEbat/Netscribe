@@ -128,7 +128,7 @@ func (h helperClient) State() api.HelperState {
 }
 
 func (h helperClient) Request(verb string) error {
-	if verb != setup.HelperUpdate && verb != setup.HelperRestart {
+	if verb != setup.HelperUpdate && verb != setup.HelperRestart && verb != setup.HelperRestore {
 		return errors.New("unknown request")
 	}
 	if st := h.State(); st.State == "waiting" || st.State == "running" {

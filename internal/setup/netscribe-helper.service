@@ -5,9 +5,9 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-# Started by netscribe-helper.path when the panel leaves a request. The helper does two
-# things only: install the newest release, and restart netscribe. The request file holds
-# one word, and nothing else from it is used.
+# Started by netscribe-helper.path when the panel leaves a request. The helper does three
+# things only: install the newest release, restart netscribe, and put a checked backup in
+# place. The request file holds one word, and nothing else from it is used.
 Type=oneshot
 ExecStart=/usr/local/bin/netscribe helper --request /var/lib/netscribe/helper.request
 RuntimeDirectory=netscribe-helper
@@ -17,7 +17,7 @@ TimeoutStartSec=15min
 
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/usr/local/bin /etc/systemd/system /var/lib/netscribe
+ReadWritePaths=/usr/local/bin /etc/systemd/system /var/lib/netscribe /etc/netscribe
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

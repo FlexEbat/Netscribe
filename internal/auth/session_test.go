@@ -623,6 +623,29 @@ func TestChangePassword(t *testing.T) {
 	}
 }
 
+func TestConfirmPassword(t *testing.T) {
+	svc, repo, _ := newTestService(t)
+	addUser(t, svc, "alice", model.RoleAdmin)
+	ctx := context.Background()
+	sess, _, _ := svc.Login(ctx, "alice", goodPassword, "", "")
+	p, _ := svc.Authenticate(ctx, sess.ID)
+
+	if err := svc.ConfirmPassword(ctx, p, goodPassword); err != nil {
+		t.Fatalf("right password = %v", err)
+	}
+	if err := svc.ConfirmPassword(ctx, p, "wrong wrong wrong"); err != ErrWrongPassword {
+		t.Fatalf("wrong password = %v", err)
+	}
+	if last := repo.recorded[len(repo.recorded)-1]; last.ok {
+		t.Error("a wrong password was not counted as a failed attempt")
+	}
+	until := time.Date(2100, 1, 1, 0, 0, 0, 0, time.UTC)
+	repo.users["alice"].LockedUntil = &until
+	if err := svc.ConfirmPassword(ctx, p, goodPassword); err != ErrWrongPassword {
+		t.Errorf("a locked account confirmed a password: %v", err)
+	}
+}
+
 func TestChangePasswordClearsMustChange(t *testing.T) {
 	svc, repo, _ := newTestService(t)
 	if _, err := svc.CreateUser(context.Background(), NewUser{Username: "alice", Role: model.RoleViewer, Password: goodPassword, MustChangePassword: true}); err != nil {

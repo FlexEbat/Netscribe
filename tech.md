@@ -3,6 +3,7 @@
 **Version: v0 (draft)** (2026-10-23)
 
 Changelog:
+- v0 (amendment 41) - the plan gets slices 31 to 43 for the work that remained after slice 30: backup and restore in the panel (31), Prometheus `/metrics` (32), the health page (33), the API reference page (34), a second factor and the list of sessions (35), single sign-on with OIDC (36), the Russian interface (37), Wake on LAN and service links (38), IPv6 (39), scored device detection with TLS certificate and passive DHCP signals (40), optional automatic updates with a rollback (41), Playwright end to end tests (42) and a large network check (43). Each slice names its files, its rules and its acceptance criteria; the new routes, audit actions (`backup_create`, `device_wake`, `totp_enable`, `totp_disable`, `totp_reset`, `totp_failed`, `session_revoke`, `oidc_login`, `oidc_login_failed`, `oidc_user_create`, `auto_update_request`, `auto_update_rollback`) and config keys (`metrics`, `auth.requireTotp`, `auth.oidc`, `discovery.ipv6`, `discovery.dhcpListen`, `discovery.tlsCerts`, `updates.auto`, `updates.window`) are copied into sections 4.3, 7, 9.8 and 9.6 by the slice that builds them. Two decisions to know: slice 36 adds the first dependencies since the plan began (`go-oidc` and `oauth2`) because a hand written token check is a risk, and slice 35 seals the second factor secrets under a key file, so a copy of the database alone does not hold them.
 - v0 (amendment 40) - slice 30: saved filters. A person can save the filter of the inventory, the services page or the containers page under a name and apply it again later. A new table `saved_filters` (migration `0014_saved_filters.sql`) holds them per user; the routes `GET /api/filters?page=`, `POST /api/filters` and `DELETE /api/filters/{id}` work on the filters of the person who asks and need only `topology:read`, so a viewer may keep his own views. A filter is a short query string with a fixed list of keys per page, checked on the server. Saving and deleting a filter is not written to the audit log. The inventory, services and containers pages get a "Saved filters" control.
 - v0 (amendment 39) - slice 29: groups, bulk edit and CSV import. A new table `device_groups` (name, optional VLAN number, optional address ranges, migration `0013_groups.sql`) and a nullable `devices.group_id`. A device shows one effective group: the one a person set, else the first group (lowest id) whose ranges contain its address. Groups are managed through `GET/POST /api/groups` and `PATCH/DELETE /api/groups/{id}` (reading needs `topology:read`, the rest `devices:write`); `PATCH /api/devices/{id}` takes `groupId` (`0` clears it). `POST /api/devices/bulk` changes `trusted`, `kind` or `groupId` of up to 200 devices in one transaction. `POST /api/devices/import` creates manual devices from a CSV file, all or none, with `?dryRun=true` to check a file first. Search and saved filters are not part of this slice: they move to slice 30.
 - v0 (amendment 38) - slice 28: an overview page and the history of a device. A new table `device_presence` (migration `0012_device_presence.sql`) gets one row per scanned, non-manual device for every completed scan, written by `ApplyResult` in the same transaction, and goes away with its scan (`history.keepScans` is the limit). There is no backfill: the history of a device starts at the upgrade. `GET /api/overview` answers the counts of the overview page and `GET /api/devices/{id}/history` answers uptime, IP changes and outages of one device, both for `topology:read`. The web gets the page `/overview` (a new item in the navigation, the landing page does not change) and a tab "History" in the device panel.
@@ -1323,7 +1324,7 @@ Do not write code with an invented type. Do not extend or weaken on your own the
 
 ## 16. Stages and slices
 
-Status: slices 0-30 are merged into `main`.
+Status: slices 0-30 are merged into `main`. Slices 31-43 are planned (amendment 41).
 
 The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
@@ -2015,6 +2016,272 @@ Acceptance criteria.
 4. Each rule of the list above has a test with a bad value: unknown page, empty and overlong name, control characters, unknown key, repeated key, bad `status`, `trust` or `group`, a query of 301 characters, a query with only empty values, and the 21st filter.
 5. A viewer may save and delete his own filters; no session gets 401; a token with the read scope cannot save (it is a write).
 6. The control applies a saved filter to all the fields of the page it belongs to and clears the fields it does not name.
+
+### Slice 31 - backup and restore in the panel
+
+The goal: an administrator saves the whole install to one file and brings it back, from the panel or from a terminal, without knowing where the files live.
+
+Files: `internal/backup/` (new package, imports only `config`), `internal/store/backup.go` (a consistent copy of the database and the check of a copy), `internal/api/backup.go`, `internal/api/router.go`, `internal/setup/helper.go` (the word `restore`), `cmd/netscribe/backup.go` (`netscribe backup` and `netscribe restore`), `web/src/pages/Settings.tsx`, `web/src/components/BackupCard.tsx`.
+
+- **File.** A `.tar.gz` named `netscribe-<date>.tar.gz` with exactly three kinds of entry: `netscribe.db` (a copy made with `VACUUM INTO`, so a scan that runs meanwhile cannot tear it), `netscribe.yaml` (the config as it is, secrets included) and `manifest.json` (`{ "version", "schema", "createdAt" }`; `schema` is the number of the last applied migration). With slice 35 the entry `totp.key` joins them. Nothing else is read from an archive and nothing else is ever written to it.
+- **Secrets.** A backup holds the config with its secrets, so it is as sensitive as the config. The download answers `Cache-Control: no-store` and the page says so. The archive is not encrypted in this slice: the person keeps it as he keeps `netscribe.yaml`.
+- **`GET /api/backup`** (`system:manage`, never in a token) streams the archive and writes `backup_create` to the audit log. It needs the password of the person in the header `X-Confirm-Password` (UTF-8 bytes, base64 encoded, because a header holds no characters beyond Latin-1), because a stolen session must not be enough to take every secret. The archive is made in a temporary file first, so a failure answers 500 before any byte is sent, and the transfer gets its own longer deadline.
+- **`POST /api/backup/restore`** (`system:manage`, never in a token) takes the archive as the request body (limit 1 GiB) and the password in `X-Confirm-Password`. It only checks and stages: it reads the archive without extracting paths (names are matched against the fixed list, a link, a directory, an absolute path or `..` is refused), checks `manifest.schema` against the newest migration of this binary (a newer schema is refused: the program cannot read it), runs `PRAGMA integrity_check` and `PRAGMA foreign_key_check` on a temporary copy, runs `config.Validate` on the config, empties the table `sessions` of the staged copy (everybody signs in again), refuses a config whose `database` path differs from this install's (the unit may write only its own state directory), and then leaves the checked files in `<state dir>/restore/` and the request word `restore` for the helper of slice 24. The helper takes the stage over with `chown -R -h root:root`, checks that the files are regular and that the config loads, stops the service, keeps the current database and config as `*.before-restore`, copies the staged files over them (an existing file keeps its owner and mode), starts the service and waits for the panel to answer. If it does not answer, the helper puts the old files back and starts the service on them; either way the result is in `status.json`. The helper unit may now also write the config directory. The answer is 202. Without the helper the answer is 501 and the page shows `sudo netscribe restore <file>`.
+- **CLI.** `netscribe backup --out FILE` (mode `0600`, refuses to overwrite) and `netscribe restore FILE` (root, stops the unit, the same checks, asks first, `--yes` for scripts). The console gets both.
+- **Web.** A card on the Settings page: a button to download (asks for the password), a file picker to restore with the result of the checks (schema, date, number of devices) and a second confirmation that says the current data will be replaced.
+
+Acceptance criteria.
+1. A backup of a database with a running scan opens as a valid database with the rows of one moment, and the archive holds only the listed names.
+2. Download and restore need `system:manage` and the right password: a viewer, an operator and a token get 403, no session gets 401, a wrong password gets 403 and writes `access_denied`.
+3. An archive with `../x`, an absolute path, a symlink, an entry that is too large, a duplicated entry, a missing database or a bad gzip is refused and nothing is staged.
+4. A database with a newer schema, a failed `integrity_check` or a config that does not pass `Validate` is refused with the text of the first problem and nothing is staged.
+5. A restore replaces the data, keeps the old files as `*.before-restore`, clears the sessions, and a failed start puts the old files back and says so in `status.json`.
+6. The restore request file holds one word, the helper uses nothing else from it, and the staged directory is not readable by other users.
+7. A secret never appears in a log line, in an audit entry or in the answer of the check.
+8. Backup then restore on a fresh install gives the same devices, groups, users and settings.
+
+### Slice 32 - Prometheus metrics
+
+The goal: the owner watches Netscribe in the tool he already has.
+
+Files: `internal/metrics/` (new package, imports only `model`; the text format is written by hand, there is no dependency), `internal/store/metrics.go`, `internal/api/metrics.go`, `internal/api/router.go`, `internal/config/` (the `metrics` block), `cmd/netscribe/`, `web/src/pages/Settings.tsx`.
+
+- **Route.** `GET /metrics` needs `topology:read`, so a Prometheus job uses a read token (`authorization: { credentials: ndt_... }`). It answers `text/plain; version=0.0.4`. It is registered only when `metrics.enabled` is true (default `false`, applied without a restart).
+- **Series.** `netscribe_build_info{version}`, `netscribe_devices{status="online|offline"}`, `netscribe_devices_untrusted`, `netscribe_devices_new_this_week`, `netscribe_risky_services`, `netscribe_recent_scans{status="done|failed"}` (the latest finished scans the overview looks at), `netscribe_last_scan_timestamp_seconds`, `netscribe_last_scan_duration_seconds` and `netscribe_last_scan_ok` (1 or 0). They are all taken from the same numbers as `GET /api/overview`, so the two cannot disagree. Every series is a gauge. Series for containers and for the size of the database can follow when somebody needs them.
+- **Labels.** Only the fixed words above. Nothing from the network (a host name, a banner, a container name) is ever a label or a value, so cardinality is bounded and the output cannot be injected.
+- **Cost.** One read transaction, a few `COUNT` queries, no scan of a large table in a loop. The answer is cached for 5 seconds.
+- **Web.** The switch is a setting of the Settings page and `netscribe config`, with the line `prometheus.yml` the person pastes.
+
+Acceptance criteria.
+1. With `metrics.enabled: false` the route answers 404 for everyone.
+2. No session gets 401, a read token gets 200, and every line of the output is a HELP line, a TYPE line or a sample line of the text format (checked with a line pattern in the test, because the Prometheus parser would be a new dependency).
+3. A database with a device named `a"b\n# HELP x` produces an output that is still valid and does not contain that name.
+4. The counts equal the counts of `GET /api/overview` for the same data.
+5. Two requests within 5 seconds read the database once.
+6. An empty database answers zeros, never a missing series.
+
+### Slice 33 - health page
+
+The goal: what `netscribe doctor` says in a terminal, an administrator reads in the panel.
+
+Files: `internal/setup/doctor.go` (the checks become data: `Check{ID, Status, Title, Detail, Fix}`), `internal/api/health.go`, `internal/api/router.go`, `cmd/netscribe/health.go` (the adapter), `web/src/pages/Health.tsx`, `web/src/App.tsx`.
+
+- **Route.** `GET /api/health` (`system:manage`) runs the checks that need no root and answers `{ "checks": [ { "id", "status": "ok|warn|fail", "title", "detail", "fix" } ], "ranAt" }`. The same list is what `netscribe doctor` prints, from the same code. `POST /api/health/run` does a fresh run, at most one per 10 seconds (429 after that); `GET` returns the last result.
+- **Checks.** The ones of `doctor` that the sandboxed service can do: config file mode and parse, database writable and its size, free disk space, scan targets valid and private, nmap found (when switched on), Chromium found (for PDF), Docker socket readable (when switched on), ICMP and raw socket permissions, time since the last completed scan against `scan.interval`, update helper present, TLS certificate expiry (when TLS is on), notification channels configured. A check that needs root says `skipped` in `detail` and counts as `ok`.
+- **Read only.** A check changes nothing and sends nothing outside the machine, except the address check of an update (already allowed by slice 24). `fix` is a sentence or a command to copy, never run by the panel.
+- **Web.** The page `/health` groups failures first, shows the time of the run, a "Run again" button and the fix next to each problem. The navigation item shows a dot when a check fails.
+
+Acceptance criteria.
+1. `GET /api/health` answers the same ids and statuses as `netscribe doctor --json` for the same machine.
+2. Viewer, operator and token get 403, no session 401.
+3. A failing check shows `fail` with a `fix`; a stale last scan (older than three intervals) shows `warn`.
+4. `POST /api/health/run` twice within 10 seconds answers 429 the second time.
+5. No answer, log line or `detail` holds a secret or the content of the config.
+6. A check that panics or hangs ends with `fail` after 5 seconds and does not stop the others.
+
+### Slice 34 - API reference page
+
+The goal: tokens exist, so the API has a reference that is always true.
+
+Files: `internal/api/openapi.go`, `internal/api/routedocs.go` (one entry per route: summary, parameters, body, answers), `internal/api/router.go`, `web/src/pages/ApiDocs.tsx`, `web/src/App.tsx`.
+
+- **Source of truth.** The route table. A route without an entry in `routeDocs` fails a test, and an entry without a route fails it too, so the reference cannot drift. The OpenAPI 3.1 document is built at request time from the table (method, path, permission) and the entries.
+- **Routes.** `GET /api/openapi.json` (any session or token, no extra permission) lists only the routes the caller may use. The page `/api` renders it in the panel with plain components: the permission of each route, whether a token may call it, the request and answer shape, an example `curl` with a placeholder token, and a "how to get a token" paragraph.
+- **No external tools.** No Swagger UI or CDN: the CSP of section 9.4 stays as it is.
+- **Not documented.** The routes that only a session may use (`/api/auth/*` except `me`) are listed as "session only".
+
+Acceptance criteria.
+1. Every route of the table has one entry and every entry has a route (test over the table).
+2. The document validates as OpenAPI 3.1 in the test, and a viewer's copy lacks the `system:manage` routes.
+3. A token that cannot use a route sees it marked "not available to tokens".
+4. The page works without a network request to another origin.
+5. The `curl` examples never contain a real token.
+
+### Slice 35 - second factor and the list of sessions
+
+The goal: a stolen password is not enough, and a person can see and end the sessions of his account.
+
+Files: `internal/auth/totp.go` (RFC 6238, pure), `internal/auth/mfa.go`, `internal/auth/seal.go` (AES-256-GCM with the key file), `internal/store/migrations/0015_mfa.sql`, `internal/store/queries/mfa.sql`, `internal/api/mfa.go`, `internal/api/sessions.go`, `internal/api/auth.go`, `internal/api/router.go`, `web/src/pages/Account.tsx`, `web/src/pages/Login.tsx`, `web/src/components/TotpSetup.tsx`.
+
+- **TOTP.** SHA-1, 6 digits, 30 second step, one step of drift either way, as authenticator apps expect. The secret is 20 random bytes. A code is accepted once: the last used step is stored, and the same or an earlier step is refused.
+- **Storage.** `user_totp(user_id, secret_sealed, confirmed_at, last_step)` and `recovery_codes(user_id, hash, used_at)`. The secret is sealed with AES-256-GCM under a key in `<state dir>/totp.key` (mode `0600`, created on first use, 32 random bytes), so a copy of the database alone does not hold the secrets. Ten recovery codes are shown once, each 10 characters from a 32 letter alphabet, and stored as argon2id hashes. The backup of slice 31 includes the key file.
+- **Setup.** `POST /api/auth/totp/setup` (session, password in the body) returns the secret and the `otpauth://` URI, nothing is active yet. `POST /api/auth/totp/enable` takes a code, activates and returns the recovery codes. `DELETE /api/auth/totp` takes the password and a code (or a recovery code). `POST /api/users/{id}/totp/reset` (`users:manage`) removes a user's second factor and revokes his sessions.
+- **Sign-in.** With TOTP on, `POST /api/auth/login` checks the password and answers 200 `{ "mfa": true, "challenge": "<opaque>" }` with no cookie. `POST /api/auth/login/totp` takes the challenge and a code or a recovery code and then sets the session. A challenge lives 5 minutes, works once, allows 5 tries, and is kept in memory (a restart asks for the password again). Failed codes count into the lockout of section 9.2 for the pair (IP, username). The answer for a wrong password does not change: it is the same 401, and the second step is never reached without the password.
+- **Policy.** `auth.requireTotp` (default `false`): when true, an account without a second factor may only open the account page and set it up, the way `must_change_password` works.
+- **Sessions.** `sessions` gets `public_id` (random, not the hash), `ip`, `user_agent` (first 120 printable characters) and `last_seen`. `GET /api/auth/sessions` lists the sessions of the caller with `current`; `DELETE /api/auth/sessions/{id}` ends one of them (404 for another person's id); `DELETE /api/auth/sessions` ends all but the current one. Tokens may use none of these routes.
+- **Audit.** `totp_enable`, `totp_disable`, `totp_reset`, `totp_failed`, `session_revoke`.
+
+Acceptance criteria.
+1. The TOTP code matches the vectors of RFC 6238 (the SHA-1 table) and a code is refused the second time within its step.
+2. A password without the second step never produces a session cookie, and a challenge fails after 5 tries, after 5 minutes and after use.
+3. A recovery code works once and then fails; ten are made and none is stored in clear text.
+4. A database copy without `totp.key` does not yield a secret; a wrong or missing key refuses to start the second factor and says why.
+5. A user cannot see or end another person's session (404), `DELETE /api/auth/sessions` keeps the current one, and ending a session makes its cookie fail at once.
+6. Failed codes lock the pair (IP, username) like failed passwords.
+7. Resetting a user's second factor needs `users:manage`, ends his sessions and is audited; a token cannot call any new route.
+8. With `auth.requireTotp: true` a user without TOTP can reach only the account page and the setup routes.
+
+### Slice 36 - single sign-on with OIDC
+
+The goal: a team signs in with the identity provider it already has, and the provider's own second factor applies.
+
+Files: `internal/auth/oidc.go`, `internal/config/` (`auth.oidc`), `internal/store/migrations/0016_identities.sql`, `internal/store/queries/identities.sql`, `internal/api/oidc.go`, `internal/api/router.go`, `web/src/pages/Login.tsx`, `web/src/pages/OidcDone.tsx`, `go.mod` (the libraries `github.com/coreos/go-oidc/v3` and `golang.org/x/oauth2`).
+
+- **Why a library.** Verifying a signed token is the one thing not written by hand: the two libraries do discovery, key rotation and signature checks. This is the only new dependency of the plan, and `go mod verify` and `govulncheck` apply to it.
+- **Config.** `auth.oidc: { issuer, clientId, clientSecret (Secret), redirectUrl, scopes: [openid, profile, email], allowedEmailDomains: [], autoCreate: false, defaultRole: viewer, roleClaim: "", roleMap: {} }`. `issuer` and `redirectUrl` must be `https` (`http` only for a loopback address). A block with a missing or bad field rejects the whole config. `defaultRole` is never `admin`; a role from `roleMap` may be.
+- **Flow.** Authorization code with PKCE (S256), `state` and `nonce`. `GET /api/auth/oidc/login` (public) sets the cookie `netscribe_oidc` (`HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS, 10 minutes, holds the state, nonce and verifier) and redirects to the provider. `GET /api/auth/oidc/callback` (public) checks the state against the cookie, exchanges the code, verifies the ID token (signature, `iss`, `aud`, `exp`, `nonce`) and `email_verified`, finds or creates the user, creates a session, and redirects to `/oidc/done`, a static page that goes to `/` with a script from the same origin, because a `SameSite=Strict` session cookie is not sent on the navigation that follows a cross-site redirect. `GET /api/auth/providers` (public) answers `{ "oidc": { "name": "..." } }` or `{}`.
+- **Users.** `user_identities(issuer, subject, user_id)`; the key is the issuer and the subject, never the e-mail. A first sign-in creates a user only when `autoCreate` is true and the e-mail domain is in `allowedEmailDomains`; otherwise it ends with the same page as any refusal. A user created this way has no password and cannot sign in locally. The role is read at every sign-in, so a change at the provider applies at once; a role removed at the provider is not kept. The last local administrator rule of section 9.2 holds.
+- **Local sign-in stays.** There is no switch that turns the password form off, so a broken provider cannot lock the owner out.
+- **Network.** The server asks only the issuer and the addresses its metadata names (the token and key endpoints), with a 10 second timeout, a 1 MiB limit and no redirects to another host. This is the second address the program asks after the update check (section 9.6).
+- **Audit.** `oidc_login`, `oidc_login_failed`, `oidc_user_create`.
+
+Acceptance criteria.
+1. A test provider (in process) completes the flow, and the user gets a session with the mapped role.
+2. A wrong state, a replayed code, a wrong nonce, a wrong audience or issuer, an expired token, a token signed with another key, an unverified e-mail and a missing cookie are each refused with the same generic page.
+3. `redirectUrl` cannot be changed by a request; the callback accepts no `next` or `redirect` parameter.
+4. A user is found by issuer and subject: the same e-mail with another subject is a different user, and an existing local user is never taken over by an e-mail match.
+5. `autoCreate: false` or a domain outside the list creates nothing; `defaultRole: admin` is rejected by `Validate`.
+6. The client secret appears in no log line, audit entry, API answer or export, and the settings page shows only that it is set.
+7. A role change at the provider applies at the next sign-in, and a user whose role mapping disappears falls to `defaultRole`.
+8. With OIDC on, `POST /api/auth/login` still works for local users.
+
+### Slice 37 - Russian interface
+
+The goal: the panel speaks Russian to the people who want it, and English stays the default of the code.
+
+Files: `web/src/i18n/index.ts`, `web/src/i18n/en.ts`, `web/src/i18n/ru.ts`, `web/src/components/`, `web/src/pages/`, `web/src/lib/format.ts`, `web/src/design-rules.test.ts`, `docs/` (a paragraph).
+
+- **Mechanism.** A small own module, no library: `t("key", { n })`, a typed key list taken from `en.ts`, plural forms through `Intl.PluralRules`, dates and numbers through `Intl`. The language is `localStorage` `netscribe.lang` (`en`, `ru`, anything else means the browser language, then `en`), switched in the user menu, and `<html lang>` follows it.
+- **What is translated.** Every string of the panel. What is not: API error texts (the server answers in English; the panel shows a Russian text for the known ones, and the English text for the rest), notification messages, exports, the CLI and the audit log, which stay English so that logs read the same everywhere.
+- **Rules.** A key exists in both files with the same placeholders. A missing Russian key falls back to English in production and fails the test. The rules of slice 26 about hyphens and sentence case are checked on the English file; the Russian file follows Russian typography (a long dash is allowed there).
+- **Layout.** Russian strings are longer: the pages are checked at 1280 and 390 pixels.
+
+Acceptance criteria.
+1. `en.ts` and `ru.ts` have the same keys and the same placeholders (test).
+2. No component holds a literal user visible string outside the dictionaries (a lint rule or a test over the source).
+3. Plural forms are right for 1, 2, 5, 11, 21 and 22 devices in Russian.
+4. The language survives a reload, follows `navigator.language` when unset, and sets `<html lang>`.
+5. A known API error shows in Russian and an unknown one shows its English text.
+6. At 390 pixels no button or heading overflows in Russian (checked in the e2e run of slice 42).
+
+### Slice 38 - device actions
+
+The goal: from a device row a person wakes a machine and opens its web page or SSH session.
+
+Files: `internal/collector/wol.go` (network code, sends only), `internal/api/wake.go`, `internal/api/router.go`, `web/src/lib/links.ts`, `web/src/components/DevicePanel.tsx`, `web/src/pages/Services.tsx`, `web/src/components/ServiceLink.tsx`.
+
+- **Wake on LAN.** `POST /api/devices/{id}/wake` (`scans:run`, so operator and administrator) sends one magic packet (6 bytes `FF`, then the stored MAC 16 times) as a UDP broadcast to port 9 on the broadcast address of the local interface whose subnet holds the device's address. The MAC comes only from the stored device. A device without a MAC, or whose address is in no local subnet, answers 422 with the reason. At most one packet per device per 10 seconds (429 after that) and the packet is sent 3 times 100 ms apart. The answer is 202 and says nothing about whether the machine woke. A broadcast address outside the private ranges is refused (section 9.6). The audit log gets `device_wake`.
+- **Service links.** Built in the panel only, from the stored address and port, never from a host name or banner: `http`/`https` for web services (80, 443, 8000 to 8099, 8443, 9000 and services named `http`, `https`), as `<a href target="_blank" rel="noopener noreferrer">`. An IPv6 address is written in brackets. SSH shows a "Copy ssh command" button (`ssh <address>`; a different port adds `-p`), because the browser cannot open `ssh://` safely everywhere. Only these schemes are produced, and the link is built by one function that is tested.
+- **No new scanning.** Neither action probes the device.
+
+Acceptance criteria.
+1. The packet bytes are exactly 6 times `FF` plus 16 copies of the MAC (test with a fake sender and a loopback UDP listener).
+2. A viewer gets 403, no session 401, a token with the read scope 403 and a token with the write scope 202.
+3. A device without a MAC, an unknown device, an address in no local subnet, and a public broadcast address are refused with a clear 4xx and no packet.
+4. A second request within 10 seconds answers 429 and sends nothing.
+5. A service whose banner or host name holds `javascript:` or a quote never changes the produced link, and the link function accepts only a valid IP and a port from 1 to 65535.
+6. Every external link has `rel="noopener noreferrer"`.
+
+### Slice 39 - IPv6
+
+The goal: a device that lives on IPv6 is found, shown and documented next to its IPv4 address.
+
+Files: `internal/store/migrations/0017_ipv6.sql`, `internal/collector/ndp.go` (neighbour table over netlink with the standard `syscall` package, a multicast echo to `ff02::1`), `internal/collector/targets.go`, `internal/config/` (targets, `discovery.ipv6`), `internal/model/model.go` (`Device.IP6`), `internal/store/`, `internal/render/`, `internal/api/validate.go`, `web/src/pages/Inventory.tsx`, `web/src/components/DevicePanel.tsx`.
+
+- **Model.** `devices.ip6` (nullable text, one address per device). The MAC stays the identity, so an NDP entry attaches to the device with that MAC and never creates a second one. The address chosen is a global or unique local address that is not temporary and not deprecated, then the link local one. `manual` devices may carry an `ip6`; a value must parse as IPv6, is stored in the canonical form and is unique among devices (409 otherwise).
+- **Discovery.** A passive and light method, because a `/64` cannot be swept: one ICMPv6 echo to `ff02::1` on each interface that has a scan target, then a read of the neighbour table, then the usual probes (ICMPv6 echo, the port scan, SNMP, HTTP) against each address found. Switched by `discovery.ipv6` (default `true`; an interface without IPv6 is skipped without an error).
+- **Targets.** `scan.targets` may hold an IPv6 prefix. Private means unique local `fc00::/7` and link local `fe80::/10`; a global prefix needs `allowPublicTargets` like a public IPv4 range. A prefix larger than `/112` is refused as a sweep target and the check says to use discovery instead. Section 9.6 gets the same rules in words.
+- **Output.** The inventory shows the second address and searches it, the device panel lists it, the exports (Markdown, Draw.io, HTML, PDF), the change feed (`ip6` changes) and the CSV import (a column `ip6`) carry it, and notifications use whichever address the device has.
+- **Services.** A service is attached to the address it was found on; the table `services` gets `ip` so that the same port on IPv4 and IPv6 is two rows only when the answers differ.
+
+Acceptance criteria.
+1. A neighbour entry parsed from a fixture of the netlink answer attaches to the device with that MAC, and a MAC the store has never seen creates a device with `ip6` and no `ip`.
+2. Temporary and deprecated addresses lose to a stable global one, and a link local address is used only when nothing else exists.
+3. `fe80::/10` and `fc00::/7` targets are accepted, a global prefix without `allowPublicTargets` is refused, a prefix wider than `/112` is refused, and each has a test.
+4. A manual device with a bad or duplicate `ip6` is refused (400, 409), and the canonical form is stored.
+5. A scan with `discovery.ipv6: false` does not open the socket, and a machine without IPv6 passes the gate.
+6. The exports and the CSV round trip an `ip6` unchanged.
+7. Existing IPv4 behavior does not change: the whole earlier suite stays green without edits.
+
+### Slice 40 - better device detection
+
+The goal: the guess about what a device is becomes a scored answer with reasons, and three more signals feed it.
+
+Files: `internal/store/migrations/0018_detection.sql`, `internal/collector/classify.go` (scoring), `internal/collector/tlscert.go`, `internal/collector/dhcp.go`, `internal/model/model.go` (`Device.KindScore`, `Device.KindReasons`, `Service.TLS`), `internal/config/` (`discovery.dhcpListen`, `discovery.tlsCerts`), `internal/api/`, `web/src/components/DevicePanel.tsx`, `deploy/netscribe.service`.
+
+- **Scoring.** Every rule of `classify_rules.csv` gets a weight (new column `weight`, 1 to 100, default 50) and every signal that matches adds its weight to its kind. The kind with the highest total wins when the total reaches 40 and the gap to the next kind is at least 10; otherwise the kind stays `unknown` and the reasons list the candidates. The result is stored as `kind_score` (0 to 100, the winner's total capped) and `kind_reasons` (at most 5 short phrases such as `HTTP banner: nginx`, `port 9100`, `TLS subject: printer`). A kind a person set (`kind_locked`) never changes. Old files without the weight column keep working.
+- **TLS certificates.** For open TLS ports (443, 465, 636, 993, 995, 8443 and a service named `https`) the collector reads the peer certificate during a handshake, then closes. It stores the subject common name, the first 5 alternative names, the issuer common name, the validity dates and the SHA-256 fingerprint, all normalized and capped. It sends no application data and does not trust or validate the certificate (the point is to read it), which is marked in the code with the reason. A changed fingerprint on a service makes a change entry `tls_changed`, an expiry in less than 14 days a `tls_expiring` entry.
+- **Passive DHCP.** `discovery.dhcpListen` (default `false`) listens for DHCP requests that other machines broadcast, on the interfaces of the scan targets, through a packet socket. It reads and never answers: option 12 (host name), 60 (vendor class) and 55 (the parameter request list, kept as a fingerprint string), and the client MAC. It needs `CAP_NET_RAW`, which the unit grants only when the switch is on (the drop-in written by `netscribe config`), and it is unavailable in the Docker image. At most 50 packets per second are read and a record never fills more than 255 characters. A host name seen only here fills an empty `hostname`, source `dhcp`.
+- **Panel.** The device panel shows the score and the reasons and lets a person fix the kind (which locks it, as before). The services tab shows the certificate.
+
+Acceptance criteria.
+1. A table of fixtures says which kind wins, and each case lists the reasons (printer by port 9100 plus banner, router by SNMP plus LLDP, camera by port 554 plus vendor).
+2. Two kinds within 10 points, or a winner below 40, give `unknown` with the candidates in the reasons.
+3. A locked kind survives every scan, and an old rules file without weights still loads.
+4. A certificate with a control character, a 10 KB name or a hundred alternative names is stored normalized and capped.
+5. The handshake reads and closes: a test server sees no application data, and an expired or self signed certificate is still read.
+6. A DHCP packet fixture gives the host name, vendor class and fingerprint; a truncated, oversized or option overflowing packet gives nothing and no panic; the listener never writes to the socket.
+7. With `discovery.dhcpListen: false` no socket is opened and the unit has no extra capability.
+8. A changed fingerprint writes exactly one `tls_changed` entry and the same scan data again writes none.
+
+### Slice 41 - optional automatic updates
+
+The goal: an owner who wants it gets the newest release without clicking, and a bad release rolls back by itself.
+
+Files: `internal/update/auto.go`, `internal/setup/helper.go` (rollback), `internal/config/` (`updates.auto`, `updates.window`), `cmd/netscribe/`, `web/src/pages/Settings.tsx`, `deploy/netscribe-helper.service`.
+
+- **Config.** `updates.auto` (`off`, `patch`, `minor`; default `off`) and `updates.window` (a local time range such as `03:00-05:00`, default `03:00-05:00`). `patch` allows a newer version with the same major and minor number, `minor` the same major number. A new major version is never installed by itself: the panel shows it as before.
+- **How.** The service decides and the helper acts, as in slice 24. Inside the window, with no scan running and no update tried in the last 24 hours, the service writes the request `update` when the check names an allowed version. The helper does what it always does: only the newest release of this repository, the SHA-256 sum checked against `checksums.txt` of the same release.
+- **Rollback.** Before replacing the program the helper keeps the old binary as `netscribe.previous`. After the restart it waits up to 60 seconds for `/healthz` to answer with the new version; if that fails it puts the old binary back, restarts, writes `rolled back` to `status.json`, and the service sets `updates.auto` to `off` in the state file `auto-paused` (the config is not rewritten) until a person turns it on again. The panel shows the pause and its reason.
+- **Panel.** The Settings page edits both keys and shows the last automatic update and its result. A manual update works as before and ignores the window.
+- **Audit.** `auto_update_request`, `auto_update_rollback`.
+
+Acceptance criteria.
+1. With `off` nothing is ever requested, and with `patch` a minor bump and a major bump are refused (a table test over version pairs).
+2. Outside the window, during a scan, or within 24 hours of the last try, nothing is requested.
+3. A release whose checksum does not match is not installed, and nothing is replaced.
+4. A new binary that does not answer `/healthz` is replaced by the previous one, the status says `rolled back`, and automatic updates stay paused until a person acts.
+5. The request file holds one word and the helper uses nothing else from it.
+6. A development build never updates itself.
+7. A pre-release or draft is never offered.
+
+### Slice 42 - end to end tests with Playwright
+
+The goal: the three paths a person walks first (sign in, scan, change a setting) are tested in a real browser on every pull request.
+
+Files: `web/e2e/` (tests and a small fixture helper), `web/playwright.config.ts`, `web/package.json` (the dev dependency `@playwright/test`), `cmd/seed/` (a way to start with a known database), `.github/workflows/ci.yml` (a job `e2e`), `Makefile` (`make e2e`).
+
+- **Not in the gate.** A browser is heavy, so `make gate` stays as it is. The CI job `e2e` runs on every pull request, builds the binary, starts it with a temporary config and the `dev` account of `cmd/seed`, installs Chromium with `npx playwright install --with-deps chromium` and runs the tests. The job is a required check once it is stable.
+- **Tests.** Sign in with a right and a wrong password, sign out; a scan against the lab network (`deploy/compose.lab.yaml`) that ends with devices in the inventory and a change in the feed; the Settings page (change `scan.interval`, see it apply, reject an invalid value); the unknown devices filter of the overview; the language switch (slice 37) and the width of 390 pixels; the second factor setup once slice 35 is merged.
+- **Rules.** No `waitForTimeout`: tests wait on a locator or a response (the same rule as section 10). Each test makes its own data and cleans it. A failure uploads the trace and the screenshots as an artifact.
+- **Flaky tests.** A test that fails once and passes on retry is a bug to fix, not to retry: the job runs with `retries: 0`.
+
+Acceptance criteria.
+1. `make e2e` passes on a clean checkout with Docker available, and the CI job passes on the pull request.
+2. A broken sign in page (the form without a submit button) makes the job fail.
+3. No test uses a fixed sleep (a lint rule over `web/e2e`).
+4. The artifact holds a trace for a failed test.
+5. The job does not need a secret and does not touch a network that is not the lab.
+
+### Slice 43 - large network check
+
+The goal: a network of several hundred devices stays fast, and a limit that does not hold is found now and not by a user.
+
+Files: `cmd/seed/` (`--devices N --links M`), `internal/render/large_test.go`, `internal/store/large_test.go`, `internal/api/large_test.go`, `web/e2e/large.spec.ts`, `web/src/components/TopologyCanvas.tsx`, `web/src/pages/Inventory.tsx`.
+
+- **Data.** The seed makes 500 devices, 800 links, 3000 services and 50 scans of history with a fixed random seed, so the numbers repeat. A second run makes 2000 devices to find the point where it stops being comfortable.
+- **Budgets** (measured, then written here; a test fails when a budget is exceeded by a wide margin, not on noise): the topology layout of 500 devices in Go, `GET /api/devices`, `GET /api/topology`, `GET /api/overview`, a scan apply of 500 results, and the four exports. Budgets are generous multiples of the measured values so a slow runner does not fail them, and the tests use a size check (rows, bytes, queries) more than a stopwatch.
+- **Queries.** The number of database queries per request does not grow with the number of devices (the rule 4 of section 17, now checked by a counting wrapper).
+- **Web.** The inventory pages or virtualizes rows beyond 200, the topology canvas draws only what is in view and keeps pan and zoom responsive at 500 nodes (the e2e test checks that the canvas answers a drag and that the page has no long task over 500 ms), and the bulk bar keeps its 200 device limit with a clear message.
+- **Findings.** What the check finds is fixed in this slice when it is small, or written as a numbered open question when it is not.
+
+Acceptance criteria.
+1. The seed produces the same database twice for the same arguments.
+2. The query count of the list, topology and overview routes is the same at 50 and at 500 devices.
+3. The layout, the exports and the scan apply finish inside their budgets at 500 devices, and the response sizes stay under the limits of section 9.5.
+4. The inventory with 2000 devices renders its first rows without drawing 2000 rows.
+5. The topology of 500 nodes answers a drag in the e2e run and shows no long task over 500 ms.
+6. A bulk edit of 201 devices still answers 400 with the existing text.
 
 ---
 

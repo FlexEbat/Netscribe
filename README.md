@@ -235,6 +235,9 @@ releases, and asks whether to update. Nothing happens before you answer.
 
 - The check asks one fixed GitHub address every few hours and sends nothing about the host.
   Turn it off with `updates.check: false`.
+- `metrics.enabled: true` serves `/metrics` in the Prometheus text format: counts of devices,
+  risky services and scans, and the time of the last scan. No name or address of a device is in
+  it. Prometheus reads it with an access token of the read scope in `authorization`.
 - An administrator can update from the panel on an install made by `netscribe setup` or the
   install script: a small root helper (`netscribe-helper.path`) installs the newest release
   after checking its SHA-256 sum, and restarts the service. Other installs (Docker, or an
