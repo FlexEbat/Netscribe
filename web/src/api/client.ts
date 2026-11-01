@@ -567,6 +567,19 @@ export function restartService(): Promise<VersionInfo> {
   return api<VersionInfo>("POST", "/api/system/restart")
 }
 
+export interface SessionInfo {
+  id: string
+  createdAt: string
+  lastSeenAt: string
+  ip: string
+  userAgent: string
+  current: boolean
+}
+
+export const listSessions = () => api<SessionInfo[]>("GET", "/api/auth/sessions")
+export const endSession = (id: string) => api<void>("DELETE", `/api/auth/sessions/${id}`)
+export const endOtherSessions = () => api<{ ended: number }>("DELETE", "/api/auth/sessions")
+
 export interface ApiOperation {
   summary: string
   description: string

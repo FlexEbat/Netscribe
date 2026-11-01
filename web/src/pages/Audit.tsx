@@ -47,6 +47,7 @@ const actions = [
   "access_denied",
   "backup_create",
   "backup_restore",
+  "session_revoke",
 ]
 
 interface Filters {

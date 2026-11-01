@@ -15,12 +15,15 @@ type RouteDoc struct {
 
 // routeDocs is keyed by "METHOD /path", the way the route table writes them.
 var routeDocs = map[string]RouteDoc{
-	"GET /healthz":           {Summary: "Tells whether the service is up. No sign-in.", Answer: `{"status":"ok"}`},
-	"POST /api/auth/login":   {Summary: "Signs in and sets the session cookie.", Body: `{"username","password"}; with a second factor (when set up) the answer asks for it.`, Answer: "The user, and the cookie."},
-	"POST /api/auth/logout":  {Summary: "Ends the session."},
-	"GET /api/auth/me":       {Summary: "The signed in user and what the caller may do.", Answer: "The user, the role and the permissions of the caller."},
-	"PUT /api/auth/password": {Summary: "Changes the password of the caller.", Body: `{"current","next"}`},
-	"GET /api/version":       {Summary: "The running version and whether a newer release exists.", Answer: "Version, and the update state."},
+	"GET /healthz":                   {Summary: "Tells whether the service is up. No sign-in.", Answer: `{"status":"ok"}`},
+	"POST /api/auth/login":           {Summary: "Signs in and sets the session cookie.", Body: `{"username","password"}; with a second factor (when set up) the answer asks for it.`, Answer: "The user, and the cookie."},
+	"POST /api/auth/logout":          {Summary: "Ends the session."},
+	"GET /api/auth/me":               {Summary: "The signed in user and what the caller may do.", Answer: "The user, the role and the permissions of the caller."},
+	"PUT /api/auth/password":         {Summary: "Changes the password of the caller.", Body: `{"current","next"}`},
+	"GET /api/auth/sessions":         {Summary: "Lists your own sessions, with the one of this request marked.", Answer: "A list with id, times, address, browser and current."},
+	"DELETE /api/auth/sessions/{id}": {Summary: "Ends one of your sessions. The session of another person is not found."},
+	"DELETE /api/auth/sessions":      {Summary: "Ends all your sessions but the one of this request.", Answer: `{"ended": how many}`},
+	"GET /api/version":               {Summary: "The running version and whether a newer release exists.", Answer: "Version, and the update state."},
 
 	"GET /api/users":                  {Summary: "Lists the accounts.", Answer: "A list of users."},
 	"POST /api/users":                 {Summary: "Creates an account.", Body: `{"username","role","password"}`},
