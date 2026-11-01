@@ -45,6 +45,8 @@ const actions = [
   "device_bulk_edit",
   "device_import",
   "access_denied",
+  "backup_create",
+  "backup_restore",
 ]
 
 interface Filters {

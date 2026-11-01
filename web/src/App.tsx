@@ -2,6 +2,7 @@ import {
   ClockCounterClockwise,
   Cube,
   Gauge,
+  Heartbeat,
   Stack,
   List,
   ListBullets,
@@ -40,6 +41,7 @@ import { Login } from "@/pages/Login"
 import { Changes } from "@/pages/Changes"
 import { Containers } from "@/pages/Containers"
 import { Services } from "@/pages/Services"
+import { Health } from "@/pages/Health"
 import { Settings } from "@/pages/Settings"
 import { Topology } from "@/pages/Topology"
 
@@ -104,6 +106,13 @@ const navItems: NavItem[] = [
   },
   { to: "/users", label: "Users", icon: UsersIcon, permission: "users:manage", group: "admin" },
   { to: "/audit", label: "Audit log", icon: Scroll, permission: "audit:read", group: "admin" },
+  {
+    to: "/health",
+    label: "Health",
+    icon: Heartbeat,
+    permission: "system:manage",
+    group: "admin",
+  },
   {
     to: "/settings",
     label: "Settings",
@@ -406,6 +415,14 @@ export const routes: RouteObject[] = [
         element: (
           <RequirePermission permission="audit:read">
             <Audit />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: "health",
+        element: (
+          <RequirePermission permission="system:manage">
+            <Health />
           </RequirePermission>
         ),
       },

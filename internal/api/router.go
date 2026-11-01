@@ -20,6 +20,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/auth"
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/events"
+	"github.com/FlexEbat/Netscribe/internal/health"
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
@@ -133,6 +134,8 @@ type Options struct {
 	Updates *update.Checker
 	// UpdatesEnabled tells whether the check is switched on in the config. Nil means it is.
 	UpdatesEnabled func() bool
+	// Health runs the health checks. Without it the health routes are not registered.
+	Health HealthRunner
 	// MetricsEnabled tells whether GET /metrics answers. Nil means it does not.
 	MetricsEnabled func() bool
 	// Backup makes and checks backups. Without it GET /api/backup and POST /api/backup/restore
@@ -180,6 +183,10 @@ type server struct {
 	backup         BackupService
 	backupMu       sync.Mutex // one backup or restore at a time
 	metricsOn      func() bool
+	health         HealthRunner
+	healthMu       sync.Mutex
+	healthRan      time.Time
+	healthLast     []health.Check
 	metricsMu      sync.Mutex
 	metricsAt      time.Time
 	metricsText    []byte
@@ -218,6 +225,12 @@ func (s *server) routes() []Route {
 		table = append(table,
 			route(http.MethodPost, "/api/update", model.PermSystemManage, s.startUpdate),
 			route(http.MethodPost, "/api/system/restart", model.PermSystemManage, s.restartService),
+		)
+	}
+	if s.health != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/health", model.PermSystemManage, s.getHealth),
+			route(http.MethodPost, "/api/health/run", model.PermSystemManage, s.runHealthNow),
 		)
 	}
 	if s.backup != nil {
@@ -338,6 +351,7 @@ func newServer(opts Options) *server {
 		helper:         opts.Helper,
 		backup:         opts.Backup,
 		metricsOn:      opts.MetricsEnabled,
+		health:         opts.Health,
 		settings:       opts.Settings,
 		notifier:       opts.Notifications,
 	}
