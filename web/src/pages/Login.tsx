@@ -23,17 +23,24 @@ function describe(error: unknown): string {
 }
 
 export function Login() {
-  const { state, signIn } = useSession()
+  const { state, signIn, signInWithCode } = useSession()
   const location = useLocation()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [challenge, setChallenge] = useState<string | null>(null)
+  const [code, setCode] = useState("")
   const usernameRef = useRef<HTMLInputElement>(null)
+  const codeRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     usernameRef.current?.focus()
   }, [])
+
+  useEffect(() => {
+    if (challenge) codeRef.current?.focus()
+  }, [challenge])
 
   if (state.status === "signedIn") {
     const from = (location.state as { from?: string } | null)?.from
@@ -46,9 +53,20 @@ export function Login() {
     setBusy(true)
     setError(null)
     try {
-      await signIn(username, password)
+      if (challenge) {
+        await signInWithCode(challenge, code)
+      } else {
+        setChallenge(await signIn(username, password))
+      }
     } catch (e) {
-      setError(describe(e))
+      if (challenge) {
+        // the challenge lives for five minutes and five tries: after a refusal start again
+        setError("That code is not right, or it has expired. Sign in again.")
+        setChallenge(null)
+        setCode("")
+      } else {
+        setError(describe(e))
+      }
       setPassword("")
     } finally {
       setBusy(false)
@@ -74,7 +92,24 @@ export function Login() {
               {notice ? <Alert>{notice}</Alert> : null}
               {error ? <Alert variant="destructive">{error}</Alert> : null}
               <form onSubmit={onSubmit} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
+                {challenge ? (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="code">Authentication code</Label>
+                    <Input
+                      id="code"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      autoComplete="one-time-code"
+                      inputMode="numeric"
+                      ref={codeRef}
+                      required
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      The code from your authenticator app, or one of your recovery codes.
+                    </p>
+                  </div>
+                ) : null}
+                <div className={challenge ? "hidden" : "flex flex-col gap-2"}>
                   <Label htmlFor="username">Username</Label>
                   <Input
                     id="username"
@@ -87,7 +122,7 @@ export function Login() {
                     required
                   />
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className={challenge ? "hidden" : "flex flex-col gap-2"}>
                   <Label htmlFor="password">Password</Label>
                   <Input
                     id="password"
@@ -99,7 +134,7 @@ export function Login() {
                   />
                 </div>
                 <Button type="submit" disabled={busy} className="mt-2 h-10">
-                  {busy ? "Signing in…" : "Sign in"}
+                  {busy ? "Signing in…" : challenge ? "Verify" : "Sign in"}
                 </Button>
               </form>
             </CardContent>

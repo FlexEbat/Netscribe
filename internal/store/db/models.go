@@ -117,6 +117,13 @@ type Link struct {
 	LastSeenAt string
 }
 
+type RecoveryCode struct {
+	ID     int64
+	UserID int64
+	Hash   string
+	UsedAt sql.NullString
+}
+
 type SavedFilter struct {
 	ID        int64
 	UserID    int64
@@ -172,4 +179,12 @@ type User struct {
 	LockedUntil        sql.NullString
 	CreatedAt          string
 	LastLoginAt        sql.NullString
+}
+
+type UserTotp struct {
+	UserID       int64
+	SecretSealed []byte
+	CreatedAt    string
+	ConfirmedAt  sql.NullString
+	LastStep     int64
 }

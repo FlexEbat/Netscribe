@@ -16,6 +16,7 @@ async function openAccount(handlers: Parameters<typeof mockFetch>[0] = {}, mustC
   const mock = mockFetch({
     "GET /api/tokens": () => json(200, { tokens: [] }),
     "GET /api/auth/sessions": () => json(200, []),
+    "GET /api/auth/totp": () => json(200, { enabled: false, recoveryCodesLeft: 0 }),
     "GET /api/auth/me": () =>
       json(200, meBody(makeUser({ mustChangePassword: mustChange }), undefined, "csrf-9")),
     ...handlers,

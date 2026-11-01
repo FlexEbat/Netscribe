@@ -56,6 +56,16 @@ func (s *session) restore(ctx context.Context) error {
 	}
 	db := cur.Database
 	paths := []string{db, s.o.ConfigPath}
+	// A backup made with a second factor in use carries the key that seals its secrets.
+	keyDst := filepath.Join(filepath.Dir(db), backup.NameTOTPKey)
+	hasKey := false
+	if info, err := s.env.Lstat(filepath.Join(stage, backup.NameTOTPKey)); err == nil {
+		if !info.Mode().IsRegular() {
+			return errors.New("the staged key is not a regular file")
+		}
+		hasKey = true
+		paths = append(paths, keyDst)
+	}
 
 	if err := s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"stop", "netscribe"}}); err != nil {
 		return err
@@ -69,7 +79,7 @@ func (s *session) restore(ctx context.Context) error {
 			kept = append(kept, p)
 		}
 	}
-	if err := s.putRestored(ctx, stage, db); err != nil {
+	if err := s.putRestored(ctx, stage, db, hasKey); err != nil {
 		return s.rollBack(ctx, kept, db, err)
 	}
 	if err := s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"start", "netscribe"}}); err != nil {
@@ -92,7 +102,7 @@ func (s *session) restore(ctx context.Context) error {
 // putRestored copies the staged database and config over the real ones. A file that exists
 // keeps its owner and mode, because cp writes into it; a database that is new gets the
 // service account as its owner and mode 0600.
-func (s *session) putRestored(ctx context.Context, stage, db string) error {
+func (s *session) putRestored(ctx context.Context, stage, db string, hasKey bool) error {
 	// The write ahead log and the shared memory file belong to the old database.
 	if err := s.runChecked(ctx, Command{Name: "rm", Args: []string{"-f", "--", db + "-wal", db + "-shm"}}); err != nil {
 		return err
@@ -111,6 +121,20 @@ func (s *session) putRestored(ctx context.Context, stage, db string) error {
 	}
 	if err := s.runChecked(ctx, Command{Name: "chmod", Args: []string{"0600", db}}); err != nil {
 		return err
+	}
+	if hasKey {
+		keyDst := filepath.Join(filepath.Dir(db), backup.NameTOTPKey)
+		if err := copyFile(backup.NameTOTPKey, keyDst); err != nil {
+			return err
+		}
+		if s.o.ServiceUser != "" {
+			if err := s.runChecked(ctx, Command{Name: "chown", Args: []string{s.o.ServiceUser + ":", keyDst}}); err != nil {
+				return err
+			}
+		}
+		if err := s.runChecked(ctx, Command{Name: "chmod", Args: []string{"0600", keyDst}}); err != nil {
+			return err
+		}
 	}
 	return copyFile(backup.NameConfig, s.o.ConfigPath)
 }

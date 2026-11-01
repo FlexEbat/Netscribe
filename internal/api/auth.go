@@ -61,6 +61,18 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess, user, err := s.auth.Login(r.Context(), body.Username, body.Password, ip, r.UserAgent())
+	if errors.Is(err, auth.ErrMFARequired) {
+		// The password was right, so the attempt is given back like a successful one; the
+		// code is limited on its own route.
+		s.limiter.Refund(limitKey(ip))
+		token, ok := s.challenges.add(&challenge{user: user, ip: ip, ua: r.UserAgent(), expires: s.now().Add(challengeLife)}, s.now())
+		if !ok {
+			writeError(w, http.StatusServiceUnavailable, "too many sign ins are waiting: try again in a few minutes")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"mfa": true, "challenge": token})
+		return
+	}
 	if errors.Is(err, auth.ErrInvalidCredentials) {
 		s.write(r.Context(), model.AuditEntry{
 			Action: "login_failed", Result: "denied", IP: ip,

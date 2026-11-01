@@ -567,6 +567,24 @@ export function restartService(): Promise<VersionInfo> {
   return api<VersionInfo>("POST", "/api/system/restart")
 }
 
+export interface TotpStatus {
+  enabled: boolean
+  recoveryCodesLeft: number
+}
+
+export interface TotpSetup {
+  secret: string
+  uri: string
+}
+
+export const getTotpStatus = () => api<TotpStatus>("GET", "/api/auth/totp")
+export const setupTotp = (password: string) =>
+  api<TotpSetup>("POST", "/api/auth/totp/setup", { body: { password } })
+export const enableTotp = (code: string) =>
+  api<{ recoveryCodes: string[] }>("POST", "/api/auth/totp/enable", { body: { code } })
+export const disableTotp = (password: string, code: string) =>
+  api<void>("DELETE", "/api/auth/totp", { body: { password, code } })
+
 export interface SessionInfo {
   id: string
   createdAt: string

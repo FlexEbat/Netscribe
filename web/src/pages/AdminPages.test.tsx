@@ -22,6 +22,7 @@ function open(
   const mock = mockFetch({
     "GET /api/auth/me": () => json(200, meBody(makeUser({ role }))),
     "GET /api/auth/sessions": () => json(200, []),
+    "GET /api/auth/totp": () => json(200, { enabled: false, recoveryCodesLeft: 0 }),
     ...handlers,
   })
   const router = createMemoryRouter(routes, { initialEntries: [entry] })

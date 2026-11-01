@@ -25,6 +25,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
+	"github.com/FlexEbat/Netscribe/internal/totp"
 	"github.com/FlexEbat/Netscribe/internal/update"
 )
 
@@ -124,6 +125,11 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	svc.SetMFAGate(st)
+	sealer, err := totp.NewSealer(bytes.Repeat([]byte{9}, totp.KeySize))
+	if err != nil {
+		t.Fatal(err)
+	}
 	logs := &bytes.Buffer{}
 	var trusted []netip.Prefix
 	for _, p := range o.trusted {
@@ -138,7 +144,7 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 		repo = o.wrapRepo(st)
 	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Version: o.version, Updates: o.updates, Helper: o.helper, Backup: o.backup, MetricsEnabled: o.metrics, Health: o.health, Sessions: sessionsOr(o.sessions, st), Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
+		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Version: o.version, Updates: o.updates, Helper: o.helper, Backup: o.backup, MetricsEnabled: o.metrics, Health: o.health, Sessions: sessionsOr(o.sessions, st), MFA: st, Sealer: sealer, Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}

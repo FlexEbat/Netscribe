@@ -102,4 +102,47 @@ describe("Login", () => {
     release(json(401, { error: "invalid username or password" }))
     await waitFor(() => expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled())
   })
+
+  it("asks for the code of the second factor and then signs in", async () => {
+    const mock = mockFetch({
+      "GET /api/auth/me": () => json(401, { error: "authentication required" }),
+      "POST /api/auth/login": () => json(200, { mfa: true, challenge: "chal-1" }),
+      "POST /api/auth/login/totp": () => json(200, meBody(makeUser())),
+    })
+    const router = createMemoryRouter(routes, { initialEntries: ["/login"] })
+    render(
+      <SessionProvider>
+        <RouterProvider router={router} />
+      </SessionProvider>,
+    )
+    const user = userEvent.setup()
+    await screen.findByRole("button", { name: "Sign in" })
+    await fill(user, "alice", "correct horse battery")
+    await user.type(await screen.findByLabelText("Authentication code"), "123456")
+    await user.click(screen.getByRole("button", { name: "Verify" }))
+    await waitFor(() => expect(router.state.location.pathname).toBe("/"))
+    const call = mock.calls.find((c) => c.path === "/api/auth/login/totp")!
+    expect(JSON.parse(String(call.init.body))).toEqual({ challenge: "chal-1", code: "123456" })
+  })
+
+  it("starts over when the code is refused", async () => {
+    mockFetch({
+      "GET /api/auth/me": () => json(401, { error: "authentication required" }),
+      "POST /api/auth/login": () => json(200, { mfa: true, challenge: "chal-1" }),
+      "POST /api/auth/login/totp": () => json(401, { error: "the code is not right" }),
+    })
+    const router = createMemoryRouter(routes, { initialEntries: ["/login"] })
+    render(
+      <SessionProvider>
+        <RouterProvider router={router} />
+      </SessionProvider>,
+    )
+    const user = userEvent.setup()
+    await screen.findByRole("button", { name: "Sign in" })
+    await fill(user, "alice", "correct horse battery")
+    await user.type(await screen.findByLabelText("Authentication code"), "000000")
+    await user.click(screen.getByRole("button", { name: "Verify" }))
+    expect(await screen.findByText(/That code is not right, or it has expired/)).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument()
+  })
 })
