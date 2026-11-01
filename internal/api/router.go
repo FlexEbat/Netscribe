@@ -207,6 +207,7 @@ func (s *server) routes() []Route {
 		route(http.MethodGet, "/api/auth/me", permSession, s.me),
 		route(http.MethodPut, "/api/auth/password", permSession, s.changePassword),
 		route(http.MethodGet, "/api/version", permSession, s.getVersion),
+		route(http.MethodGet, "/api/openapi.json", model.PermTopologyRead, s.getOpenAPI),
 	}
 	table = append(table,
 		route(http.MethodGet, "/api/users", model.PermUsersManage, s.listUsers),

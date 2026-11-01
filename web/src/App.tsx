@@ -1,6 +1,7 @@
 import {
   ClockCounterClockwise,
   Cube,
+  BracketsCurly,
   Gauge,
   Heartbeat,
   Stack,
@@ -41,6 +42,7 @@ import { Login } from "@/pages/Login"
 import { Changes } from "@/pages/Changes"
 import { Containers } from "@/pages/Containers"
 import { Services } from "@/pages/Services"
+import { ApiReference } from "@/pages/ApiReference"
 import { Health } from "@/pages/Health"
 import { Settings } from "@/pages/Settings"
 import { Topology } from "@/pages/Topology"
@@ -101,6 +103,13 @@ const navItems: NavItem[] = [
     to: "/changes",
     label: "Changes",
     icon: ClockCounterClockwise,
+    permission: "topology:read",
+    group: "workspace",
+  },
+  {
+    to: "/reference",
+    label: "API reference",
+    icon: BracketsCurly,
     permission: "topology:read",
     group: "workspace",
   },
@@ -415,6 +424,14 @@ export const routes: RouteObject[] = [
         element: (
           <RequirePermission permission="audit:read">
             <Audit />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: "reference",
+        element: (
+          <RequirePermission permission="topology:read">
+            <ApiReference />
           </RequirePermission>
         ),
       },

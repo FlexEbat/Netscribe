@@ -2087,7 +2087,7 @@ The goal: tokens exist, so the API has a reference that is always true.
 Files: `internal/api/openapi.go`, `internal/api/routedocs.go` (one entry per route: summary, parameters, body, answers), `internal/api/router.go`, `web/src/pages/ApiDocs.tsx`, `web/src/App.tsx`.
 
 - **Source of truth.** The route table. A route without an entry in `routeDocs` fails a test, and an entry without a route fails it too, so the reference cannot drift. The OpenAPI 3.1 document is built at request time from the table (method, path, permission) and the entries.
-- **Routes.** `GET /api/openapi.json` (any session or token, no extra permission) lists only the routes the caller may use. The page `/api` renders it in the panel with plain components: the permission of each route, whether a token may call it, the request and answer shape, an example `curl` with a placeholder token, and a "how to get a token" paragraph.
+- **Routes.** `GET /api/openapi.json` (any session or token, no extra permission) lists only the routes the caller may use. The page `/reference` (not `/api`, which the server owns) renders it in the panel with plain components: the permission of each route, whether a token may call it, the query parameters and a sentence on the body and the answer, an example `curl` with a placeholder token, and a "how to get a token" paragraph.
 - **No external tools.** No Swagger UI or CDN: the CSP of section 9.4 stays as it is.
 - **Not documented.** The routes that only a session may use (`/api/auth/*` except `me`) are listed as "session only".
 
