@@ -167,7 +167,7 @@ func sendUDP(ctx context.Context, dst netip.AddrPort, packet []byte) error {
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }() // a datagram socket holds nothing to flush
 	_, err = conn.Write(packet)
 	return err
 }

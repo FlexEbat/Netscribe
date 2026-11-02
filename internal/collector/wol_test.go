@@ -152,7 +152,7 @@ func TestSendUDPDeliversTheDatagramToAListener(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }() // the test is over, a close error changes nothing
 	packet := MagicPacket(net.HardwareAddr{1, 2, 3, 4, 5, 6})
 
 	dst := l.LocalAddr().(*net.UDPAddr).AddrPort()
