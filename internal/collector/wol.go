@@ -91,7 +91,7 @@ func (w *Waker) Wake(ctx context.Context, ip, mac string) error {
 	}
 	prefixes := w.Prefixes
 	if prefixes == nil {
-		prefixes = localPrefixes
+		prefixes = wakePrefixes
 	}
 	local, err := prefixes()
 	if err != nil {
@@ -128,8 +128,8 @@ func (w *Waker) Wake(ctx context.Context, ip, mac string) error {
 	return nil
 }
 
-// localPrefixes returns the IPv4 subnets of the interfaces that are up and can broadcast.
-func localPrefixes() ([]netip.Prefix, error) {
+// wakePrefixes returns the IPv4 subnets of the interfaces that are up and can broadcast.
+func wakePrefixes() ([]netip.Prefix, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, err
