@@ -33,6 +33,7 @@ func fullServer() *server {
 		scanner:    struct{ Scanner }{},
 		nmap:       struct{ NmapStatus }{},
 		identifier: struct{ DeviceIdentifier }{},
+		waker:      struct{ DeviceWaker }{},
 		hub:        &events.Hub{},
 		metricsOn:  func() bool { return true },
 	}

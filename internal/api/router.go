@@ -89,6 +89,13 @@ type DeviceIdentifier interface {
 	Identify(id int64) error
 }
 
+// DeviceWaker sends the Wake on LAN packet of one device. Wake returns collector.ErrNoMAC,
+// collector.ErrNoLocalSubnet or collector.ErrPublicBroadcast when it refuses to send.
+// *collector.Waker implements it.
+type DeviceWaker interface {
+	Wake(ctx context.Context, ip, mac string) error
+}
+
 // Scanner starts scans. The scanner behind it is told which targets to use.
 type Scanner interface {
 	// Start records a scan and returns it while it continues in the background.
@@ -115,6 +122,8 @@ type Options struct {
 	Containers ContainerReader
 	// Identifier serves POST /api/devices/{id}/identify. Without it that route is not registered.
 	Identifier DeviceIdentifier
+	// Waker serves POST /api/devices/{id}/wake. Without it that route is not registered.
+	Waker DeviceWaker
 	// Nmap serves GET /api/nmap. Without it that route is not registered.
 	Nmap NmapStatus
 	// Docker reports whether the daemon can be read. Without it the daemon counts as available.
@@ -172,6 +181,7 @@ type server struct {
 	docker     DockerStatus
 	nmap       NmapStatus
 	identifier DeviceIdentifier
+	waker      DeviceWaker
 	auditLog   AuditReader
 	scanner    Scanner
 	hub        *events.Hub
@@ -204,6 +214,8 @@ type server struct {
 	settingsMu     sync.Mutex // one change of the config file at a time
 	recheckMu      sync.Mutex
 	lastRecheck    time.Time
+	wakeMu         sync.Mutex
+	wakeAt         map[int64]time.Time // device id to the time of its last wake
 }
 
 const (
@@ -326,6 +338,9 @@ func (s *server) routes() []Route {
 		if s.identifier != nil {
 			table = append(table, route(http.MethodPost, "/api/devices/{id}/identify", model.PermScansRun, s.identifyDevice))
 		}
+		if s.waker != nil {
+			table = append(table, route(http.MethodPost, "/api/devices/{id}/wake", model.PermScansRun, s.wakeDevice))
+		}
 	}
 	if s.hub != nil {
 		table = append(table, route(http.MethodGet, "/api/events", model.PermTopologyRead, s.streamEvents))
@@ -365,6 +380,7 @@ func newServer(opts Options) *server {
 		docker:     opts.Docker,
 		nmap:       opts.Nmap,
 		identifier: opts.Identifier,
+		waker:      opts.Waker,
 		auditLog:   opts.AuditLog,
 		scanner:    opts.Scanner,
 		hub:        opts.Events,

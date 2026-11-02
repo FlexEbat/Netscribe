@@ -1,4 +1,4 @@
-import { PencilSimple, Scan } from "@phosphor-icons/react"
+import { PencilSimple, Power, Scan } from "@phosphor-icons/react"
 import { useEffect, useState } from "react"
 import {
   ApiError,
@@ -8,6 +8,7 @@ import {
   identifyDevice,
   listGroups,
   updateDevice,
+  wakeDevice,
   type Device,
   type DeviceDetail,
   type Group,
@@ -124,6 +125,9 @@ export function DevicePanel({
         ) : (
           <>
             <Body state={state} />
+            {canIdentify && state.status === "ready" && state.device.ip && state.device.mac ? (
+              <WakeButton deviceId={deviceId} />
+            ) : null}
             {canIdentify && state.status === "ready" && state.device.ip ? (
               <IdentifyButton deviceId={deviceId} onDone={() => setReloads((n) => n + 1)} />
             ) : null}
@@ -266,6 +270,45 @@ function IdentifyButton({ deviceId, onDone }: { deviceId: number; onDone: () => 
   )
 }
 
+/**
+ * Sends a Wake on LAN packet. The server answers 202 as soon as the packet is out, and the
+ * panel can only say that it was sent: it cannot know whether the machine started.
+ */
+function WakeButton({ deviceId }: { deviceId: number }) {
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState("")
+
+  async function wake() {
+    setError("")
+    setSent(false)
+    try {
+      await wakeDevice(deviceId)
+      setSent(true)
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 422 || e.status === 429)) {
+        setError(e.message)
+      } else {
+        setError("Could not send the packet.")
+      }
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Button variant="outline" size="sm" onClick={() => void wake()}>
+        <Power className="size-4" aria-hidden="true" />
+        Wake on LAN
+      </Button>
+      {sent ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          The packet was sent. The device may need a minute to start.
+        </p>
+      ) : null}
+      {error ? <Alert variant="destructive">{error}</Alert> : null}
+    </div>
+  )
+}
+
 function Body({ state }: { state: State }) {
   if (state.status === "loading") {
     return (
@@ -294,7 +337,7 @@ function Body({ state }: { state: State }) {
         <InterfacesTable interfaces={state.interfaces} />
       </TabsContent>
       <TabsContent value="services">
-        <ServicesTable services={state.services} />
+        <ServicesTable services={state.services} address={state.device.ip} />
       </TabsContent>
       <TabsContent value="history">
         <HistoryTab deviceId={state.device.id} />

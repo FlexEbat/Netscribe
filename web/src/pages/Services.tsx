@@ -3,6 +3,7 @@ import { listDevices, listServices, type Device, type Service } from "@/api/clie
 import { EmptyState } from "@/components/EmptyState"
 import { SavedFilters } from "@/components/SavedFilters"
 import { RiskBadge } from "@/components/RiskBadge"
+import { ServiceLink } from "@/components/ServiceLink"
 import { Alert } from "@/components/ui/alert"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -112,6 +113,7 @@ function Results({ state, query }: { state: State; query: string }) {
           <TableHead>Protocol</TableHead>
           <TableHead>Banner</TableHead>
           <TableHead>Device</TableHead>
+          <TableHead>Open</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -134,6 +136,7 @@ function Results({ state, query }: { state: State; query: string }) {
                   <span className="ml-2 font-mono text-muted-foreground">{d.ip}</span>
                 ) : null}
               </TableCell>
+              <TableCell>{d?.ip ? <ServiceLink address={d.ip} service={s} /> : null}</TableCell>
             </TableRow>
           )
         })}

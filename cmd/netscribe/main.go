@@ -255,6 +255,7 @@ func serve(args []string, e streams) error {
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},
+		Waker:          &collector.Waker{},
 		ExportOptions:  func() render.Options { return render.Options{ChromePath: live.Current().Export.ChromePath} },
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, config: live.Current},
 		TrustedProxies: proxies, Logger: logger,
