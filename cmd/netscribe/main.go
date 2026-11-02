@@ -15,6 +15,7 @@ import (
 	"net/netip"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -32,6 +33,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/notify"
 	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
+	"github.com/FlexEbat/Netscribe/internal/totp"
 	"github.com/FlexEbat/Netscribe/internal/update"
 	"github.com/FlexEbat/Netscribe/web"
 )
@@ -213,6 +215,17 @@ func serve(args []string, e streams) error {
 	if err != nil {
 		return err
 	}
+	// The key that seals second factor secrets sits next to the database. A key that cannot
+	// be read stops the start: running without it would let accounts in without their code.
+	key, err := totp.LoadOrCreateKey(filepath.Join(filepath.Dir(cfg.Database), "totp.key"))
+	if err != nil {
+		return err
+	}
+	sealer, err := totp.NewSealer(key)
+	if err != nil {
+		return err
+	}
+	svc.SetMFAGate(db)
 	proxies, err := parseProxies(cfg.TrustedProxies)
 	if err != nil {
 		return err
@@ -238,7 +251,7 @@ func serve(args []string, e streams) error {
 	go notifyOnScans(ctx, hub, notifier)
 	router := api.NewRouter(api.Options{
 		Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
-		Helper: newHelperClient(cfg.Database), Sessions: db, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
+		Helper: newHelperClient(cfg.Database), Sessions: db, MFA: db, Sealer: sealer, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},

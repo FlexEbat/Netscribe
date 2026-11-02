@@ -75,6 +75,11 @@ func (b *backupService) Create(ctx context.Context) (io.ReadCloser, int64, error
 	}
 	m := backup.Manifest{Version: b.version, Schema: schema, CreatedAt: b.now().UTC().Truncate(time.Second)}
 	files := []backup.File{{Name: backup.NameDB, Path: dbCopy}, {Name: backup.NameConfig, Path: b.configPath}}
+	// The key that seals second factor secrets: without it a restored database could not
+	// open them.
+	if keyPath := filepath.Join(b.stateDir(), backup.NameTOTPKey); fileExists(keyPath) {
+		files = append(files, backup.File{Name: backup.NameTOTPKey, Path: keyPath})
+	}
 	if err := backup.Write(f, m, files); err != nil {
 		_ = f.Close() // the write error is the one worth reporting
 		return nil, 0, err
@@ -228,4 +233,9 @@ func runRestore(args []string, e streams) error {
 	o := baseOptions()
 	o.ConfigPath, o.StateDir = *flags.configPath, filepath.Dir(cfg.Database)
 	return setup.Restore(context.Background(), setupEnv(e), o)
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
 }

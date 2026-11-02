@@ -28,7 +28,10 @@ type State =
 
 interface SessionApi {
   state: State
-  signIn: (username: string, password: string) => Promise<void>
+  /** Resolves to a challenge when the account also needs a code, and to null when it is in. */
+  signIn: (username: string, password: string) => Promise<string | null>
+  /** The second step of a sign in, for an account with a second factor. */
+  signInWithCode: (challenge: string, code: string) => Promise<void>
   signOut: () => Promise<void>
   /** Forget the session without asking the server, for when it is already gone. */
   forget: (notice?: string) => void
@@ -79,8 +82,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (username: string, password: string) => {
-    const me = await api<MeResponse>("POST", "/api/auth/login", {
-      body: { username, password },
+    const answer = await api<MeResponse | { mfa: true; challenge: string }>(
+      "POST",
+      "/api/auth/login",
+      {
+        body: { username, password },
+        expectUnauthorized: true,
+      },
+    )
+    if ("mfa" in answer) return answer.challenge
+    setState({ status: "signedIn", session: toSession(answer) })
+    return null
+  }, [])
+
+  const signInWithCode = useCallback(async (challenge: string, code: string) => {
+    const me = await api<MeResponse>("POST", "/api/auth/login/totp", {
+      body: { challenge, code },
       expectUnauthorized: true,
     })
     setState({ status: "signedIn", session: toSession(me) })
@@ -98,8 +115,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [forget])
 
   const value = useMemo(
-    () => ({ state, signIn, signOut, forget }),
-    [state, signIn, signOut, forget],
+    () => ({ state, signIn, signInWithCode, signOut, forget }),
+    [state, signIn, signInWithCode, signOut, forget],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

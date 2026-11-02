@@ -115,6 +115,7 @@ type Service struct {
 	dummy    string // hash checked for unknown users, so timing does not reveal them
 	hasUsers atomic.Bool
 	locks    *attemptLock // failed logins per address and username
+	mfa      MFAGate      // nil until a second factor is switched on
 }
 
 // NewService returns a service. A nil now means time.Now.
@@ -251,6 +252,16 @@ func (s *Service) Login(ctx context.Context, username, password, ip, userAgent s
 		// Best effort: a failed upgrade must not block a correct login.
 		if hash, err := Hash(password, s.params); err == nil {
 			_ = s.repo.SetPassword(ctx, rec.ID, hash, rec.MustChangePassword)
+		}
+	}
+
+	if s.mfa != nil {
+		needed, err := s.mfa.Required(ctx, rec.ID)
+		if err != nil {
+			return Session{}, model.User{}, fmt.Errorf("check second factor: %w", err)
+		}
+		if needed {
+			return Session{}, rec.User, ErrMFARequired
 		}
 	}
 

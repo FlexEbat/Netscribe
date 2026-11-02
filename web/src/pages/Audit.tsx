@@ -48,6 +48,10 @@ const actions = [
   "backup_create",
   "backup_restore",
   "session_revoke",
+  "totp_enable",
+  "totp_disable",
+  "totp_reset",
+  "totp_failed",
 ]
 
 interface Filters {

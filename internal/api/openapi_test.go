@@ -9,6 +9,7 @@ import (
 
 	"github.com/FlexEbat/Netscribe/internal/events"
 	"github.com/FlexEbat/Netscribe/internal/store"
+	"github.com/FlexEbat/Netscribe/internal/totp"
 	"github.com/FlexEbat/Netscribe/internal/update"
 )
 
@@ -21,6 +22,8 @@ func fullServer() *server {
 		helper:     struct{ SystemHelper }{},
 		health:     struct{ HealthRunner }{},
 		sessions:   struct{ SessionStore }{},
+		mfa:        struct{ MFAStore }{},
+		sealer:     &totp.Sealer{},
 		backup:     struct{ BackupService }{},
 		settings:   struct{ SettingsEditor }{},
 		notifier:   struct{ Notifications }{},

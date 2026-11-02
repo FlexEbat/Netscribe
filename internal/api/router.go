@@ -24,6 +24,7 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/render"
 	"github.com/FlexEbat/Netscribe/internal/store"
+	"github.com/FlexEbat/Netscribe/internal/totp"
 	"github.com/FlexEbat/Netscribe/internal/update"
 )
 
@@ -134,6 +135,9 @@ type Options struct {
 	Updates *update.Checker
 	// UpdatesEnabled tells whether the check is switched on in the config. Nil means it is.
 	UpdatesEnabled func() bool
+	// MFA and Sealer switch on the second factor: both must be set, or neither.
+	MFA    MFAStore
+	Sealer *totp.Sealer
 	// Sessions lists and ends the sessions of the caller. Without it the routes under
 	// /api/auth/sessions are not registered.
 	Sessions SessionStore
@@ -188,6 +192,9 @@ type server struct {
 	metricsOn      func() bool
 	health         HealthRunner
 	sessions       SessionStore
+	mfa            MFAStore
+	sealer         *totp.Sealer
+	challenges     challenges
 	healthMu       sync.Mutex
 	healthRan      time.Time
 	healthLast     []health.Check
@@ -212,6 +219,16 @@ func (s *server) routes() []Route {
 		route(http.MethodPut, "/api/auth/password", permSession, s.changePassword),
 		route(http.MethodGet, "/api/version", permSession, s.getVersion),
 		route(http.MethodGet, "/api/openapi.json", model.PermTopologyRead, s.getOpenAPI),
+	}
+	if s.mfa != nil && s.sealer != nil {
+		table = append(table,
+			route(http.MethodPost, "/api/auth/login/totp", permPublic, s.loginTOTP),
+			route(http.MethodGet, "/api/auth/totp", permSession, s.totpStatus),
+			route(http.MethodPost, "/api/auth/totp/setup", permSession, s.totpSetup),
+			route(http.MethodPost, "/api/auth/totp/enable", permSession, s.totpEnable),
+			route(http.MethodDelete, "/api/auth/totp", permSession, s.totpDisable),
+			route(http.MethodPost, "/api/users/{id}/totp/reset", model.PermUsersManage, s.totpReset),
+		)
 	}
 	if s.sessions != nil {
 		table = append(table,
@@ -365,6 +382,8 @@ func newServer(opts Options) *server {
 		metricsOn:      opts.MetricsEnabled,
 		health:         opts.Health,
 		sessions:       opts.Sessions,
+		mfa:            opts.MFA,
+		sealer:         opts.Sealer,
 		settings:       opts.Settings,
 		notifier:       opts.Notifications,
 	}

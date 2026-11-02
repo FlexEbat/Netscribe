@@ -4,6 +4,7 @@ import { useSession } from "@/api/session"
 import { can } from "@/lib/permissions"
 import { RoleBadge } from "@/components/RoleBadge"
 import { SessionsCard } from "@/components/SessionsCard"
+import { TotpCard } from "@/components/TotpCard"
 import { TokensCard } from "@/components/TokensCard"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -119,6 +120,8 @@ export function Account() {
           </form>
         </CardContent>
       </Card>
+
+      <TotpCard />
 
       <SessionsCard />
 
