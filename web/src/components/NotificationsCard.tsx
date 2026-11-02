@@ -9,6 +9,8 @@ import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { t } from "@/i18n"
+import { tRich } from "@/i18n/rich"
 
 type State =
   | { status: "loading" }
@@ -18,11 +20,11 @@ type State =
 /** What the answer to "Send test" tells a person. */
 function testMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 429) return "A test message was sent a moment ago. Wait a few seconds."
-    if (error.status === 404) return "This channel is not in the config any more."
+    if (error.status === 429) return t("notificationsCard.testRecent")
+    if (error.status === 404) return t("notificationsCard.channelGone")
     if (error.status === 502) return error.message
   }
-  return "The test message could not be sent."
+  return t("notificationsCard.testFailed")
 }
 
 /** The channels of the config, read only: they hold secrets, so they are edited in the file. */
@@ -45,7 +47,7 @@ export function NotificationsCard() {
     setBusy(name)
     try {
       await testNotification(name)
-      setResults((r) => ({ ...r, [name]: "The test message was sent." }))
+      setResults((r) => ({ ...r, [name]: t("notificationsCard.testSent") }))
     } catch (error) {
       setResults((r) => ({ ...r, [name]: testMessage(error) }))
     } finally {
@@ -56,24 +58,26 @@ export function NotificationsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Notifications</CardTitle>
+        <CardTitle>{t("notificationsCard.notifications")}</CardTitle>
         <CardDescription>
-          Messages about new devices, devices that went offline, new open ports and failed scans.
-          Channels hold addresses and tokens, so they are set under{" "}
-          <code className="font-mono">notify</code> in the config file.
+          {tRich("notificationsCard.description", {
+            notify: <code className="font-mono">{t("notificationsCard.notify")}</code>,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {state.status === "loading" ? (
           <p role="status" className="text-sm text-muted-foreground">
-            Loading the channels
+            {t("notificationsCard.loadingTheChannels")}
           </p>
         ) : null}
         {state.status === "failed" ? (
-          <Alert variant="destructive">The channels could not be loaded.</Alert>
+          <Alert variant="destructive">{t("notificationsCard.theChannelsCouldNotBe")}</Alert>
         ) : null}
         {state.status === "ready" && state.channels.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No channel is configured.</p>
+          <p className="text-sm text-muted-foreground">
+            {t("notificationsCard.noChannelIsConfigured")}
+          </p>
         ) : null}
         {state.status === "ready"
           ? state.channels.map((c) => (
@@ -81,16 +85,16 @@ export function NotificationsCard() {
                 <span className="font-medium">{c.name}</span>
                 <Badge variant="outline">{c.type}</Badge>
                 <span className="text-sm text-muted-foreground">
-                  {c.events.length > 0 ? c.events.join(", ") : "no events selected"}
+                  {c.events.length > 0 ? c.events.join(", ") : t("notificationsCard.noEvents")}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={busy !== ""}
-                  aria-label={`Send a test message to ${c.name}`}
+                  aria-label={t("notificationsCard.sendTestTo", { name: c.name })}
                   onClick={() => void send(c.name)}
                 >
-                  Send test
+                  {t("notificationsCard.sendTest")}
                 </Button>
                 {results[c.name] ? (
                   <span role="status" className="text-sm text-muted-foreground">

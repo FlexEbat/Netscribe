@@ -15,6 +15,7 @@ import { Alert } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { can } from "@/lib/permissions"
 import { displayName } from "@/lib/topology"
+import { t } from "@/i18n"
 
 type State =
   { status: "loading" } | { status: "failed" } | { status: "ready"; topology: TopologyData }
@@ -86,10 +87,12 @@ export function Topology() {
   const deviceId = Number.isInteger(selected) && selected > 0 ? selected : null
 
   if (state.status === "loading") {
-    return <Skeleton role="status" aria-label="Loading topology" className="h-96 w-full" />
+    return (
+      <Skeleton role="status" aria-label={t("topology.loadingTopology")} className="h-96 w-full" />
+    )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The topology could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("topology.theTopologyCouldNotBe")}</Alert>
   }
   const toolbar =
     canMove || canExport ? (
@@ -102,17 +105,14 @@ export function Topology() {
     return (
       <div className="flex flex-col gap-3">
         {toolbar}
-        <EmptyState
-          title="No scans yet"
-          text="Run a scan to discover the devices on your network. The topology appears here."
-        />
+        <EmptyState title={t("topology.noScansYet")} text={t("topology.noScansText")} />
       </div>
     )
   }
   const devices = state.topology.devices
   const nameOf = (id: number) => {
     const d = devices.find((x) => x.id === id)
-    return d ? displayName(d) : `device ${id}`
+    return d ? displayName(d) : t("topology.deviceId", { id })
   }
   const link = state.topology.links.find((l) => l.id === linkId)
   // A container that is gone from the topology closes its panel.
@@ -120,7 +120,9 @@ export function Topology() {
   return (
     <div className="flex flex-col gap-3">
       {toolbar}
-      {saveFailed ? <Alert variant="destructive">The position could not be saved.</Alert> : null}
+      {saveFailed ? (
+        <Alert variant="destructive">{t("topology.thePositionCouldNotBe")}</Alert>
+      ) : null}
       {link ? (
         <LinkBar
           key={link.id}

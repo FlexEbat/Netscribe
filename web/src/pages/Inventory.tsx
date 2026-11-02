@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/table"
 import { sortByIp } from "@/lib/ip"
 import { can } from "@/lib/permissions"
+import { t } from "@/i18n"
 
 type Filter = "all" | "online" | "offline"
 type TrustFilter = "all" | "unknown" | "trusted"
@@ -173,13 +174,11 @@ export function Inventory() {
       setScan(await startScan(useNmap))
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
-        setScanError("A scan is already running.")
+        setScanError(t("inventory.scanRunning"))
       } else if (error instanceof ApiError && error.status === 400) {
-        setScanError(
-          useNmap ? "Nmap is not available on the server." : "No scan targets are configured.",
-        )
+        setScanError(t(useNmap ? "inventory.nmapUnavailable" : "inventory.noTargets"))
       } else {
-        setScanError("The scan could not be started.")
+        setScanError(t("inventory.scanCouldNotStart"))
       }
     } finally {
       setStarting(false)
@@ -200,7 +199,7 @@ export function Inventory() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Inventory</h1>
+        <h1 className="text-2xl font-semibold">{t("inventory.inventory")}</h1>
         {canWrite ? (
           <div className="flex gap-2">
             <ImportDialog onImported={() => setRefresh((n) => n + 1)} />
@@ -223,41 +222,41 @@ export function Inventory() {
         <Input
           ref={searchRef}
           type="search"
-          aria-label="Search devices"
+          aria-label={t("inventory.searchDevices")}
           aria-keyshortcuts="/"
-          placeholder="Search by IP, MAC, hostname or vendor"
+          placeholder={t("inventory.searchByIpMacHostname")}
           className="max-w-sm"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <select
-          aria-label="Filter by status"
+          aria-label={t("inventory.filterByStatus")}
           className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           value={filter}
           onChange={(e) => setFilter(e.target.value as Filter)}
         >
-          <option value="all">All devices</option>
-          <option value="online">Online</option>
-          <option value="offline">Offline</option>
+          <option value="all">{t("inventory.allDevices")}</option>
+          <option value="online">{t("inventory.online")}</option>
+          <option value="offline">{t("inventory.offline")}</option>
         </select>
         <select
-          aria-label="Filter by trust"
+          aria-label={t("inventory.filterByTrust")}
           className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           value={trust}
           onChange={(e) => setTrust(e.target.value as TrustFilter)}
         >
-          <option value="all">Known and unknown</option>
-          <option value="unknown">Unknown only</option>
-          <option value="trusted">Trusted only</option>
+          <option value="all">{t("inventory.knownAndUnknown")}</option>
+          <option value="unknown">{t("inventory.unknownOnly")}</option>
+          <option value="trusted">{t("inventory.trustedOnly")}</option>
         </select>
         <select
-          aria-label="Filter by group"
+          aria-label={t("inventory.filterByGroup")}
           className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           value={groupFilter}
           onChange={(e) => setGroupFilter(e.target.value)}
         >
-          <option value="all">All groups</option>
-          <option value="none">No group</option>
+          <option value="all">{t("inventory.allGroups")}</option>
+          <option value="none">{t("inventory.noGroup")}</option>
           {groups.map((g) => (
             <option key={g.id} value={String(g.id)}>
               {g.name}
@@ -323,7 +322,7 @@ function Results({
 }) {
   if (state.status === "loading") {
     return (
-      <div role="status" aria-label="Loading devices" className="flex flex-col gap-2">
+      <div role="status" aria-label={t("inventory.loadingDevices")} className="flex flex-col gap-2">
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
@@ -331,29 +330,31 @@ function Results({
     )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The devices could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("inventory.theDevicesCouldNotBe")}</Alert>
   }
   if (state.devices.length === 0) {
     return filtering ? (
-      <EmptyState title="No matches" text="No device matches the search and filter." />
+      <EmptyState title={t("inventory.noMatches")} text={t("inventory.noMatchText")} />
     ) : (
       <EmptyState
-        title="No devices yet"
-        text="Run a scan to discover the devices on your network."
-        action={firstScan ? <Button onClick={firstScan}>Run first scan</Button> : undefined}
+        title={t("inventory.noDevicesYet")}
+        text={t("inventory.noDevicesText")}
+        action={
+          firstScan ? <Button onClick={firstScan}>{t("inventory.runFirstScan")}</Button> : undefined
+        }
       />
     )
   }
   return (
     <Table>
-      <TableCaption>Devices ({state.devices.length})</TableCaption>
+      <TableCaption>{t("inventory.caption", { n: state.devices.length })}</TableCaption>
       <TableHeader>
         <TableRow>
           {canWrite ? (
             <TableHead className="w-8">
               <input
                 type="checkbox"
-                aria-label="Select all devices"
+                aria-label={t("inventory.selectAllDevices")}
                 checked={state.devices.length > 0 && state.devices.every((d) => selected.has(d.id))}
                 onChange={(e) =>
                   onSelect(e.target.checked ? new Set(state.devices.map((d) => d.id)) : new Set())
@@ -361,13 +362,13 @@ function Results({
               />
             </TableHead>
           ) : null}
-          <TableHead>IP</TableHead>
-          <TableHead>MAC</TableHead>
-          <TableHead>Hostname</TableHead>
-          <TableHead>Kind</TableHead>
-          <TableHead>Group</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Trust</TableHead>
+          <TableHead>{t("inventory.ip")}</TableHead>
+          <TableHead>{t("inventory.mac")}</TableHead>
+          <TableHead>{t("inventory.hostname")}</TableHead>
+          <TableHead>{t("inventory.kind")}</TableHead>
+          <TableHead>{t("inventory.group")}</TableHead>
+          <TableHead>{t("inventory.status")}</TableHead>
+          <TableHead>{t("inventory.trust")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -377,7 +378,9 @@ function Results({
               <TableCell>
                 <input
                   type="checkbox"
-                  aria-label={`Select ${d.label || d.hostname || d.ip || d.mac}`}
+                  aria-label={t("inventory.selectName", {
+                    name: d.label || d.hostname || d.ip || d.mac,
+                  })}
                   checked={selected.has(d.id)}
                   onChange={(e) => {
                     const next = new Set(selected)
@@ -397,7 +400,7 @@ function Results({
                 <span>
                   {d.group.name}
                   {d.groupAuto ? (
-                    <span className="text-xs text-muted-foreground"> (range)</span>
+                    <span className="text-xs text-muted-foreground"> {t("inventory.range")}</span>
                   ) : null}
                 </span>
               ) : (
@@ -409,7 +412,7 @@ function Results({
             </TableCell>
             <TableCell>
               {d.trusted ? (
-                <span className="text-muted-foreground">Trusted</span>
+                <span className="text-muted-foreground">{t("inventory.trusted")}</span>
               ) : (
                 <span className="flex flex-wrap items-center gap-2">
                   <UnknownBadge />
@@ -443,10 +446,12 @@ function TrustButton({ device, onDone }: { device: Device; onDone: () => void })
       variant="outline"
       size="sm"
       disabled={busy}
-      aria-label={`Trust ${device.label || device.hostname || device.ip || device.mac}`}
+      aria-label={t("inventory.trustName", {
+        name: device.label || device.hostname || device.ip || device.mac,
+      })}
       onClick={() => void trust()}
     >
-      Trust
+      {t("inventory.trust")}
     </Button>
   )
 }

@@ -1,15 +1,32 @@
 import type { Change, ChangeKind, Scan } from "@/api/client"
+import { t } from "@/i18n"
 
 /** Plain words for the kinds of change. */
 export const kindLabels: Record<ChangeKind, string> = {
-  device_added: "Device added",
-  device_online: "Device online",
-  device_offline: "Device offline",
-  device_changed: "Device changed",
-  link_added: "Link added",
-  link_removed: "Link removed",
-  container_added: "Container added",
-  container_removed: "Container removed",
+  get device_added() {
+    return t("changes.deviceAdded")
+  },
+  get device_online() {
+    return t("changes.deviceOnline")
+  },
+  get device_offline() {
+    return t("changes.deviceOffline")
+  },
+  get device_changed() {
+    return t("changes.deviceChanged")
+  },
+  get link_added() {
+    return t("changes.linkAdded")
+  },
+  get link_removed() {
+    return t("changes.linkRemoved")
+  },
+  get container_added() {
+    return t("changes.containerAdded")
+  },
+  get container_removed() {
+    return t("changes.containerRemoved")
+  },
 }
 
 /** Tailwind classes of a change: green for what appeared, red for what went away, amber for what changed. */

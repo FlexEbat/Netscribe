@@ -8,22 +8,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { t } from "@/i18n"
 
 /** The interfaces of one device: name, MAC, IP and whether the link is up. */
 export function InterfacesTable({ interfaces }: { interfaces: readonly DeviceInterface[] }) {
   if (interfaces.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">No interfaces were read from this device.</p>
+      <p className="text-sm text-muted-foreground">
+        {t("interfacesTable.noInterfacesWereReadFrom")}
+      </p>
     )
   }
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>MAC</TableHead>
-          <TableHead>IP</TableHead>
-          <TableHead>State</TableHead>
+          <TableHead>{t("interfacesTable.name")}</TableHead>
+          <TableHead>{t("interfacesTable.mac")}</TableHead>
+          <TableHead>{t("interfacesTable.ip")}</TableHead>
+          <TableHead>{t("interfacesTable.state")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -33,7 +36,9 @@ export function InterfacesTable({ interfaces }: { interfaces: readonly DeviceInt
             <TableCell className="font-mono break-all">{i.mac || "–"}</TableCell>
             <TableCell className="font-mono break-all">{i.ip || "–"}</TableCell>
             <TableCell>
-              <Badge variant={i.up ? "default" : "outline"}>{i.up ? "Up" : "Down"}</Badge>
+              <Badge variant={i.up ? "default" : "outline"}>
+                {t(i.up ? "interfacesTable.up" : "interfacesTable.down")}
+              </Badge>
             </TableCell>
           </TableRow>
         ))}

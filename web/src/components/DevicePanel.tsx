@@ -27,6 +27,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { displayName, kindLabels } from "@/lib/topology"
+import { formatDateTime, t } from "@/i18n"
 
 interface DevicePanelProps {
   deviceId: number
@@ -86,15 +87,17 @@ export function DevicePanel({
     <Sheet open onOpenChange={(open) => !open && onClose()}>
       <SheetContent aria-describedby={undefined}>
         <SheetTitle className="pr-8 text-lg font-semibold">
-          {state.status === "ready" ? displayName(state.device) : "Device"}
+          {state.status === "ready" ? displayName(state.device) : t("devicePanel.device")}
         </SheetTitle>
-        <SheetDescription className="sr-only">Details of the selected device</SheetDescription>
+        <SheetDescription className="sr-only">
+          {t("devicePanel.detailsOfTheSelectedDevice")}
+        </SheetDescription>
         {state.status === "ready" && editing ? (
           <DeviceForm
             // A new key when the data was reloaded, so the form starts from the current values.
             key={`${state.device.id}-${state.device.version}`}
             mode="edit"
-            submitLabel="Save"
+            submitLabel={t("devicePanel.save")}
             initial={{
               label: state.device.label,
               notes: state.device.notes,
@@ -135,7 +138,7 @@ export function DevicePanel({
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
                   <PencilSimple className="size-4" aria-hidden="true" />
-                  Edit
+                  {t("devicePanel.edit")}
                 </Button>
                 <Button
                   variant="outline"
@@ -159,10 +162,10 @@ export function DevicePanel({
                       .catch(() => setReloads((n) => n + 1))
                   }}
                 >
-                  {state.device.trusted ? "Mark as unknown" : "Mark as trusted"}
+                  {t(state.device.trusted ? "devicePanel.markUnknown" : "devicePanel.markTrusted")}
                 </Button>
                 <select
-                  aria-label="Group of the device"
+                  aria-label={t("devicePanel.groupOfTheDevice")}
                   className="h-8 rounded-lg border bg-input px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   value={state.device.groupId === null ? "" : String(state.device.groupId)}
                   onChange={(e) => {
@@ -179,7 +182,9 @@ export function DevicePanel({
                   }}
                 >
                   <option value="">
-                    {state.device.groupAuto ? "Group from its range" : "No group"}
+                    {t(
+                      state.device.groupAuto ? "devicePanel.groupFromRange" : "devicePanel.noGroup",
+                    )}
                   </option>
                   {groups.map((g) => (
                     <option key={g.id} value={String(g.id)}>
@@ -250,11 +255,11 @@ function IdentifyButton({ deviceId, onDone }: { deviceId: number; onDone: () => 
       setRunning(true)
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        setError("A scan or another identification is running.")
+        setError(t("devicePanel.scanRunning"))
       } else if (e instanceof ApiError && e.status === 400) {
-        setError("Nmap is not available.")
+        setError(t("devicePanel.nmapUnavailable"))
       } else {
-        setError("Could not start Nmap.")
+        setError(t("devicePanel.nmapCouldNotStart"))
       }
     }
   }
@@ -263,7 +268,7 @@ function IdentifyButton({ deviceId, onDone }: { deviceId: number; onDone: () => 
     <div className="flex flex-col gap-2">
       <Button variant="outline" size="sm" disabled={running} onClick={() => void start()}>
         <Scan className="size-4" aria-hidden="true" />
-        {running ? "Asking Nmap…" : "Identify with Nmap"}
+        {t(running ? "devicePanel.askingNmap" : "devicePanel.identifyWithNmap")}
       </Button>
       {error ? <Alert variant="destructive">{error}</Alert> : null}
     </div>
@@ -288,7 +293,7 @@ function WakeButton({ deviceId }: { deviceId: number }) {
       if (e instanceof ApiError && (e.status === 422 || e.status === 429)) {
         setError(e.message)
       } else {
-        setError("Could not send the packet.")
+        setError(t("devicePanel.packetFailed"))
       }
     }
   }
@@ -297,11 +302,11 @@ function WakeButton({ deviceId }: { deviceId: number }) {
     <div className="flex flex-col gap-2">
       <Button variant="outline" size="sm" onClick={() => void wake()}>
         <Power className="size-4" aria-hidden="true" />
-        Wake on LAN
+        {t("devicePanel.wakeOnLan")}
       </Button>
       {sent ? (
         <p role="status" className="text-sm text-muted-foreground">
-          The packet was sent. The device may need a minute to start.
+          {t("devicePanel.thePacketWasSentThe")}
         </p>
       ) : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
@@ -312,7 +317,11 @@ function WakeButton({ deviceId }: { deviceId: number }) {
 function Body({ state }: { state: State }) {
   if (state.status === "loading") {
     return (
-      <div role="status" aria-label="Loading device" className="flex flex-col gap-2">
+      <div
+        role="status"
+        aria-label={t("devicePanel.loadingDevice")}
+        className="flex flex-col gap-2"
+      >
         <Skeleton className="h-6 w-2/3" />
         <Skeleton className="h-6 w-full" />
         <Skeleton className="h-6 w-full" />
@@ -320,15 +329,19 @@ function Body({ state }: { state: State }) {
     )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The device could not be loaded.</Alert>
+    return <Alert variant="destructive">{t("devicePanel.theDeviceCouldNotBe")}</Alert>
   }
   return (
     <Tabs defaultValue="details">
-      <TabsList aria-label="Device sections">
-        <TabsTrigger value="details">Details</TabsTrigger>
-        <TabsTrigger value="interfaces">Interfaces ({state.interfaces.length})</TabsTrigger>
-        <TabsTrigger value="services">Services ({state.services.length})</TabsTrigger>
-        <TabsTrigger value="history">History</TabsTrigger>
+      <TabsList aria-label={t("devicePanel.deviceSections")}>
+        <TabsTrigger value="details">{t("devicePanel.details")}</TabsTrigger>
+        <TabsTrigger value="interfaces">
+          {t("devicePanel.interfacesCount", { n: state.interfaces.length })}
+        </TabsTrigger>
+        <TabsTrigger value="services">
+          {t("devicePanel.servicesCount", { n: state.services.length })}
+        </TabsTrigger>
+        <TabsTrigger value="history">{t("devicePanel.history")}</TabsTrigger>
       </TabsList>
       <TabsContent value="details">
         <Details device={state.device} />
@@ -347,23 +360,21 @@ function Body({ state }: { state: State }) {
 }
 
 function Details({ device: d }: { device: Device }) {
+  const group = d.group
+    ? `${d.group.name}${d.group.vlan ? t("devicePanel.vlan", { n: d.group.vlan }) : ""}${d.groupAuto ? t("devicePanel.fromRange") : ""}`
+    : t("devicePanel.none")
   const rows: [string, React.ReactNode][] = [
-    ["Status", <StatusBadge key="s" online={d.online} />],
-    ["Trust", d.trusted ? "Trusted" : <UnknownBadge key="t" />],
-    [
-      "Group",
-      d.group
-        ? `${d.group.name}${d.group.vlan ? ` (VLAN ${d.group.vlan})` : ""}${d.groupAuto ? ", from its address range" : ""}`
-        : "None",
-    ],
-    ["Kind", kindLabels[d.kind]],
+    [t("devicePanel.status"), <StatusBadge key="s" online={d.online} />],
+    [t("devicePanel.trust"), d.trusted ? t("devicePanel.trusted") : <UnknownBadge key="t" />],
+    [t("devicePanel.group"), group],
+    [t("devicePanel.kind"), kindLabels[d.kind]],
     ["IP", d.ip || "–"],
     ["MAC", d.mac || "–"],
-    ["Hostname", d.hostname || "–"],
-    ["Vendor", d.vendor || "–"],
-    ["Source", d.manual ? "Added by hand" : d.source || "–"],
-    ["First seen", formatTime(d.firstSeenAt)],
-    ["Last seen", formatTime(d.lastSeenAt)],
+    [t("devicePanel.hostname"), d.hostname || "–"],
+    [t("devicePanel.vendor"), d.vendor || "–"],
+    [t("devicePanel.source"), d.manual ? t("devicePanel.addedByHand") : d.source || "–"],
+    [t("devicePanel.firstSeen"), formatDateTime(d.firstSeenAt)],
+    [t("devicePanel.lastSeen"), formatDateTime(d.lastSeenAt)],
   ]
   return (
     <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-2 text-sm">
@@ -375,27 +386,22 @@ function Details({ device: d }: { device: Device }) {
       ))}
       {d.notes ? (
         <div className="contents">
-          <dt className="text-muted-foreground">Notes</dt>
+          <dt className="text-muted-foreground">{t("devicePanel.notes")}</dt>
           <dd className="break-words whitespace-pre-wrap">{d.notes}</dd>
         </div>
       ) : null}
       {d.description ? (
         <div className="contents">
-          <dt className="text-muted-foreground">Description</dt>
+          <dt className="text-muted-foreground">{t("devicePanel.description")}</dt>
           <dd className="break-words">{d.description}</dd>
         </div>
       ) : null}
       {d.osGuess ? (
         <div className="contents">
-          <dt className="text-muted-foreground">System (Nmap)</dt>
+          <dt className="text-muted-foreground">{t("devicePanel.systemNmap")}</dt>
           <dd className="break-words">{d.osGuess}</dd>
         </div>
       ) : null}
     </dl>
   )
-}
-
-function formatTime(iso: string): string {
-  const t = new Date(iso)
-  return Number.isNaN(t.getTime()) ? "–" : t.toLocaleString()
 }

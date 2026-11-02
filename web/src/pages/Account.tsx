@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { t } from "@/i18n"
 
 export function Account() {
   const { state, forget } = useSession()
@@ -27,7 +28,7 @@ export function Account() {
     event.preventDefault()
     setError(null)
     if (next !== repeat) {
-      setError("The new passwords do not match.")
+      setError(t("account.noMatch"))
       return
     }
     setBusy(true)
@@ -36,12 +37,10 @@ export function Account() {
         body: { currentPassword: current, newPassword: next },
       })
       // The server ended every session of the user, this one included.
-      forget("Your password was changed. Sign in with the new one.")
+      forget(t("account.passwordChanged"))
     } catch (e) {
       setError(
-        e instanceof ApiError && e.status === 400
-          ? e.message
-          : "The password was not changed. Try again later.",
+        e instanceof ApiError && e.status === 400 ? e.message : t("account.passwordNotChanged"),
       )
       setBusy(false)
     }
@@ -49,35 +48,31 @@ export function Account() {
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Account</h1>
+      <h1 className="text-2xl font-semibold">{t("account.account")}</h1>
 
       <Card>
         <CardHeader>
           <CardTitle>{user.displayName || user.username}</CardTitle>
-          <CardDescription>Signed in as {user.username}</CardDescription>
+          <CardDescription>{t("account.signedInAs", { name: user.username })}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-sm">
-            Role <RoleBadge role={user.role} />
+            {t("account.role")} <RoleBadge role={user.role} />
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Change password</CardTitle>
-          <CardDescription>
-            You will be signed out everywhere and asked to sign in with the new password.
-          </CardDescription>
+          <CardTitle>{t("account.changePassword")}</CardTitle>
+          <CardDescription>{t("account.youWillBeSignedOut")}</CardDescription>
         </CardHeader>
         <CardContent>
-          {user.mustChangePassword ? (
-            <Alert>You must set a new password before you can continue.</Alert>
-          ) : null}
+          {user.mustChangePassword ? <Alert>{t("account.youMustSetANew")}</Alert> : null}
           {error ? <Alert variant="destructive">{error}</Alert> : null}
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="current-password">Current password</Label>
+              <Label htmlFor="current-password">{t("account.currentPassword")}</Label>
               <Input
                 id="current-password"
                 type="password"
@@ -88,7 +83,7 @@ export function Account() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="new-password">New password</Label>
+              <Label htmlFor="new-password">{t("account.newPassword")}</Label>
               <Input
                 id="new-password"
                 type="password"
@@ -99,12 +94,11 @@ export function Account() {
                 required
               />
               <p id="new-password-hint" className="text-sm text-muted-foreground">
-                A long phrase works better than a short word with digits. Passwords that appear in
-                public leaks are refused.
+                {t("account.aLongPhraseWorksBetter")}
               </p>
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="repeat-password">Repeat the new password</Label>
+              <Label htmlFor="repeat-password">{t("account.repeatTheNewPassword")}</Label>
               <Input
                 id="repeat-password"
                 type="password"
@@ -115,7 +109,7 @@ export function Account() {
               />
             </div>
             <Button type="submit" disabled={busy}>
-              {busy ? "Saving…" : "Change password"}
+              {t(busy ? "account.saving" : "account.changePassword")}
             </Button>
           </form>
         </CardContent>

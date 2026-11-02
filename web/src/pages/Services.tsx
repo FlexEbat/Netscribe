@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table"
 import { compareIp } from "@/lib/ip"
 import { filterServices } from "@/lib/services"
+import { t } from "@/i18n"
 
 type State =
   | { status: "loading" }
@@ -46,12 +47,12 @@ export function Services() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Services</h1>
+      <h1 className="text-2xl font-semibold">{t("services.services")}</h1>
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"
-          aria-label="Filter by service name or banner"
-          placeholder="Filter by service name or banner"
+          aria-label={t("services.filterByServiceNameOr")}
+          placeholder={t("services.filterByServiceNameOr")}
           className="max-w-sm"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -75,7 +76,7 @@ function deviceName(d: Device | undefined): string {
 function Results({ state, query }: { state: State; query: string }) {
   if (state.status === "loading") {
     return (
-      <div role="status" aria-label="Loading services" className="flex flex-col gap-2">
+      <div role="status" aria-label={t("services.loadingServices")} className="flex flex-col gap-2">
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
@@ -83,15 +84,10 @@ function Results({ state, query }: { state: State; query: string }) {
     )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The services could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("services.theServicesCouldNotBe")}</Alert>
   }
   if (state.services.length === 0) {
-    return (
-      <EmptyState
-        title="No services yet"
-        text="Open ports appear here after a scan. The ports to scan are set in scan.ports."
-      />
-    )
+    return <EmptyState title={t("services.noServicesYet")} text={t("services.noServicesText")} />
   }
   const shown = filterServices(state.services, query).sort((a, b) => {
     const byIp = compareIp(
@@ -101,19 +97,19 @@ function Results({ state, query }: { state: State; query: string }) {
     return byIp || a.deviceId - b.deviceId || a.port - b.port
   })
   if (shown.length === 0) {
-    return <EmptyState title="No matches" text="No service matches the filter." />
+    return <EmptyState title={t("services.noMatches")} text={t("services.noMatchText")} />
   }
   return (
     <Table>
-      <TableCaption>Services ({shown.length})</TableCaption>
+      <TableCaption>{t("services.caption", { n: shown.length })}</TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead>Service</TableHead>
-          <TableHead>Port</TableHead>
-          <TableHead>Protocol</TableHead>
-          <TableHead>Banner</TableHead>
-          <TableHead>Device</TableHead>
-          <TableHead>Open</TableHead>
+          <TableHead>{t("services.service")}</TableHead>
+          <TableHead>{t("services.port")}</TableHead>
+          <TableHead>{t("services.protocol")}</TableHead>
+          <TableHead>{t("services.banner")}</TableHead>
+          <TableHead>{t("services.device")}</TableHead>
+          <TableHead>{t("services.open")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

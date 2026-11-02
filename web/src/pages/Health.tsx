@@ -11,11 +11,16 @@ import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { type Key, formatDateTime, t } from "@/i18n"
 
 type State =
   { status: "loading" } | { status: "failed" } | { status: "ready"; report: HealthReport }
 
-const label: Record<HealthStatus, string> = { fail: "Failed", warn: "Warning", ok: "OK" }
+const label = {
+  fail: "health.failed",
+  warn: "health.warning",
+  ok: "health.ok",
+} as const satisfies Record<HealthStatus, Key>
 const rank: Record<HealthStatus, number> = { fail: 0, warn: 1, ok: 2 }
 
 /** Problems first, in the order the server listed them, then what is fine. */
@@ -47,8 +52,8 @@ export function Health() {
     } catch (e) {
       setNote(
         e instanceof ApiError && e.status === 429
-          ? "The checks ran a moment ago. Wait a few seconds."
-          : "The checks could not be run.",
+          ? t("health.ranRecently")
+          : t("health.couldNotRun"),
       )
     } finally {
       setRunning(false)
@@ -58,13 +63,13 @@ export function Health() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Health</h1>
+        <h1 className="text-2xl font-semibold">{t("health.health")}</h1>
         <Button
           variant="outline"
           disabled={running || state.status !== "ready"}
           onClick={() => void again()}
         >
-          Run again
+          {t("health.runAgain")}
         </Button>
       </div>
       {note ? <Alert>{note}</Alert> : null}
@@ -76,7 +81,7 @@ export function Health() {
 function Body({ state }: { state: State }) {
   if (state.status === "loading") {
     return (
-      <div role="status" aria-label="Loading health" className="flex flex-col gap-2">
+      <div role="status" aria-label={t("health.loadingHealth")} className="flex flex-col gap-2">
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-16 w-full" />
         <Skeleton className="h-16 w-full" />
@@ -84,32 +89,29 @@ function Body({ state }: { state: State }) {
     )
   }
   if (state.status === "failed") {
-    return (
-      <Alert variant="destructive">The health checks could not be loaded. Try again later.</Alert>
-    )
+    return <Alert variant="destructive">{t("health.theHealthChecksCouldNot")}</Alert>
   }
   const { report } = state
   const problems = report.checks.filter((c) => c.status !== "ok").length
   return (
     <>
       <p className="text-sm text-muted-foreground">
-        {problems === 0
-          ? "Every check is fine."
-          : `${problems} ${problems === 1 ? "check needs" : "checks need"} a look.`}{" "}
-        Last run {new Date(report.ranAt).toLocaleString()}. The checks only read: nothing is
-        changed.
+        {problems === 0 ? t("health.allFine") : t("health.needLook", { n: problems })}{" "}
+        {t("health.lastRun", { date: formatDateTime(report.ranAt) })}
       </p>
       <ul className="flex flex-col gap-3">
         {sorted(report.checks).map((c) => (
           <li key={c.id} className="rounded-lg border p-4">
             <div className="flex flex-wrap items-center gap-3">
-              <Badge variant={c.status === "ok" ? "outline" : "default"}>{label[c.status]}</Badge>
+              <Badge variant={c.status === "ok" ? "outline" : "default"}>
+                {t(label[c.status])}
+              </Badge>
               <span className="font-medium">{c.title}</span>
             </div>
             {c.detail ? <p className="mt-2 text-sm text-muted-foreground">{c.detail}</p> : null}
             {c.fix && c.status !== "ok" ? (
               <p className="mt-2 text-sm">
-                <span className="font-medium">What to do: </span>
+                <span className="font-medium">{t("health.whatToDo")} </span>
                 <code className="font-mono text-xs">{c.fix}</code>
               </p>
             ) : null}

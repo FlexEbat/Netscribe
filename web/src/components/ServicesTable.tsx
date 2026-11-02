@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { t } from "@/i18n"
 
 /** The open ports of one device. */
 export function ServicesTable({
@@ -20,17 +21,19 @@ export function ServicesTable({
   address: string
 }) {
   if (services.length === 0) {
-    return <p className="text-sm text-muted-foreground">No open ports were found on this device.</p>
+    return (
+      <p className="text-sm text-muted-foreground">{t("servicesTable.noOpenPortsWereFound")}</p>
+    )
   }
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Service</TableHead>
-          <TableHead>Port</TableHead>
-          <TableHead>Protocol</TableHead>
-          <TableHead>Banner</TableHead>
-          <TableHead>Open</TableHead>
+          <TableHead>{t("servicesTable.service")}</TableHead>
+          <TableHead>{t("servicesTable.port")}</TableHead>
+          <TableHead>{t("servicesTable.protocol")}</TableHead>
+          <TableHead>{t("servicesTable.banner")}</TableHead>
+          <TableHead>{t("servicesTable.open")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

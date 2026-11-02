@@ -1,7 +1,10 @@
+import { apiErrorText } from "@/i18n"
 import type { Role, User } from "@/lib/permissions"
 
 export class ApiError extends Error {
   readonly status: number
+  /** The text the server sent, before it was put into the language of the panel. */
+  readonly serverMessage: string
   /** Seconds to wait, from a Retry-After header. */
   readonly retryAfter: number | null
   /** The lines of an import file that have a problem, when the server names them. */
@@ -13,8 +16,9 @@ export class ApiError extends Error {
     retryAfter: number | null = null,
     rows: ImportProblem[] = [],
   ) {
-    super(message)
+    super(apiErrorText(message))
     this.name = "ApiError"
+    this.serverMessage = message
     this.status = status
     this.retryAfter = retryAfter
     this.rows = rows

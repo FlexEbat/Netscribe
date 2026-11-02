@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { kindLabels } from "@/lib/topology"
+import { t } from "@/i18n"
 
 export interface DeviceFormValues {
   label: string
@@ -72,15 +73,11 @@ export function DeviceForm({
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
         setConflict(true)
-        setError(
-          mode === "edit"
-            ? "Someone else changed this device while you were editing it."
-            : "A device with this address already exists.",
-        )
+        setError(mode === "edit" ? t("deviceForm.changedByOther") : t("deviceForm.alreadyExists"))
       } else if (e instanceof ApiError && e.status === 400) {
         setError(e.message)
       } else {
-        setError("The device could not be saved. Try again later.")
+        setError(t("deviceForm.couldNotSave"))
       }
     } finally {
       setSaving(false)
@@ -94,13 +91,13 @@ export function DeviceForm({
           <span>{error}</span>
           {conflict && mode === "edit" && onReload ? (
             <Button type="button" variant="outline" size="sm" className="mt-2" onClick={onReload}>
-              Load the current data
+              {t("deviceForm.loadTheCurrentData")}
             </Button>
           ) : null}
         </Alert>
       ) : null}
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-label`}>Name</Label>
+        <Label htmlFor={`${id}-label`}>{t("deviceForm.name")}</Label>
         <Input
           id={`${id}-label`}
           value={values.label}
@@ -109,7 +106,7 @@ export function DeviceForm({
         />
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-kind`}>Kind</Label>
+        <Label htmlFor={`${id}-kind`}>{t("deviceForm.kind")}</Label>
         <Select value={values.kind} onValueChange={(v) => set("kind", v as DeviceKind)}>
           <SelectTrigger id={`${id}-kind`}>
             <SelectValue />
@@ -125,12 +122,12 @@ export function DeviceForm({
       </div>
       {mode === "create" ? (
         <div className="flex flex-col gap-2">
-          <Label htmlFor={`${id}-hostname`}>Hostname</Label>
+          <Label htmlFor={`${id}-hostname`}>{t("deviceForm.hostname")}</Label>
           <Input
             id={`${id}-hostname`}
             value={values.hostname}
             maxLength={255}
-            placeholder="optional"
+            placeholder={t("deviceForm.optional")}
             onChange={(e) => set("hostname", e.target.value)}
           />
         </div>
@@ -138,28 +135,28 @@ export function DeviceForm({
       {mode === "create" ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-2">
-            <Label htmlFor={`${id}-ip`}>IP address</Label>
+            <Label htmlFor={`${id}-ip`}>{t("deviceForm.ipAddress")}</Label>
             <Input
               id={`${id}-ip`}
               value={values.ip}
               inputMode="decimal"
-              placeholder="optional"
+              placeholder={t("deviceForm.optional")}
               onChange={(e) => set("ip", e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor={`${id}-mac`}>MAC address</Label>
+            <Label htmlFor={`${id}-mac`}>{t("deviceForm.macAddress")}</Label>
             <Input
               id={`${id}-mac`}
               value={values.mac}
-              placeholder="optional"
+              placeholder={t("deviceForm.optional")}
               onChange={(e) => set("mac", e.target.value)}
             />
           </div>
         </div>
       ) : null}
       <div className="flex flex-col gap-2">
-        <Label htmlFor={`${id}-notes`}>Notes</Label>
+        <Label htmlFor={`${id}-notes`}>{t("deviceForm.notes")}</Label>
         <Textarea
           id={`${id}-notes`}
           value={values.notes}
@@ -169,7 +166,7 @@ export function DeviceForm({
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
+          {t("deviceForm.cancel")}
         </Button>
         <Button type="submit" disabled={saving}>
           {saving ? "Saving…" : submitLabel}

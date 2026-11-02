@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { Role } from "@/lib/permissions"
+import { formatDate, t } from "@/i18n"
+import { tRich } from "@/i18n/rich"
 
 interface TokensCardProps {
   /** A viewer cannot issue a token that writes. */
@@ -17,10 +19,16 @@ interface TokensCardProps {
 type State =
   { status: "loading" } | { status: "failed" } | { status: "ready"; tokens: AccessToken[] }
 
-function statusOf(t: AccessToken): string {
-  if (t.revoked) return "Revoked"
-  if (new Date(t.expiresAt).getTime() <= Date.now()) return "Expired"
-  return "Active"
+const statusLabels = {
+  revoked: "tokensCard.revoked",
+  expired: "tokensCard.expired",
+  active: "tokensCard.active",
+} as const
+
+function statusOf(tok: AccessToken): "revoked" | "expired" | "active" {
+  if (tok.revoked) return "revoked"
+  if (new Date(tok.expiresAt).getTime() <= Date.now()) return "expired"
+  return "active"
 }
 
 export function TokensCard({ role }: TokensCardProps) {
@@ -56,10 +64,9 @@ export function TokensCard({ role }: TokensCardProps) {
       setName("")
       load()
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409)
-        setError("You already have 20 active tokens. Revoke one first.")
+      if (e instanceof ApiError && e.status === 409) setError(t("tokensCard.tooMany"))
       else if (e instanceof ApiError && e.status === 400) setError(e.message)
-      else setError("The token could not be created. Try again later.")
+      else setError(t("tokensCard.couldNotCreate"))
     } finally {
       setBusy(false)
     }
@@ -71,24 +78,25 @@ export function TokensCard({ role }: TokensCardProps) {
       await revokeToken(token.id)
       load()
     } catch {
-      setError("The token could not be revoked. Try again later.")
+      setError(t("tokensCard.couldNotRevoke"))
     }
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Access tokens</CardTitle>
+        <CardTitle>{t("tokensCard.accessTokens")}</CardTitle>
         <CardDescription>
-          For scripts: send a token in the Authorization header as <code>Bearer</code>. A token
-          never opens user management or the audit log.
+          {tRich("tokensCard.description", {
+            bearer: <code>{t("tokensCard.bearer")}</code>,
+          })}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error ? <Alert variant="destructive">{error}</Alert> : null}
         <form onSubmit={(e) => void issue(e)} className="flex flex-wrap items-end gap-3" noValidate>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="token-name">Token name</Label>
+            <Label htmlFor="token-name">{t("tokensCard.tokenName")}</Label>
             <Input
               id="token-name"
               value={name}
@@ -97,19 +105,19 @@ export function TokensCard({ role }: TokensCardProps) {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="token-scope">Scope</Label>
+            <Label htmlFor="token-scope">{t("tokensCard.scope")}</Label>
             <select
               id="token-scope"
               className="h-9 rounded-lg border bg-input px-3 text-sm"
               value={scope}
               onChange={(e) => setScope(e.target.value as "read" | "write")}
             >
-              <option value="read">Read</option>
-              {role !== "viewer" ? <option value="write">Write</option> : null}
+              <option value="read">{t("tokensCard.read")}</option>
+              {role !== "viewer" ? <option value="write">{t("tokensCard.write")}</option> : null}
             </select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="token-days">Valid for (days)</Label>
+            <Label htmlFor="token-days">{t("tokensCard.validForDays")}</Label>
             <Input
               id="token-days"
               type="number"
@@ -121,38 +129,45 @@ export function TokensCard({ role }: TokensCardProps) {
             />
           </div>
           <Button type="submit" disabled={busy}>
-            {busy ? "Creating…" : "Create token"}
+            {t(busy ? "tokensCard.creating" : "tokensCard.createToken")}
           </Button>
         </form>
 
         {state.status === "loading" ? (
-          <div role="status" aria-label="Loading tokens" className="flex flex-col gap-2">
+          <div
+            role="status"
+            aria-label={t("tokensCard.loadingTokens")}
+            className="flex flex-col gap-2"
+          >
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
         ) : state.status === "failed" ? (
-          <Alert variant="destructive">The tokens could not be loaded.</Alert>
+          <Alert variant="destructive">{t("tokensCard.theTokensCouldNotBe")}</Alert>
         ) : state.tokens.length === 0 ? (
-          <p className="text-sm text-muted-foreground">You have no access tokens.</p>
+          <p className="text-sm text-muted-foreground">{t("tokensCard.youHaveNoAccessTokens")}</p>
         ) : (
           <ul className="flex flex-col divide-y rounded-lg border text-sm">
-            {state.tokens.map((t) => (
-              <li key={t.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
-                <span className="font-medium">{t.name}</span>
-                <code className="text-xs">{t.prefix}…</code>
-                <span>{t.scope}</span>
+            {state.tokens.map((tok) => (
+              <li key={tok.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+                <span className="font-medium">{tok.name}</span>
+                <code className="text-xs">{tok.prefix}…</code>
+                <span>{tok.scope}</span>
                 <span className="text-muted-foreground">
-                  {statusOf(t)}, until {new Date(t.expiresAt).toLocaleDateString()}
+                  {t("tokensCard.statusUntil", {
+                    status: t(statusLabels[statusOf(tok)]),
+                    date: formatDate(tok.expiresAt),
+                  })}
                 </span>
-                {statusOf(t) === "Active" ? (
+                {statusOf(tok) === "active" ? (
                   <Button
                     variant="outline"
                     size="sm"
                     className="ml-auto"
-                    aria-label={`Revoke ${t.name}`}
-                    onClick={() => void revoke(t)}
+                    aria-label={t("tokensCard.revokeName", { name: tok.name })}
+                    onClick={() => void revoke(tok)}
                   >
-                    Revoke
+                    {t("tokensCard.revoke")}
                   </Button>
                 ) : null}
               </li>
@@ -164,17 +179,17 @@ export function TokensCard({ role }: TokensCardProps) {
       {shown ? (
         <Dialog open onOpenChange={(open) => !open && setShown(null)}>
           <DialogContent aria-describedby={undefined}>
-            <DialogTitle className="text-lg font-semibold">Your new token</DialogTitle>
+            <DialogTitle className="text-lg font-semibold">
+              {t("tokensCard.yourNewToken")}
+            </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Copy it now. It is shown only once and cannot be recovered.
+              {t("tokensCard.copyItNowItIs")}
             </DialogDescription>
             <code className="rounded-md border bg-muted px-3 py-2 text-sm break-all select-all">
               {shown}
             </code>
             {copyFailed ? (
-              <Alert variant="destructive">
-                The browser did not allow copying. Select the token above and copy it by hand.
-              </Alert>
+              <Alert variant="destructive">{t("tokensCard.theBrowserDidNotAllow")}</Alert>
             ) : null}
             <div className="flex justify-end gap-2">
               <Button
@@ -197,9 +212,9 @@ export function TokensCard({ role }: TokensCardProps) {
                   )
                 }}
               >
-                {copied ? "Copied" : "Copy"}
+                {t(copied ? "tokensCard.copied" : "tokensCard.copy")}
               </Button>
-              <Button onClick={() => setShown(null)}>Done</Button>
+              <Button onClick={() => setShown(null)}>{t("tokensCard.done")}</Button>
             </div>
           </DialogContent>
         </Dialog>

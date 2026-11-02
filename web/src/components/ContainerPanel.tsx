@@ -1,6 +1,7 @@
 import type { Container } from "@/api/client"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { formatPort, stateClasses, uniquePorts } from "@/lib/containers"
+import { t } from "@/i18n"
 
 interface ContainerPanelProps {
   container: Container
@@ -30,21 +31,23 @@ export function ContainerPanel({ container, hostName, onClose }: ContainerPanelP
     <Sheet open onOpenChange={(open) => !open && onClose()}>
       <SheetContent aria-describedby={undefined}>
         <SheetTitle className="pr-8 text-lg font-semibold">{container.name}</SheetTitle>
-        <SheetDescription className="sr-only">Details of the selected container</SheetDescription>
+        <SheetDescription className="sr-only">
+          {t("containerPanel.detailsOfTheSelectedContainer")}
+        </SheetDescription>
         <dl className="flex flex-col gap-3">
-          <Row label="State">
+          <Row label={t("containerPanel.state")}>
             <span
               className={`rounded border px-2 py-0.5 text-xs font-medium ${stateClasses(container.state)}`}
             >
               {container.state}
             </span>
           </Row>
-          <Row label="Image">
+          <Row label={t("containerPanel.image")}>
             <span className="break-all font-mono">{container.image}</span>
           </Row>
-          <Row label="Host">{hostName}</Row>
-          <Row label="Compose project">{container.composeProject || "–"}</Row>
-          <Row label="Ports">
+          <Row label={t("containerPanel.host")}>{hostName}</Row>
+          <Row label={t("containerPanel.composeProject")}>{container.composeProject || "–"}</Row>
+          <Row label={t("containerPanel.ports")}>
             {ports.length === 0 ? (
               "–"
             ) : (
@@ -57,7 +60,7 @@ export function ContainerPanel({ container, hostName, onClose }: ContainerPanelP
               </ul>
             )}
           </Row>
-          <Row label="Networks">
+          <Row label={t("containerPanel.networks")}>
             {container.networks.length === 0 ? (
               "–"
             ) : (
@@ -73,8 +76,8 @@ export function ContainerPanel({ container, hostName, onClose }: ContainerPanelP
               </ul>
             )}
           </Row>
-          <Row label="First seen">{when(container.firstSeenAt)}</Row>
-          <Row label="Last seen">{when(container.lastSeenAt)}</Row>
+          <Row label={t("containerPanel.firstSeen")}>{when(container.firstSeenAt)}</Row>
+          <Row label={t("containerPanel.lastSeen")}>{when(container.lastSeenAt)}</Row>
         </dl>
       </SheetContent>
     </Sheet>

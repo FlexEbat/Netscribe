@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatDateTime, t } from "@/i18n"
 
 const pageSize = 50
 
@@ -142,7 +143,7 @@ export function Audit() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Audit log</h1>
+      <h1 className="text-2xl font-semibold">{t("audit.auditLog")}</h1>
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
@@ -152,7 +153,7 @@ export function Audit() {
         }}
       >
         <div className="flex flex-col gap-2">
-          <Label htmlFor="audit-user">User</Label>
+          <Label htmlFor="audit-user">{t("audit.user")}</Label>
           <Input
             id="audit-user"
             className="w-40"
@@ -161,14 +162,14 @@ export function Audit() {
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="audit-action">Action</Label>
+          <Label htmlFor="audit-action">{t("audit.action")}</Label>
           <select
             id="audit-action"
             className="h-9 rounded-lg border bg-input px-3 text-sm"
             value={draft.action}
             onChange={(e) => set("action")(e.target.value)}
           >
-            <option value="">Any action</option>
+            <option value="">{t("audit.anyAction")}</option>
             {actions.map((a) => (
               <option key={a} value={a}>
                 {a}
@@ -177,21 +178,21 @@ export function Audit() {
           </select>
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="audit-result">Result</Label>
+          <Label htmlFor="audit-result">{t("audit.result")}</Label>
           <select
             id="audit-result"
             className="h-9 rounded-lg border bg-input px-3 text-sm"
             value={draft.result}
             onChange={(e) => set("result")(e.target.value)}
           >
-            <option value="">Any result</option>
-            <option value="ok">ok</option>
-            <option value="denied">denied</option>
-            <option value="error">error</option>
+            <option value="">{t("audit.anyResult")}</option>
+            <option value="ok">{t("audit.ok")}</option>
+            <option value="denied">{t("audit.denied")}</option>
+            <option value="error">{t("audit.error")}</option>
           </select>
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="audit-from">From</Label>
+          <Label htmlFor="audit-from">{t("audit.from")}</Label>
           <Input
             id="audit-from"
             type="date"
@@ -200,7 +201,7 @@ export function Audit() {
           />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="audit-to">To</Label>
+          <Label htmlFor="audit-to">{t("audit.to")}</Label>
           <Input
             id="audit-to"
             type="date"
@@ -208,7 +209,7 @@ export function Audit() {
             onChange={(e) => set("to")(e.target.value)}
           />
         </div>
-        <Button type="submit">Apply</Button>
+        <Button type="submit">{t("audit.apply")}</Button>
       </form>
 
       <Entries state={state} moreFailed={moreFailed} onMore={loadMore} />
@@ -226,32 +227,34 @@ function Entries({
   onMore: () => void
 }) {
   if (state.status === "loading") {
-    return <Skeleton role="status" aria-label="Loading the audit log" className="h-48 w-full" />
+    return (
+      <Skeleton role="status" aria-label={t("audit.loadingTheAuditLog")} className="h-48 w-full" />
+    )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The audit log could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("audit.theAuditLogCouldNot")}</Alert>
   }
   if (state.entries.length === 0) {
-    return <EmptyState title="No entries" text="No audit entry matches the filters." />
+    return <EmptyState title={t("audit.noEntries")} text={t("audit.noEntriesText")} />
   }
   return (
     <>
       <Table>
-        <TableCaption>Entries shown: {state.entries.length}</TableCaption>
+        <TableCaption>{t("audit.entriesShown", { n: state.entries.length })}</TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead>Time</TableHead>
-            <TableHead>User</TableHead>
-            <TableHead>Action</TableHead>
-            <TableHead>Result</TableHead>
-            <TableHead>IP</TableHead>
-            <TableHead>Detail</TableHead>
+            <TableHead>{t("audit.time")}</TableHead>
+            <TableHead>{t("audit.user")}</TableHead>
+            <TableHead>{t("audit.action")}</TableHead>
+            <TableHead>{t("audit.result")}</TableHead>
+            <TableHead>{t("audit.ip")}</TableHead>
+            <TableHead>{t("audit.detail")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {state.entries.map((e) => (
             <TableRow key={e.id}>
-              <TableCell className="whitespace-nowrap">{new Date(e.at).toLocaleString()}</TableCell>
+              <TableCell className="whitespace-nowrap">{formatDateTime(e.at)}</TableCell>
               <TableCell>{e.username || "–"}</TableCell>
               <TableCell className="font-mono text-xs">{e.action}</TableCell>
               <TableCell>{e.result}</TableCell>
@@ -261,13 +264,11 @@ function Entries({
           ))}
         </TableBody>
       </Table>
-      {moreFailed ? (
-        <Alert variant="destructive">More entries could not be loaded. Try again later.</Alert>
-      ) : null}
+      {moreFailed ? <Alert variant="destructive">{t("audit.moreEntriesCouldNotBe")}</Alert> : null}
       {state.more ? (
         <div>
           <Button variant="outline" onClick={onMore} disabled={state.loadingMore}>
-            {state.loadingMore ? "Loading…" : "Load more"}
+            {t(state.loadingMore ? "audit.loading" : "audit.loadMore")}
           </Button>
         </div>
       ) : null}

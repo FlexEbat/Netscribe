@@ -5,6 +5,8 @@ import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { t } from "@/i18n"
+import { tRich } from "@/i18n/rich"
 
 interface UpdateDialogProps {
   info: VersionInfo
@@ -45,14 +47,14 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
           if (next.version !== from.current) {
             setPhase("done")
           } else if (next.helper.state === "failed") {
-            setError(next.helper.message || "The update failed.")
+            setError(next.helper.message || t("updateDialog.failed"))
             setPhase("failed")
           }
         } catch {
           // The service restarts as the last step of an update: no answer for a moment is normal.
         }
         if (Date.now() - started.current > giveUpAfter) {
-          setError("The panel did not come back in time. Check the service with: sudo netscribe")
+          setError(t("updateDialog.didNotComeBack"))
           setPhase("failed")
         }
       })()
@@ -69,7 +71,7 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
       setPhase("working")
     } catch (e) {
       setError(
-        e instanceof ApiError && e.status !== 0 ? e.message : "The update could not be started.",
+        e instanceof ApiError && e.status !== 0 ? e.message : t("updateDialog.couldNotStart"),
       )
       setPhase("failed")
     }
@@ -80,10 +82,10 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent aria-describedby={undefined} className="max-w-lg">
         <DialogTitle className="text-lg font-semibold">
-          {phase === "done" ? "Netscribe is updated" : "A new version is available"}
+          {t(phase === "done" ? "updateDialog.updated" : "updateDialog.available")}
         </DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          {info.version} → {latest?.tag ?? "newer"}
+          {info.version} → {latest?.tag ?? t("updateDialog.newer")}
         </DialogDescription>
 
         {phase === "ask" || phase === "failed" ? (
@@ -91,7 +93,7 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
             {latest?.notes ? (
               <Textarea
                 readOnly
-                aria-label="What is new"
+                aria-label={t("updateDialog.whatIsNew")}
                 value={latest.notes}
                 className="max-h-56 min-h-32 font-mono text-xs"
               />
@@ -104,7 +106,8 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
                   rel="noreferrer noopener"
                   className="inline-flex items-center gap-1 text-brand underline-offset-4 hover:underline"
                 >
-                  This release <ArrowSquareOut aria-hidden="true" className="size-3.5" />
+                  {t("updateDialog.thisRelease")}{" "}
+                  <ArrowSquareOut aria-hidden="true" className="size-3.5" />
                 </a>
               ) : null}
               {changelog ? (
@@ -114,32 +117,34 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
                   rel="noreferrer noopener"
                   className="inline-flex items-center gap-1 text-brand underline-offset-4 hover:underline"
                 >
-                  All releases and changelog{" "}
+                  {t("updateDialog.changelog")}{" "}
                   <ArrowSquareOut aria-hidden="true" className="size-3.5" />
                 </a>
               ) : null}
             </div>
             {error ? <Alert variant="destructive">{error}</Alert> : null}
             {!canUpdate ? (
-              <Alert>Only an administrator can update. Ask one to open this notice.</Alert>
+              <Alert>{t("updateDialog.onlyAnAdministratorCanUpdate")}</Alert>
             ) : !info.helper.available ? (
               <Alert>
-                This install cannot update itself. On the server, run{" "}
-                <code className="font-mono">sudo netscribe</code> and choose Update, or{" "}
-                <code className="font-mono">sudo netscribe update</code>. A Docker install updates
-                by pulling the new image.
+                {tRich("updateDialog.cannotSelfUpdate", {
+                  run: <code className="font-mono">{t("updateDialog.sudoNetscribe")}</code>,
+                  runUpdate: (
+                    <code className="font-mono">{t("updateDialog.sudoNetscribeUpdate")}</code>
+                  ),
+                })}
               </Alert>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Update now? The panel is unavailable for a moment while it restarts.
+                {t("updateDialog.updateNowThePanelIs")}
               </p>
             )}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>
-                Not now
+                {t("updateDialog.notNow")}
               </Button>
               {canUpdate && info.helper.available ? (
-                <Button onClick={() => void update()}>Update now</Button>
+                <Button onClick={() => void update()}>{t("updateDialog.updateNow")}</Button>
               ) : null}
             </div>
           </>
@@ -147,18 +152,17 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
 
         {busy ? (
           <p role="status" className="text-sm">
-            Updating to {latest?.tag}. The panel restarts when it is done; this page follows on its
-            own.
+            {t("updateDialog.updating", { tag: latest?.tag ?? "" })}
           </p>
         ) : null}
 
         {phase === "done" ? (
           <>
             <p role="status" className="text-sm">
-              The panel now runs {latest?.tag}. Reload the page to use it.
+              {t("updateDialog.nowRuns", { tag: latest?.tag ?? "" })}
             </p>
             <div className="flex justify-end">
-              <Button onClick={() => window.location.reload()}>Reload</Button>
+              <Button onClick={() => window.location.reload()}>{t("updateDialog.reload")}</Button>
             </div>
           </>
         ) : null}

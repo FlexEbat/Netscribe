@@ -8,13 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { kindClasses, kindLabels } from "@/lib/changes"
 import { cn } from "@/lib/utils"
+import { formatDateTime, t } from "@/i18n"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; data: OverviewData }
-
-function when(iso: string): string {
-  const t = new Date(iso)
-  return Number.isNaN(t.getTime()) ? "–" : t.toLocaleString()
-}
 
 /** The state of the network on one page. Every tile leads to the page that has the details. */
 export function Overview() {
@@ -42,7 +38,7 @@ export function Overview() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Overview</h1>
+      <h1 className="text-2xl font-semibold">{t("overview.overview")}</h1>
       <Body state={state} />
     </div>
   )
@@ -51,7 +47,11 @@ export function Overview() {
 function Body({ state }: { state: State }) {
   if (state.status === "loading") {
     return (
-      <div role="status" aria-label="Loading the overview" className="grid gap-3 sm:grid-cols-3">
+      <div
+        role="status"
+        aria-label={t("overview.loadingTheOverview")}
+        className="grid gap-3 sm:grid-cols-3"
+      >
         <Skeleton className="h-20" />
         <Skeleton className="h-20" />
         <Skeleton className="h-20" />
@@ -59,29 +59,24 @@ function Body({ state }: { state: State }) {
     )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The overview could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("overview.theOverviewCouldNotBe")}</Alert>
   }
   const { devices, risky, lastScan, recentScans, changes } = state.data
   if (lastScan === null && devices.total === 0) {
-    return (
-      <EmptyState
-        title="Nothing to show yet"
-        text="Run a scan on the inventory page. The overview fills in after the first one."
-      />
-    )
+    return <EmptyState title={t("overview.nothingToShowYet")} text={t("overview.nothingText")} />
   }
   const tiles: { label: string; value: number; to: string; alert?: boolean }[] = [
-    { label: "Devices", value: devices.total, to: "/inventory" },
-    { label: "Online", value: devices.online, to: "/inventory?status=online" },
-    { label: "Offline", value: devices.offline, to: "/inventory?status=offline" },
+    { label: t("overview.devices"), value: devices.total, to: "/inventory" },
+    { label: t("overview.online"), value: devices.online, to: "/inventory?status=online" },
+    { label: t("overview.offline"), value: devices.offline, to: "/inventory?status=offline" },
     {
-      label: "Unknown",
+      label: t("overview.unknown"),
       value: devices.unknown,
       to: "/inventory?trust=unknown",
       alert: devices.unknown > 0,
     },
-    { label: "New this week", value: devices.newThisWeek, to: "/changes" },
-    { label: "Risky services", value: risky, to: "/services", alert: risky > 0 },
+    { label: t("overview.newThisWeek"), value: devices.newThisWeek, to: "/changes" },
+    { label: t("overview.riskyServices"), value: risky, to: "/services", alert: risky > 0 },
   ]
   return (
     <>
@@ -108,29 +103,39 @@ function Body({ state }: { state: State }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Scans</CardTitle>
+          <CardTitle>{t("overview.scans")}</CardTitle>
           <CardDescription>
             {lastScan === null
-              ? "No scan has run."
-              : `The last scan ${lastScan.status === "running" ? "started" : lastScan.status === "failed" ? "failed" : "finished"} ${when(lastScan.finishedAt ?? lastScan.startedAt)}.`}
+              ? t("overview.noScan")
+              : t(
+                  lastScan.status === "running"
+                    ? "overview.lastStarted"
+                    : lastScan.status === "failed"
+                      ? "overview.lastFailed"
+                      : "overview.lastFinished",
+                  { when: formatDateTime(lastScan.finishedAt ?? lastScan.startedAt) },
+                )}
           </CardDescription>
         </CardHeader>
         <CardContent className="text-sm">
           {recentScans.total === 0
-            ? "No scan has finished yet."
+            ? t("overview.noneFinished")
             : recentScans.failed === 0
-              ? `All of the last ${recentScans.total} scans finished.`
-              : `${recentScans.failed} of the last ${recentScans.total} scans failed.`}
+              ? t("overview.allFinished", { n: recentScans.total })
+              : t("overview.someFailed", {
+                  failed: recentScans.failed,
+                  n: recentScans.total,
+                })}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Latest changes</CardTitle>
+          <CardTitle>{t("overview.latestChanges")}</CardTitle>
         </CardHeader>
         <CardContent>
           {changes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No change has been recorded.</p>
+            <p className="text-sm text-muted-foreground">{t("overview.noChangeHasBeenRecorded")}</p>
           ) : (
             <ul className="flex flex-col gap-2 text-sm">
               {changes.map((c) => (
@@ -141,13 +146,13 @@ function Body({ state }: { state: State }) {
                     {kindLabels[c.kind] ?? c.kind}
                   </span>
                   <span>{c.summary}</span>
-                  <span className="text-muted-foreground">{when(c.at)}</span>
+                  <span className="text-muted-foreground">{formatDateTime(c.at)}</span>
                 </li>
               ))}
             </ul>
           )}
           <Link to="/changes" className="mt-3 inline-block text-sm underline underline-offset-4">
-            All changes
+            {t("overview.allChanges")}
           </Link>
         </CardContent>
       </Card>

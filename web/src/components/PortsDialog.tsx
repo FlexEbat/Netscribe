@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { t } from "@/i18n"
 
 interface PortsDialogProps {
   aDeviceId: number
@@ -38,9 +39,9 @@ export function PortsDialog({
       await createLink({ aDeviceId, aPort: aPort.trim(), bDeviceId, bPort: bPort.trim() })
       onDone()
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) setError("This link already exists.")
+      if (e instanceof ApiError && e.status === 409) setError(t("portsDialog.exists"))
       else if (e instanceof ApiError && e.status === 400) setError(e.message)
-      else setError("The link could not be saved. Try again later.")
+      else setError(t("portsDialog.couldNotSave"))
     } finally {
       setSaving(false)
     }
@@ -49,14 +50,14 @@ export function PortsDialog({
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent aria-describedby={undefined}>
-        <DialogTitle className="text-lg font-semibold">New link</DialogTitle>
+        <DialogTitle className="text-lg font-semibold">{t("portsDialog.newLink")}</DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          {aName} to {bName}. The port names are optional.
+          {t("portsDialog.description", { a: aName, b: bName })}
         </DialogDescription>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4" noValidate>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
           <div className="flex flex-col gap-2">
-            <Label htmlFor={`${id}-a`}>Port on {aName}</Label>
+            <Label htmlFor={`${id}-a`}>{t("portsDialog.portOn", { name: aName })}</Label>
             <Input
               id={`${id}-a`}
               value={aPort}
@@ -65,7 +66,7 @@ export function PortsDialog({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor={`${id}-b`}>Port on {bName}</Label>
+            <Label htmlFor={`${id}-b`}>{t("portsDialog.portOn", { name: bName })}</Label>
             <Input
               id={`${id}-b`}
               value={bPort}
@@ -75,10 +76,10 @@ export function PortsDialog({
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
+              {t("portsDialog.cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Create link"}
+              {t(saving ? "portsDialog.saving" : "portsDialog.createLink")}
             </Button>
           </div>
         </form>

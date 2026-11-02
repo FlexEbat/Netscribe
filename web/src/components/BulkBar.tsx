@@ -3,6 +3,7 @@ import { ApiError, type BulkChange, type DeviceKind, type Group } from "@/api/cl
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { kindLabels } from "@/lib/topology"
+import { t } from "@/i18n"
 
 const selectClass =
   "h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -29,11 +30,7 @@ export function BulkBar({
     try {
       await onApply(change)
     } catch (e) {
-      setError(
-        e instanceof ApiError && e.status !== 0
-          ? e.message
-          : "The devices could not be changed. Try again later.",
-      )
+      setError(e instanceof ApiError && e.status !== 0 ? e.message : t("bulkBar.couldNotChange"))
     } finally {
       setBusy(false)
     }
@@ -42,30 +39,28 @@ export function BulkBar({
   return (
     <div
       role="region"
-      aria-label="Selected devices"
+      aria-label={t("bulkBar.selectedDevices")}
       className="flex flex-col gap-2 rounded-lg border bg-card p-3"
     >
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm font-medium">
-          {count} {count === 1 ? "device" : "devices"} selected
-        </span>
+        <span className="text-sm font-medium">{t("bulkBar.selected", { n: count })}</span>
         <Button
           variant="outline"
           size="sm"
           disabled={busy}
           onClick={() => void apply({ trusted: true })}
         >
-          Mark as trusted
+          {t("bulkBar.markAsTrusted")}
         </Button>
         <select
-          aria-label="Set the group of the selection"
+          aria-label={t("bulkBar.setTheGroupOfThe")}
           className={selectClass}
           disabled={busy}
           value=""
           onChange={(e) => e.target.value !== "" && void apply({ groupId: Number(e.target.value) })}
         >
-          <option value="">Set group…</option>
-          <option value="0">No group</option>
+          <option value="">{t("bulkBar.setGroup")}</option>
+          <option value="0">{t("bulkBar.noGroup")}</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
               {g.name}
@@ -73,7 +68,7 @@ export function BulkBar({
           ))}
         </select>
         <select
-          aria-label="Set the kind of the selection"
+          aria-label={t("bulkBar.setTheKindOfThe")}
           className={selectClass}
           disabled={busy}
           value=""
@@ -81,7 +76,7 @@ export function BulkBar({
             e.target.value !== "" && void apply({ kind: e.target.value as DeviceKind })
           }
         >
-          <option value="">Set kind…</option>
+          <option value="">{t("bulkBar.setKind")}</option>
           {kinds.map((k) => (
             <option key={k} value={k}>
               {kindLabels[k]}
@@ -89,7 +84,7 @@ export function BulkBar({
           ))}
         </select>
         <Button variant="ghost" size="sm" onClick={onClear}>
-          Clear selection
+          {t("bulkBar.clearSelection")}
         </Button>
       </div>
       {error ? <Alert variant="destructive">{error}</Alert> : null}

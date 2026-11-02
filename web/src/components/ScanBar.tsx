@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import type { NmapState, Scan } from "@/api/client"
 import type { ScanProgress } from "@/api/events"
+import { formatDateTime, t } from "@/i18n"
 
 interface ScanBarProps {
   scan: Scan | null
@@ -34,7 +35,7 @@ export function ScanBar({
         {running && progress ? (
           <div
             role="progressbar"
-            aria-label="Scan progress"
+            aria-label={t("scanBar.scanProgress")}
             aria-valuemin={0}
             aria-valuemax={progress.total}
             aria-valuenow={progress.done}
@@ -60,12 +61,12 @@ export function ScanBar({
             disabled={nmap.enabled || running}
             onChange={(e) => onUseNmapChange?.(e.target.checked)}
           />
-          {nmap.enabled ? "Nmap (on in the config)" : "Identify unknown devices with Nmap"}
+          {t(nmap.enabled ? "scanBar.nmapOn" : "scanBar.nmapIdentify")}
         </label>
       ) : null}
       {canRun ? (
         <Button size="sm" onClick={onStart} disabled={running}>
-          {running ? "Scanning…" : "Run scan"}
+          {t(running ? "scanBar.scanning" : "scanBar.runScan")}
         </Button>
       ) : null}
     </div>
@@ -73,11 +74,15 @@ export function ScanBar({
 }
 
 function summary(scan: Scan | null, running: boolean): string {
-  if (running) return "Scan in progress"
-  if (!scan) return "No scan has run yet"
+  if (running) return t("scanBar.inProgress")
+  if (!scan) return t("scanBar.none")
   if (scan.status === "failed") {
-    return `Last scan failed: ${scan.error || "unknown error"}`
+    return t("scanBar.failed", {
+      error: scan.error || t("scanBar.unknownError"),
+    })
   }
-  const when = scan.finishedAt ? new Date(scan.finishedAt).toLocaleString() : ""
-  return `Last scan: ${scan.deviceCount} devices${when ? `, ${when}` : ""}`
+  const n = scan.deviceCount
+  return scan.finishedAt
+    ? t("scanBar.lastWhen", { n, when: formatDateTime(scan.finishedAt) })
+    : t("scanBar.last", { n })
 }

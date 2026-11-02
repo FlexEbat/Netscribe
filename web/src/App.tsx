@@ -46,11 +46,12 @@ import { ApiReference } from "@/pages/ApiReference"
 import { Health } from "@/pages/Health"
 import { Settings } from "@/pages/Settings"
 import { Topology } from "@/pages/Topology"
+import { t, type Key } from "@/i18n"
 
 // The pages of the panel and the navigation that leads to them.
 interface NavItem {
   to: string
-  label: string
+  label: Key
   icon: typeof ShareNetwork
   permission: Permission
   group: "workspace" | "admin"
@@ -59,79 +60,82 @@ interface NavItem {
 const navItems: NavItem[] = [
   {
     to: "/",
-    label: "Topology",
+    label: "nav.topology",
     icon: ShareNetwork,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/overview",
-    label: "Overview",
+    label: "nav.overview",
     icon: Gauge,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/groups",
-    label: "Groups",
+    label: "nav.groups",
     icon: Stack,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/inventory",
-    label: "Inventory",
+    label: "nav.inventory",
     icon: ListBullets,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/services",
-    label: "Services",
+    label: "nav.services",
     icon: PlugsConnected,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/containers",
-    label: "Containers",
+    label: "nav.containers",
     icon: Cube,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/changes",
-    label: "Changes",
+    label: "nav.changes",
     icon: ClockCounterClockwise,
     permission: "topology:read",
     group: "workspace",
   },
   {
     to: "/reference",
-    label: "API reference",
+    label: "nav.apiReference",
     icon: BracketsCurly,
     permission: "topology:read",
     group: "workspace",
   },
-  { to: "/users", label: "Users", icon: UsersIcon, permission: "users:manage", group: "admin" },
-  { to: "/audit", label: "Audit log", icon: Scroll, permission: "audit:read", group: "admin" },
+  { to: "/users", label: "nav.users", icon: UsersIcon, permission: "users:manage", group: "admin" },
+  { to: "/audit", label: "nav.auditLog", icon: Scroll, permission: "audit:read", group: "admin" },
   {
     to: "/health",
-    label: "Health",
+    label: "nav.health",
     icon: Heartbeat,
     permission: "system:manage",
     group: "admin",
   },
   {
     to: "/settings",
-    label: "Settings",
+    label: "nav.settings",
     icon: SlidersHorizontal,
     permission: "system:manage",
     group: "admin",
   },
 ]
 
-const groupLabels = { workspace: "Workspace", admin: "Administration" } as const
+const groupLabels = {
+  workspace: "nav.workspace",
+  admin: "nav.administration",
+} as const satisfies Record<string, Key>
 
 interface SidebarProps {
   user: User
@@ -155,7 +159,7 @@ function NavGroup({
   return (
     <div className="flex flex-col gap-1">
       <p className="px-3 pb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-        {groupLabels[group]}
+        {t(groupLabels[group])}
       </p>
       {items.map(({ to, label, icon: Icon }, index) => (
         <NavLink
@@ -189,7 +193,7 @@ function NavGroup({
                   isActive && "text-brand",
                 )}
               />
-              {label}
+              {t(label)}
             </>
           )}
         </NavLink>
@@ -205,7 +209,7 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
     <>
       <div className="flex flex-col gap-8">
         <Brand className="px-2 pt-1" />
-        <nav aria-label="Main" className="flex flex-col gap-6">
+        <nav aria-label={t("app.main")} className="flex flex-col gap-6">
           {groups.map((g) => (
             <NavGroup
               key={g}
@@ -223,12 +227,12 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
 }
 
 /** The label of the current page, for the capsule at the top. */
-function pageLabel(pathname: string): { label: string; icon: typeof ShareNetwork } {
+function pageLabel(pathname: string): { label: Key; icon: typeof ShareNetwork } {
   const hit = navItems.find((i) => i.to === pathname)
   if (hit) return { label: hit.label, icon: hit.icon }
   return pathname === "/account"
-    ? { label: "Account", icon: UserIcon }
-    : { label: "Netscribe", icon: ShareNetwork }
+    ? { label: "nav.account", icon: UserIcon }
+    : { label: "nav.netscribe", icon: ShareNetwork }
 }
 
 function TopBar({
@@ -250,7 +254,7 @@ function TopBar({
           variant="outline"
           size="icon"
           className="md:hidden"
-          aria-label="Open navigation"
+          aria-label={t("app.openNavigation")}
           aria-expanded={menuOpen}
           onClick={onOpenMenu}
         >
@@ -272,13 +276,13 @@ function TopBar({
         <BrandMark className="md:hidden" />
         <div className="hidden items-center gap-2 rounded-full border bg-muted py-2 pr-4 pl-3 text-sm md:inline-flex">
           <Icon aria-hidden="true" className="size-4 text-brand" />
-          <span className="font-medium">{label}</span>
+          <span className="font-medium">{t(label)}</span>
         </div>
       </div>
       <Button
         variant="outline"
         size="icon"
-        aria-label={dark ? "Switch to the light theme" : "Switch to the dark theme"}
+        aria-label={t(dark ? "app.switchToLight" : "app.switchToDark")}
         onClick={() => setTheme(dark ? "light" : "dark")}
         className="group"
       >
@@ -312,8 +316,8 @@ function Layout() {
       {/* Below the md breakpoint the sidebar folds into a sheet behind a menu button. */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent className="right-auto left-0 w-72 justify-between border-r border-l-0 bg-sidebar/95 backdrop-blur-2xl">
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <SheetDescription className="sr-only">Pages of Netscribe</SheetDescription>
+          <SheetTitle className="sr-only">{t("app.navigation")}</SheetTitle>
+          <SheetDescription className="sr-only">{t("app.pagesOfNetscribe")}</SheetDescription>
           <Sidebar
             user={user}
             permissions={permissions}
@@ -454,7 +458,7 @@ export const routes: RouteObject[] = [
       { path: "account", element: <Account /> },
       {
         path: "*",
-        element: <EmptyState title="Page not found" text="This page does not exist." />,
+        element: <EmptyState title={t("app.pageNotFound")} text={t("app.pageNotFoundText")} />,
       },
     ],
   },

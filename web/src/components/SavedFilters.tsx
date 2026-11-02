@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { t } from "@/i18n"
 
 function reason(error: unknown, fallback: string): string {
   return error instanceof ApiError && error.status !== 0 ? error.message : fallback
@@ -44,7 +45,7 @@ export function SavedFilters({
   const load = useCallback(() => {
     listFilters(page).then(setFilters, (e) => {
       setFilters([])
-      setError(reason(e, "The saved filters could not be loaded."))
+      setError(reason(e, t("savedFilters.couldNotLoad")))
     })
   }, [page])
 
@@ -59,7 +60,7 @@ export function SavedFilters({
       setName("")
       load()
     } catch (e) {
-      setError(reason(e, "The filter could not be saved. Try again later."))
+      setError(reason(e, t("savedFilters.couldNotSave")))
     }
   }
 
@@ -69,7 +70,7 @@ export function SavedFilters({
       await deleteFilter(f.id)
       load()
     } catch (e) {
-      setError(reason(e, "The filter could not be deleted. Try again later."))
+      setError(reason(e, t("savedFilters.couldNotDelete")))
     }
   }
 
@@ -78,18 +79,19 @@ export function SavedFilters({
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <BookmarkSimple className="size-4" aria-hidden="true" />
-          Saved filters
+          {t("savedFilters.savedFilters")}
         </Button>
       </DialogTrigger>
       <DialogContent aria-describedby={undefined}>
-        <DialogTitle className="text-lg font-semibold">Saved filters</DialogTitle>
+        <DialogTitle className="text-lg font-semibold">
+          {t("savedFilters.savedFilters")}
+        </DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          Keep the filter you use often and apply it again with one click. Only you see your
-          filters.
+          {t("savedFilters.keepTheFilterYouUse")}
         </DialogDescription>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <Label htmlFor={`${id}-name`}>Name for the current filter</Label>
+            <Label htmlFor={`${id}-name`}>{t("savedFilters.nameForTheCurrentFilter")}</Label>
             <div className="flex gap-2">
               <Input
                 id={`${id}-name`}
@@ -98,22 +100,20 @@ export function SavedFilters({
                 disabled={current === ""}
               />
               <Button disabled={current === "" || name.trim() === ""} onClick={() => void save()}>
-                Save filter
+                {t("savedFilters.saveFilter")}
               </Button>
             </div>
             {current === "" ? (
-              <p className="text-xs text-muted-foreground">
-                Set a search or a filter first, then save it.
-              </p>
+              <p className="text-xs text-muted-foreground">{t("savedFilters.setASearchOrA")}</p>
             ) : null}
           </div>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
           {filters === null ? (
             <p role="status" className="text-sm text-muted-foreground">
-              Loading the saved filters
+              {t("savedFilters.loadingTheSavedFilters")}
             </p>
           ) : filters.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No filter is saved yet.</p>
+            <p className="text-sm text-muted-foreground">{t("savedFilters.noFilterIsSavedYet")}</p>
           ) : (
             <ul className="flex flex-col gap-2">
               {filters.map((f) => (
@@ -124,21 +124,21 @@ export function SavedFilters({
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`Apply ${f.name}`}
+                      aria-label={t("savedFilters.applyName", { name: f.name })}
                       onClick={() => {
                         onApply(f.query)
                         setOpen(false)
                       }}
                     >
-                      Apply
+                      {t("savedFilters.apply")}
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      aria-label={`Delete filter ${f.name}`}
+                      aria-label={t("savedFilters.deleteName", { name: f.name })}
                       onClick={() => void remove(f)}
                     >
-                      Delete
+                      {t("savedFilters.delete")}
                     </Button>
                   </span>
                 </li>

@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { t } from "@/i18n"
 
 /**
  * The mark of Netscribe: a node with three links, drawn with the same thin line as the icons.
@@ -35,7 +36,7 @@ export function Brand({ className }: { className?: string }) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
       <BrandMark />
-      <p className="text-base font-semibold tracking-tight">Netscribe</p>
+      <p className="text-base font-semibold tracking-tight">{t("brand.netscribe")}</p>
     </div>
   )
 }
