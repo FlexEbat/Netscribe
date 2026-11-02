@@ -207,6 +207,11 @@ export function identifyDevice(id: number): Promise<void> {
   return api<void>("POST", `/api/devices/${id}/identify`)
 }
 
+/** Sends a Wake on LAN packet to a device. The answer does not say whether the machine woke. */
+export function wakeDevice(id: number): Promise<void> {
+  return api<void>("POST", `/api/devices/${id}/wake`)
+}
+
 export function getNmap(): Promise<NmapState> {
   return api<NmapState>("GET", "/api/nmap")
 }

@@ -276,3 +276,101 @@ describe("DevicePanel trust", () => {
     expect(screen.queryByRole("button", { name: /Mark as/ })).not.toBeInTheDocument()
   })
 })
+
+describe("DevicePanel wake on LAN", () => {
+  function openWake(
+    options: { wake?: () => Response; canIdentify?: boolean; mac?: string; ip?: string } = {},
+  ) {
+    setCsrfToken("token")
+    const body = {
+      device: { ...device, mac: options.mac ?? device.mac, ip: options.ip ?? device.ip },
+      interfaces: [],
+      services: [],
+    }
+    const mock = mockFetch({
+      "GET /api/devices/3": () => json(200, body),
+      "GET /api/nmap": () => json(200, { available: false, enabled: false, reason: "" }),
+      "POST /api/devices/3/wake": options.wake ?? (() => new Response(null, { status: 202 })),
+    })
+    render(
+      <DevicePanel deviceId={3} onClose={() => {}} canIdentify={options.canIdentify ?? true} />,
+    )
+    return mock
+  }
+
+  it("sends the request and says only that the packet was sent", async () => {
+    const mock = openWake()
+    await userEvent.click(await screen.findByRole("button", { name: "Wake on LAN" }))
+
+    expect(await screen.findByText(/The packet was sent/)).toBeInTheDocument()
+    expect(
+      mock.calls.filter((c) => c.method === "POST" && c.path === "/api/devices/3/wake"),
+    ).toHaveLength(1)
+    expect(screen.queryByText(/woke|is awake|is on/i)).not.toBeInTheDocument()
+  })
+
+  it("is hidden when the person may not run scans or the device has no MAC or address", async () => {
+    openWake({ canIdentify: false })
+    await screen.findByText("Cisco Systems")
+    expect(screen.queryByRole("button", { name: "Wake on LAN" })).not.toBeInTheDocument()
+    cleanup()
+
+    openWake({ mac: "" })
+    await screen.findByText("Cisco Systems")
+    expect(screen.queryByRole("button", { name: "Wake on LAN" })).not.toBeInTheDocument()
+    cleanup()
+
+    openWake({ ip: "" })
+    await screen.findByText("Cisco Systems")
+    expect(screen.queryByRole("button", { name: "Wake on LAN" })).not.toBeInTheDocument()
+  })
+
+  it("shows the reason of a refusal and the rate limit", async () => {
+    openWake({ wake: () => json(422, { error: "the device address is in no local subnet" }) })
+    await userEvent.click(await screen.findByRole("button", { name: "Wake on LAN" }))
+    expect(await screen.findByText("the device address is in no local subnet")).toBeInTheDocument()
+    expect(screen.queryByText(/The packet was sent/)).not.toBeInTheDocument()
+    cleanup()
+
+    openWake({ wake: () => json(429, { error: "this device was woken a moment ago" }) })
+    await userEvent.click(await screen.findByRole("button", { name: "Wake on LAN" }))
+    expect(await screen.findByText("this device was woken a moment ago")).toBeInTheDocument()
+  })
+})
+
+describe("DevicePanel service links", () => {
+  it("opens web services in a new tab with noopener and noreferrer, and copies the ssh command", async () => {
+    const service = (id: number, port: number, name: string, banner = ""): Service => ({
+      id,
+      deviceId: 3,
+      port,
+      proto: "tcp",
+      name,
+      banner,
+      firstSeenAt: "2026-10-09T12:00:00.000Z",
+      lastSeenAt: "2026-10-09T12:00:00.000Z",
+      risk: null,
+    })
+    mockFetch({
+      "GET /api/devices/3": () =>
+        json(200, {
+          device,
+          interfaces: [],
+          services: [
+            service(1, 8080, "http", 'javascript:alert(1)" onclick="x'),
+            service(2, 22, "ssh"),
+            service(3, 3306, "mysql"),
+          ],
+        }),
+    })
+    render(<DevicePanel deviceId={3} onClose={() => {}} />)
+    await userEvent.click(await screen.findByRole("tab", { name: /Services/ }))
+
+    const link = await screen.findByRole("link", { name: /Open/ })
+    expect(link).toHaveAttribute("href", "http://192.168.1.3:8080")
+    expect(link).toHaveAttribute("target", "_blank")
+    expect(link).toHaveAttribute("rel", "noopener noreferrer")
+    expect(screen.getAllByRole("link")).toHaveLength(1)
+    expect(screen.getByRole("button", { name: "Copy ssh command" })).toBeInTheDocument()
+  })
+})

@@ -1,5 +1,6 @@
 import type { Service } from "@/api/client"
 import { RiskBadge } from "@/components/RiskBadge"
+import { ServiceLink } from "@/components/ServiceLink"
 import {
   Table,
   TableBody,
@@ -10,7 +11,14 @@ import {
 } from "@/components/ui/table"
 
 /** The open ports of one device. */
-export function ServicesTable({ services }: { services: readonly Service[] }) {
+export function ServicesTable({
+  services,
+  address,
+}: {
+  services: readonly Service[]
+  /** The stored address of the device, from which the links are built. */
+  address: string
+}) {
   if (services.length === 0) {
     return <p className="text-sm text-muted-foreground">No open ports were found on this device.</p>
   }
@@ -22,6 +30,7 @@ export function ServicesTable({ services }: { services: readonly Service[] }) {
           <TableHead>Port</TableHead>
           <TableHead>Protocol</TableHead>
           <TableHead>Banner</TableHead>
+          <TableHead>Open</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -35,6 +44,9 @@ export function ServicesTable({ services }: { services: readonly Service[] }) {
             <TableCell className="uppercase">{s.proto}</TableCell>
             <TableCell className="max-w-64 break-words text-muted-foreground">
               {s.banner || "–"}
+            </TableCell>
+            <TableCell>
+              <ServiceLink address={address} service={s} />
             </TableCell>
           </TableRow>
         ))}

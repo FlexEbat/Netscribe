@@ -65,6 +65,7 @@ var routeDocs = map[string]RouteDoc{
 	"POST /api/devices/import":        {Summary: "Imports devices from CSV."},
 	"PUT /api/devices/{id}/position":  {Summary: "Saves where a device sits on the topology canvas."},
 	"POST /api/devices/{id}/identify": {Summary: "Asks one device again what it is."},
+	"POST /api/devices/{id}/wake":     {Summary: "Sends a Wake on LAN packet to one device."},
 	"GET /api/overview":               {Summary: "Counts for the overview page.", Answer: "Devices by presence, risky services, recent scans."},
 	"GET /api/groups":                 {Summary: "Lists groups."},
 	"POST /api/groups":                {Summary: "Creates a group."},
