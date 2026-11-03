@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/netip"
 	"testing"
 
@@ -14,8 +15,23 @@ import (
 	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
+// u16 and u32 narrow a length of a test fixture, which is always small.
+func u16(n int) uint16 {
+	if n < 0 || n > math.MaxUint16 {
+		panic("fixture too large")
+	}
+	return uint16(n)
+}
+
+func u32(n int) uint32 {
+	if n < 0 || n > math.MaxUint32 {
+		panic("fixture too large")
+	}
+	return uint32(n)
+}
+
 func nlAttr(typ uint16, payload []byte) []byte {
-	b := binary.NativeEndian.AppendUint16(nil, uint16(4+len(payload)))
+	b := binary.NativeEndian.AppendUint16(nil, u16(4+len(payload)))
 	b = binary.NativeEndian.AppendUint16(b, typ)
 	b = append(b, payload...)
 	for len(b)%4 != 0 {
@@ -25,9 +41,9 @@ func nlAttr(typ uint16, payload []byte) []byte {
 }
 
 // nlNeigh builds one RTM_NEWNEIGH message for AF_INET6.
-func nlNeigh(iface int32, state uint16, attrs ...[]byte) []byte {
+func nlNeigh(iface uint32, state uint16, attrs ...[]byte) []byte {
 	body := []byte{afInet6, 0, 0, 0}
-	body = binary.NativeEndian.AppendUint32(body, uint32(iface))
+	body = binary.NativeEndian.AppendUint32(body, iface)
 	body = binary.NativeEndian.AppendUint16(body, state)
 	body = append(body, 0, 0) // flags, type
 	for _, a := range attrs {
@@ -37,7 +53,7 @@ func nlNeigh(iface int32, state uint16, attrs ...[]byte) []byte {
 }
 
 func nlMessage(typ uint16, body []byte) []byte {
-	b := binary.NativeEndian.AppendUint32(nil, uint32(nlmsgHdrLen+len(body)))
+	b := binary.NativeEndian.AppendUint32(nil, u32(nlmsgHdrLen+len(body)))
 	b = binary.NativeEndian.AppendUint16(b, typ)
 	b = append(b, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0) // flags, seq, pid
 	b = append(b, body...)

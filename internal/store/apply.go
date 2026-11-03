@@ -85,7 +85,7 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		return fmt.Errorf("apply result: %w", err)
 	}
 	for _, d := range online {
-		if _, ok := seen[d.ID]; ok || !(inTargets(targets, d.Ip) || inTargets(targets, d.Ip6)) {
+		if _, ok := seen[d.ID]; ok || (!inTargets(targets, d.Ip) && !inTargets(targets, d.Ip6)) {
 			continue
 		}
 		if err := q.SetDeviceOffline(ctx, d.ID); err != nil {
@@ -100,7 +100,7 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		return fmt.Errorf("apply result: %w", err)
 	}
 	for _, d := range all {
-		if _, was := seen[d.ID]; d.Manual != 0 || (!was && !(inTargets(targets, d.Ip) || inTargets(targets, d.Ip6))) {
+		if _, was := seen[d.ID]; d.Manual != 0 || (!was && !inTargets(targets, d.Ip) && !inTargets(targets, d.Ip6)) {
 			continue
 		}
 		if err := q.InsertPresence(ctx, dbgen.InsertPresenceParams{ScanID: scanID, DeviceID: d.ID, Online: d.Online, Ip: d.Ip}); err != nil {

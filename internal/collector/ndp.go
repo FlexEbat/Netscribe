@@ -78,7 +78,7 @@ func parseNeighbour(msg []byte) (ndpEntry, bool) {
 	if len(msg) < ndmsgLen || msg[0] != afInet6 {
 		return ndpEntry{}, false
 	}
-	iface := int(int32(binary.NativeEndian.Uint32(msg[4:8])))
+	iface := int(binary.NativeEndian.Uint32(msg[4:8])) // an interface index is a small positive number
 	state := binary.NativeEndian.Uint16(msg[8:10])
 	if state&nudUsable == 0 {
 		return ndpEntry{}, false
