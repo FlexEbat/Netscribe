@@ -41,9 +41,17 @@ describe("DeviceForm", () => {
     })
   })
 
+  it("sends the IPv6 address only when one was typed", async () => {
+    const { onSubmit } = form("create")
+    await userEvent.type(screen.getByLabelText("IPv6 address"), "fd00::9")
+    await userEvent.click(screen.getByRole("button", { name: "Save" }))
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ ip6: "fd00::9" }))
+  })
+
   it("leaves the address and hostname out of the edit form", () => {
     form("edit")
     expect(screen.queryByLabelText("IP address")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("IPv6 address")).not.toBeInTheDocument()
     expect(screen.queryByLabelText("Hostname")).not.toBeInTheDocument()
   })
 

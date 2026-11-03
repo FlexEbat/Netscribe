@@ -18,6 +18,7 @@ function device(overrides: Partial<Device>): Device {
     id: 1,
     mac: "aa:bb:cc:dd:ee:01",
     ip: "192.168.1.2",
+    ip6: "",
     hostname: "gateway",
     vendor: "",
     kind: "router",

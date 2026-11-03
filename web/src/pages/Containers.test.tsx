@@ -27,6 +27,7 @@ function device(id: number, ip: string, hostname: string): Device {
     id,
     mac: `aa:bb:cc:dd:ee:0${id}`,
     ip,
+    ip6: "",
     hostname,
     vendor: "",
     kind: "server",

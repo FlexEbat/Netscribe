@@ -12,6 +12,7 @@ const device: Device = {
   id: 3,
   mac: "aa:bb:cc:dd:ee:03",
   ip: "192.168.1.3",
+  ip6: "",
   hostname: "sw1",
   vendor: "Cisco Systems",
   kind: "switch",
@@ -42,6 +43,7 @@ function service(id: number, overrides: Partial<Service> = {}): Service {
   return {
     id,
     deviceId: 3,
+    ip: "",
     port: 22,
     proto: "tcp",
     name: "ssh",
@@ -343,6 +345,7 @@ describe("DevicePanel service links", () => {
     const service = (id: number, port: number, name: string, banner = ""): Service => ({
       id,
       deviceId: 3,
+      ip: "",
       port,
       proto: "tcp",
       name,
@@ -372,5 +375,36 @@ describe("DevicePanel service links", () => {
     expect(link).toHaveAttribute("rel", "noopener noreferrer")
     expect(screen.getAllByRole("link")).toHaveLength(1)
     expect(screen.getByRole("button", { name: "Copy ssh command" })).toBeInTheDocument()
+  })
+})
+
+describe("DevicePanel IPv6", () => {
+  it("shows the IPv6 address and links a service that answered on it with brackets", async () => {
+    const service = (id: number, ip: string, port: number): Service => ({
+      id,
+      deviceId: 3,
+      ip,
+      port,
+      proto: "tcp",
+      name: "http",
+      banner: "",
+      firstSeenAt: "2026-10-09T12:00:00.000Z",
+      lastSeenAt: "2026-10-09T12:00:00.000Z",
+      risk: null,
+    })
+    mockFetch({
+      "GET /api/devices/3": () =>
+        json(200, {
+          device: { ...device, ip6: "fd00::3" },
+          interfaces: [],
+          services: [service(1, "", 80), service(2, "fd00::3", 8080)],
+        }),
+    })
+    render(<DevicePanel deviceId={3} onClose={() => {}} />)
+
+    expect(await screen.findByText("fd00::3")).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole("tab", { name: /Services/ }))
+    const hrefs = (await screen.findAllByRole("link")).map((a) => a.getAttribute("href"))
+    expect(hrefs).toEqual(["http://192.168.1.3", "http://[fd00::3]:8080"])
   })
 })

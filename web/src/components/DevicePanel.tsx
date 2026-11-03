@@ -350,7 +350,7 @@ function Body({ state }: { state: State }) {
         <InterfacesTable interfaces={state.interfaces} />
       </TabsContent>
       <TabsContent value="services">
-        <ServicesTable services={state.services} address={state.device.ip} />
+        <ServicesTable services={state.services} address={state.device.ip || state.device.ip6} />
       </TabsContent>
       <TabsContent value="history">
         <HistoryTab deviceId={state.device.id} />
@@ -369,6 +369,7 @@ function Details({ device: d }: { device: Device }) {
     [t("devicePanel.group"), group],
     [t("devicePanel.kind"), kindLabels[d.kind]],
     ["IP", d.ip || "–"],
+    [t("devicePanel.ipv6"), d.ip6 || "–"],
     ["MAC", d.mac || "–"],
     [t("devicePanel.hostname"), d.hostname || "–"],
     [t("devicePanel.vendor"), d.vendor || "–"],

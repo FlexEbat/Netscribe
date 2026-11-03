@@ -21,6 +21,8 @@ export interface DeviceFormValues {
   notes: string
   kind: DeviceKind
   ip: string
+  /** Typed only in create mode; left out of the request while the field is untouched. */
+  ip6?: string
   mac: string
 }
 
@@ -142,6 +144,16 @@ export function DeviceForm({
               inputMode="decimal"
               placeholder={t("deviceForm.optional")}
               onChange={(e) => set("ip", e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-ip6`}>{t("deviceForm.ipv6Address")}</Label>
+            <Input
+              id={`${id}-ip6`}
+              value={values.ip6 ?? ""}
+              inputMode="text"
+              placeholder={t("deviceForm.optional")}
+              onChange={(e) => set("ip6", e.target.value)}
             />
           </div>
           <div className="flex flex-col gap-2">

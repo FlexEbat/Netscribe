@@ -55,7 +55,7 @@ function DeviceNodeView({ data, selected }: NodeProps) {
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="truncate text-sm font-medium">{displayName(device)}</span>
             <span className="truncate font-mono text-xs text-muted-foreground">
-              {device.ip || "no address"}
+              {device.ip || device.ip6 || t("deviceNode.noAddress")}
             </span>
             <StatusBadge online={device.online} />
           </div>

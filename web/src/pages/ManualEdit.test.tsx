@@ -43,6 +43,7 @@ function device(id: number, overrides: Partial<Device> = {}): Device {
     id,
     mac: "",
     ip: `192.168.1.${id}`,
+    ip6: "",
     hostname: "",
     vendor: "",
     kind: "host",
