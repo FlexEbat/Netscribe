@@ -116,9 +116,9 @@ func Diagram(d Data) string {
 			attrs, num(b.x), num(b.y), num(b.w), num(b.h), colors[0], colors[1])
 		fmt.Fprintf(&s, `<text x="%s" y="%s" text-anchor="middle" font-size="12" font-weight="600" fill="#111111">%s</text>`,
 			num(b.cx()), num(b.y+22), svgText(shorten(names[dev.ID])))
-		if dev.IP != "" && dev.IP != names[dev.ID] {
+		if addr := dev.Address(); addr != "" && addr != names[dev.ID] {
 			fmt.Fprintf(&s, `<text x="%s" y="%s" text-anchor="middle" font-size="10" fill="#444444">%s</text>`,
-				num(b.cx()), num(b.y+40), svgText(shorten(dev.IP)))
+				num(b.cx()), num(b.y+40), svgText(shorten(addr)))
 		}
 		s.WriteString("</g>\n")
 	}

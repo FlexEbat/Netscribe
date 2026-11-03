@@ -78,8 +78,8 @@ func Drawio(d Data) []byte {
 			style += "dashed=1;opacity=50;"
 		}
 		label := names[dev.ID]
-		if dev.IP != "" && dev.IP != label {
-			label += "\n" + dev.IP
+		if addr := dev.Address(); addr != "" && addr != label {
+			label += "\n" + addr
 		}
 		var x, y float64
 		if dev.X != nil && dev.Y != nil {

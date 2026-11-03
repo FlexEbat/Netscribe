@@ -120,7 +120,7 @@ func (s *Store) Topology(ctx context.Context) (model.Topology, error) {
 }
 
 func matches(d model.Device, lowerQuery string) bool {
-	for _, field := range []string{d.IP, d.MAC, d.Hostname, d.Vendor, d.Label} {
+	for _, field := range []string{d.IP, d.IP6, d.MAC, d.Hostname, d.Vendor, d.Label} {
 		if strings.Contains(strings.ToLower(field), lowerQuery) {
 			return true
 		}
@@ -140,6 +140,18 @@ func compareByIP(a, b model.Device) int {
 	case aerr == nil:
 		return -1
 	case berr == nil:
+		return 1
+	}
+	// Neither has an IPv4 address: the ones with an IPv6 address come first, in order.
+	if a6, err := netip.ParseAddr(a.IP6); err == nil {
+		if b6, err := netip.ParseAddr(b.IP6); err == nil {
+			if c := a6.Compare(b6); c != 0 {
+				return c
+			}
+		} else {
+			return -1
+		}
+	} else if _, err := netip.ParseAddr(b.IP6); err == nil {
 		return 1
 	}
 	switch {
@@ -164,6 +176,7 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		ID:          r.ID,
 		MAC:         r.Mac,
 		IP:          r.Ip,
+		IP6:         r.Ip6,
 		Hostname:    r.Hostname,
 		Vendor:      r.Vendor,
 		Kind:        model.DeviceKind(r.Kind),

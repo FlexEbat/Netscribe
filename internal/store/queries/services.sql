@@ -1,9 +1,9 @@
 -- name: GetServiceByKey :one
-SELECT * FROM services WHERE device_id = ? AND port = ? AND proto = ?;
+SELECT * FROM services WHERE device_id = ? AND ip = ? AND port = ? AND proto = ?;
 
 -- name: InsertService :exec
-INSERT INTO services (device_id, port, proto, name, banner, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO services (device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: TouchService :exec
 UPDATE services SET name = ?, banner = ?, last_seen_at = ? WHERE id = ?;
@@ -12,7 +12,7 @@ UPDATE services SET name = ?, banner = ?, last_seen_at = ? WHERE id = ?;
 DELETE FROM services WHERE device_id = ? AND last_seen_at < ?;
 
 -- name: ListServices :many
-SELECT * FROM services ORDER BY device_id, port, proto;
+SELECT * FROM services ORDER BY device_id, port, proto, ip;
 
 -- name: ListServicesByDevice :many
-SELECT * FROM services WHERE device_id = ? ORDER BY port, proto;
+SELECT * FROM services WHERE device_id = ? ORDER BY port, proto, ip;

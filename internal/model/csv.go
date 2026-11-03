@@ -15,8 +15,8 @@ const MaxImportRows = 1000
 // ImportRow is one line of an import file. Every cell is text and stays text: nothing in
 // this package or after it evaluates a cell, so "=cmd()" is stored as it was typed.
 type ImportRow struct {
-	Line                                         int
-	Label, IP, MAC, Hostname, Kind, Group, Notes string
+	Line                                              int
+	Label, IP, IP6, MAC, Hostname, Kind, Group, Notes string
 }
 
 // The errors of ParseDeviceCSV.
@@ -25,7 +25,7 @@ var (
 	ErrCSVTooMany  = fmt.Errorf("a file may have at most %d rows", MaxImportRows)
 )
 
-var importColumns = map[string]bool{"label": true, "ip": true, "mac": true, "hostname": true, "kind": true, "group": true, "notes": true}
+var importColumns = map[string]bool{"label": true, "ip": true, "ip6": true, "mac": true, "hostname": true, "kind": true, "group": true, "notes": true}
 
 // ParseDeviceCSV reads an import file. The first line names the columns, in any order, from
 // label, ip, mac, hostname, kind, group and notes. Blank lines are skipped. A byte order
@@ -53,7 +53,7 @@ func ParseDeviceCSV(r io.Reader) ([]ImportRow, error) {
 		name := strings.ToLower(strings.TrimSpace(h))
 		switch {
 		case !importColumns[name]:
-			return nil, fmt.Errorf("line 1: %q is not a column, use label, ip, mac, hostname, kind, group or notes", strings.TrimSpace(h))
+			return nil, fmt.Errorf("line 1: %q is not a column, use label, ip, ip6, mac, hostname, kind, group or notes", strings.TrimSpace(h))
 		case seen[name]:
 			return nil, fmt.Errorf("line 1: the column %q is listed twice", name)
 		}
@@ -82,6 +82,8 @@ func ParseDeviceCSV(r io.Reader) ([]ImportRow, error) {
 				row.Label = cell
 			case "ip":
 				row.IP = cell
+			case "ip6":
+				row.IP6 = cell
 			case "mac":
 				row.MAC = cell
 			case "hostname":

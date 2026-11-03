@@ -39,8 +39,8 @@ func mermaidGraph(d Data) string {
 	names := deviceNames(d.Devices)
 	for _, dev := range d.Devices {
 		label := mermaidText(names[dev.ID])
-		if dev.IP != "" && dev.IP != names[dev.ID] {
-			label += "<br/>" + mermaidText(dev.IP)
+		if addr := dev.Address(); addr != "" && addr != names[dev.ID] {
+			label += "<br/>" + mermaidText(addr)
 		}
 		fmt.Fprintf(&b, "  n%d[\"%s\"]\n", dev.ID, label)
 	}

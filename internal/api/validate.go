@@ -22,6 +22,7 @@ const (
 // list does not name are marked.
 var (
 	errIPInvalid     = errors.New("ip is not valid")
+	errIP6Invalid    = errors.New("ip6 is not a valid IPv6 address")
 	errMACInvalid    = errors.New("mac is not valid")
 	errNoIdentity    = errors.New("device has no ip, mac or label")
 	errLabelLong     = errors.New("label is longer than 100 characters")
@@ -44,6 +45,20 @@ func normalizeIP(s string) (string, error) {
 		return "", errIPInvalid
 	}
 	return a.Unmap().String(), nil
+}
+
+// normalizeIP6 accepts an empty string or an IPv6 address, without a zone and not in the
+// IPv4-mapped form, and returns it in the canonical form of RFC 5952.
+func normalizeIP6(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "", nil
+	}
+	a, err := netip.ParseAddr(s)
+	if err != nil || a.Zone() != "" || !a.Is6() || a.Is4In6() {
+		return "", errIP6Invalid
+	}
+	return a.String(), nil
 }
 
 // normalizeMAC accepts an empty string or an EUI-48 address in any common notation and
@@ -97,6 +112,7 @@ func validNotes(s string) error {
 type deviceBody struct {
 	MAC      string `json:"mac"`
 	IP       string `json:"ip"`
+	IP6      string `json:"ip6"`
 	Hostname string `json:"hostname"`
 	Label    string `json:"label"`
 	Notes    string `json:"notes"`
@@ -113,8 +129,19 @@ func (b deviceBody) manualDevice() (model.ManualDevice, error) {
 	if err != nil {
 		return model.ManualDevice{}, err
 	}
+	ip6, err := normalizeIP6(b.IP6)
+	if err != nil {
+		return model.ManualDevice{}, err
+	}
+	if a, err := netip.ParseAddr(ip); err == nil && a.Is6() {
+		// An IPv6 address typed into the ip field is the IPv6 address of the device.
+		if ip6 != "" && ip6 != a.String() {
+			return model.ManualDevice{}, errIPInvalid
+		}
+		ip, ip6 = "", a.String()
+	}
 	label, notes := cleanLabel(b.Label), cleanNotes(b.Notes)
-	if mac == "" && ip == "" && label == "" {
+	if mac == "" && ip == "" && ip6 == "" && label == "" {
 		return model.ManualDevice{}, errNoIdentity
 	}
 	if err := validLabel(label); err != nil {
@@ -134,7 +161,7 @@ func (b deviceBody) manualDevice() (model.ManualDevice, error) {
 	if !validKind(kind) {
 		return model.ManualDevice{}, errKindUnknown
 	}
-	return model.ManualDevice{MAC: mac, IP: ip, Hostname: hostname, Label: label, Notes: notes, Kind: kind}, nil
+	return model.ManualDevice{MAC: mac, IP: ip, IP6: ip6, Hostname: hostname, Label: label, Notes: notes, Kind: kind}, nil
 }
 
 type editBody struct {

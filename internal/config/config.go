@@ -151,7 +151,13 @@ type DiscoveryConfig struct {
 	NmapScope          string `yaml:"nmapScope"`   // untyped (default) or all
 	NmapPath           string `yaml:"nmapPath"`    // empty: look for nmap in PATH
 	ProbeRoutedTargets bool   `yaml:"probeRoutedTargets"`
+	// IPv6 switches the IPv6 discovery on: one echo to ff02::1 on each interface that has a
+	// scan target, then a read of the neighbour table. A missing value means true.
+	IPv6 *bool `yaml:"ipv6"`
 }
+
+// IPv6Enabled reports whether IPv6 discovery is on. It is on unless the config says false.
+func (d DiscoveryConfig) IPv6Enabled() bool { return d.IPv6 == nil || *d.IPv6 }
 
 type ExportConfig struct {
 	ChromePath string `yaml:"chromePath"`
@@ -351,7 +357,7 @@ func redact(msg string) string { return quotedValue.ReplaceAllString(msg, "value
 
 var (
 	errTargetCIDR   = errors.New("target is not a valid CIDR")
-	errTargetIPv4   = errors.New("only IPv4 targets are supported")
+	errTargetV6Wide = errors.New("IPv6 target is wider than /112: use discovery.ipv6 to find IPv6 devices instead of sweeping")
 	errTargetWide   = errors.New("target is wider than /16")
 	errTargetPublic = errors.New("target is outside private ranges")
 	errInterval     = errors.New("scan interval is below 1m")
@@ -369,6 +375,13 @@ var (
 	errProxyCIDR   = errors.New("trusted proxy is not a valid CIDR")
 	errListen      = errors.New("listen must be host:port with a port from 1 to 65535")
 )
+
+// privateV6 are the IPv6 ranges a scan target may lie in without allowPublicTargets:
+// unique local and link local.
+var privateV6 = []netip.Prefix{
+	netip.MustParsePrefix("fc00::/7"),
+	netip.MustParsePrefix("fe80::/10"),
+}
 
 var rfc1918 = []netip.Prefix{
 	netip.MustParsePrefix("10.0.0.0/8"),
@@ -460,14 +473,26 @@ func ValidateListen(addr string) error {
 }
 
 // ParseTarget parses and checks one scan target, from the config or from a CLI argument.
-// It accepts IPv4 CIDRs only: discovery relies on ARP, which has no IPv6 form.
+// An IPv4 target is a CIDR of /16 or narrower. An IPv6 target is a CIDR of /112 or narrower:
+// a /64 cannot be swept, the neighbour table finds IPv6 devices (discovery.ipv6). A target
+// outside the private ranges needs allowPublic. Private means the RFC 1918 ranges for IPv4
+// and unique local fc00::/7 or link local fe80::/10 for IPv6.
 func ParseTarget(t string, allowPublic bool) (netip.Prefix, error) {
 	p, err := netip.ParsePrefix(strings.TrimSpace(t))
 	if err != nil {
 		return netip.Prefix{}, errTargetCIDR
 	}
-	if !p.Addr().Is4() {
-		return netip.Prefix{}, errTargetIPv4
+	if p.Addr().Is4In6() {
+		return netip.Prefix{}, errTargetCIDR
+	}
+	if p.Addr().Is6() {
+		if p.Bits() < 112 {
+			return netip.Prefix{}, errTargetV6Wide
+		}
+		if !allowPublic && !isPrivate(p) {
+			return netip.Prefix{}, errTargetPublic
+		}
+		return p, nil
 	}
 	if p.Bits() < 16 {
 		return netip.Prefix{}, errTargetWide
@@ -479,6 +504,14 @@ func ParseTarget(t string, allowPublic bool) (netip.Prefix, error) {
 }
 
 func isPrivate(p netip.Prefix) bool {
+	if p.Addr().Is6() {
+		for _, r := range privateV6 {
+			if r.Bits() <= p.Bits() && r.Contains(p.Addr()) {
+				return true
+			}
+		}
+		return false
+	}
 	for _, r := range rfc1918 {
 		if r.Bits() <= p.Bits() && r.Contains(p.Addr()) {
 			return true

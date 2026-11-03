@@ -24,38 +24,46 @@ func (q *Queries) DeleteDeviceServicesBefore(ctx context.Context, arg DeleteDevi
 }
 
 const getServiceByKey = `-- name: GetServiceByKey :one
-SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at, banner FROM services WHERE device_id = ? AND port = ? AND proto = ?
+SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at FROM services WHERE device_id = ? AND ip = ? AND port = ? AND proto = ?
 `
 
 type GetServiceByKeyParams struct {
 	DeviceID int64
+	Ip       string
 	Port     int64
 	Proto    string
 }
 
 func (q *Queries) GetServiceByKey(ctx context.Context, arg GetServiceByKeyParams) (Service, error) {
-	row := q.db.QueryRowContext(ctx, getServiceByKey, arg.DeviceID, arg.Port, arg.Proto)
+	row := q.db.QueryRowContext(ctx, getServiceByKey,
+		arg.DeviceID,
+		arg.Ip,
+		arg.Port,
+		arg.Proto,
+	)
 	var i Service
 	err := row.Scan(
 		&i.ID,
 		&i.DeviceID,
+		&i.Ip,
 		&i.Port,
 		&i.Proto,
 		&i.Name,
+		&i.Banner,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
-		&i.Banner,
 	)
 	return i, err
 }
 
 const insertService = `-- name: InsertService :exec
-INSERT INTO services (device_id, port, proto, name, banner, first_seen_at, last_seen_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO services (device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertServiceParams struct {
 	DeviceID    int64
+	Ip          string
 	Port        int64
 	Proto       string
 	Name        string
@@ -67,6 +75,7 @@ type InsertServiceParams struct {
 func (q *Queries) InsertService(ctx context.Context, arg InsertServiceParams) error {
 	_, err := q.db.ExecContext(ctx, insertService,
 		arg.DeviceID,
+		arg.Ip,
 		arg.Port,
 		arg.Proto,
 		arg.Name,
@@ -78,7 +87,7 @@ func (q *Queries) InsertService(ctx context.Context, arg InsertServiceParams) er
 }
 
 const listServices = `-- name: ListServices :many
-SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at, banner FROM services ORDER BY device_id, port, proto
+SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at FROM services ORDER BY device_id, port, proto, ip
 `
 
 func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
@@ -93,12 +102,13 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 		if err := rows.Scan(
 			&i.ID,
 			&i.DeviceID,
+			&i.Ip,
 			&i.Port,
 			&i.Proto,
 			&i.Name,
+			&i.Banner,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
-			&i.Banner,
 		); err != nil {
 			return nil, err
 		}
@@ -114,7 +124,7 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 }
 
 const listServicesByDevice = `-- name: ListServicesByDevice :many
-SELECT id, device_id, port, proto, name, first_seen_at, last_seen_at, banner FROM services WHERE device_id = ? ORDER BY port, proto
+SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at FROM services WHERE device_id = ? ORDER BY port, proto, ip
 `
 
 func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]Service, error) {
@@ -129,12 +139,13 @@ func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]S
 		if err := rows.Scan(
 			&i.ID,
 			&i.DeviceID,
+			&i.Ip,
 			&i.Port,
 			&i.Proto,
 			&i.Name,
+			&i.Banner,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
-			&i.Banner,
 		); err != nil {
 			return nil, err
 		}

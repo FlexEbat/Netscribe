@@ -98,7 +98,7 @@ func Markdown(d Data, now time.Time) []byte {
 	rows := make([][]string, 0, len(d.Devices))
 	for _, dev := range d.Devices {
 		rows = append(rows, []string{
-			mdCell(names[dev.ID]), mdOrDash(dev.IP), mdOrDash(dev.MAC), mdCell(string(dev.Kind)), mdOrDash(dev.Vendor), state(dev.Online),
+			mdCell(names[dev.ID]), mdOrDash(dev.Addresses()), mdOrDash(dev.MAC), mdCell(string(dev.Kind)), mdOrDash(dev.Vendor), state(dev.Online),
 		})
 	}
 	mdTable(&b, []string{"Name", "IP", "MAC", "Kind", "Vendor", "State"}, rows)

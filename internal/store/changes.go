@@ -64,7 +64,7 @@ func takeSnapshot(ctx context.Context, q *dbgen.Queries) (snapshot, error) {
 type change struct{ kind, entity, summary string }
 
 func deviceName(d dbgen.Device) string {
-	for _, s := range []string{d.Label, d.Hostname, d.Ip, d.Mac} {
+	for _, s := range []string{d.Label, d.Hostname, d.Ip, d.Ip6, d.Mac} {
 		if s != "" {
 			return s
 		}
@@ -95,7 +95,7 @@ func diffSnapshots(before, after snapshot) []change {
 		was, existed := before.devices[id]
 		key := strconv.FormatInt(id, 10)
 		if !existed {
-			out = append(out, change{ChangeDeviceAdded, key, fmt.Sprintf("New device %s (%s, %s)", deviceName(now), dashIfEmpty(now.Ip), now.Kind)})
+			out = append(out, change{ChangeDeviceAdded, key, fmt.Sprintf("New device %s (%s, %s)", deviceName(now), dashIfEmpty(firstNonEmpty(now.Ip, now.Ip6)), now.Kind)})
 			continue
 		}
 		if was.Online == 0 && now.Online != 0 {
@@ -169,7 +169,7 @@ func diffSnapshots(before, after snapshot) []change {
 func deviceParts(was, now dbgen.Device) []string {
 	var parts []string
 	for _, f := range []struct{ name, old, new string }{
-		{"ip", was.Ip, now.Ip}, {"hostname", was.Hostname, now.Hostname}, {"kind", was.Kind, now.Kind},
+		{"ip", was.Ip, now.Ip}, {"ip6", was.Ip6, now.Ip6}, {"hostname", was.Hostname, now.Hostname}, {"kind", was.Kind, now.Kind},
 		{"system", was.OsGuess, now.OsGuess},
 	} {
 		if f.old != f.new {

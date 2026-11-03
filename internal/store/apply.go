@@ -85,7 +85,7 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		return fmt.Errorf("apply result: %w", err)
 	}
 	for _, d := range online {
-		if _, ok := seen[d.ID]; ok || !inTargets(targets, d.Ip) {
+		if _, ok := seen[d.ID]; ok || !(inTargets(targets, d.Ip) || inTargets(targets, d.Ip6)) {
 			continue
 		}
 		if err := q.SetDeviceOffline(ctx, d.ID); err != nil {
@@ -100,7 +100,7 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		return fmt.Errorf("apply result: %w", err)
 	}
 	for _, d := range all {
-		if _, was := seen[d.ID]; d.Manual != 0 || (!was && !inTargets(targets, d.Ip)) {
+		if _, was := seen[d.ID]; d.Manual != 0 || (!was && !(inTargets(targets, d.Ip) || inTargets(targets, d.Ip6))) {
 			continue
 		}
 		if err := q.InsertPresence(ctx, dbgen.InsertPresenceParams{ScanID: scanID, DeviceID: d.ID, Online: d.Online, Ip: d.Ip}); err != nil {
@@ -167,7 +167,8 @@ func inTargets(targets []netip.Prefix, ip string) bool {
 func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts string) (int64, error) {
 	mac := strings.ToLower(strings.TrimSpace(in.Key.MAC))
 	ip := strings.TrimSpace(in.Key.IP)
-	if mac == "" && ip == "" {
+	ip6 := normalizeIP6(in.IP6)
+	if mac == "" && ip == "" && ip6 == "" {
 		return 0, errors.New("device has neither mac nor ip")
 	}
 	if in.Source == "" {
@@ -184,13 +185,18 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 		kind = string(model.KindUnknown)
 	}
 
-	cur, found, err := findDevice(ctx, q, mac, ip)
+	cur, found, err := findDevice6(ctx, q, mac, ip, ip6)
 	if err != nil {
 		return 0, err
 	}
 	if !found {
+		if ip6 != "" {
+			if err := q.ClearIP6Elsewhere(ctx, dbgen.ClearIP6ElsewhereParams{Ip6: ip6, ID: 0}); err != nil {
+				return 0, fmt.Errorf("move address %s: %w", ip6, err)
+			}
+		}
 		id, err := q.InsertDevice(ctx, dbgen.InsertDeviceParams{
-			Mac: mac, Ip: ip, Hostname: in.Hostname, Vendor: in.Vendor, Kind: kind,
+			Mac: mac, Ip: ip, Ip6: ip6, Hostname: in.Hostname, Vendor: in.Vendor, Kind: kind,
 			Description: in.Description, OsGuess: in.OSGuess, Source: in.Source, FirstSeenAt: ts, LastSeenAt: ts,
 		})
 		if err != nil {
@@ -207,9 +213,16 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 		// A name from mDNS only fills an empty hostname, it never replaces a known one.
 		hostname = firstNonEmpty(cur.Hostname, in.Hostname)
 	}
+	if ip6 != "" {
+		// An address that moved to this device is no longer on the one that had it.
+		if err := q.ClearIP6Elsewhere(ctx, dbgen.ClearIP6ElsewhereParams{Ip6: ip6, ID: cur.ID}); err != nil {
+			return 0, fmt.Errorf("move address %s: %w", ip6, err)
+		}
+	}
 	err = q.UpdateDeviceFromScan(ctx, dbgen.UpdateDeviceFromScanParams{
 		Mac:         firstNonEmpty(mac, cur.Mac),
 		Ip:          firstNonEmpty(ip, cur.Ip),
+		Ip6:         firstNonEmpty(ip6, cur.Ip6),
 		Hostname:    hostname,
 		Vendor:      firstNonEmpty(in.Vendor, cur.Vendor),
 		Kind:        kind,
@@ -228,6 +241,12 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 // findDevice looks a device up by MAC, then among records without a MAC by IP.
 // An input without a MAC falls back to any record with that IP.
 func findDevice(ctx context.Context, q *dbgen.Queries, mac, ip string) (dbgen.Device, bool, error) {
+	return findDevice6(ctx, q, mac, ip, "")
+}
+
+// findDevice6 is findDevice that also knows the IPv6 address: a device with neither a MAC
+// nor an IPv4 address is found by it.
+func findDevice6(ctx context.Context, q *dbgen.Queries, mac, ip, ip6 string) (dbgen.Device, bool, error) {
 	lookups := []func() (dbgen.Device, error){}
 	if mac != "" {
 		lookups = append(lookups, func() (dbgen.Device, error) { return q.GetDeviceByMAC(ctx, mac) })
@@ -237,6 +256,9 @@ func findDevice(ctx context.Context, q *dbgen.Queries, mac, ip string) (dbgen.De
 		if mac == "" {
 			lookups = append(lookups, func() (dbgen.Device, error) { return q.GetDeviceByIP(ctx, ip) })
 		}
+	}
+	if ip6 != "" && mac == "" && ip == "" {
+		lookups = append(lookups, func() (dbgen.Device, error) { return q.GetDeviceByIP6(ctx, ip6) })
 	}
 	for _, lookup := range lookups {
 		d, err := lookup()
@@ -468,7 +490,8 @@ func applyServices(ctx context.Context, q *dbgen.Queries, r collector.Result, ts
 			continue
 		}
 		name, banner := cleanText(in.Name), cleanBanner(in.Banner)
-		cur, err := q.GetServiceByKey(ctx, dbgen.GetServiceByKeyParams{DeviceID: id, Port: int64(in.Port), Proto: proto})
+		svcIP := normalizeIP6(in.IP)
+		cur, err := q.GetServiceByKey(ctx, dbgen.GetServiceByKeyParams{DeviceID: id, Ip: svcIP, Port: int64(in.Port), Proto: proto})
 		switch {
 		case err == nil:
 			if err := q.TouchService(ctx, dbgen.TouchServiceParams{Name: name, Banner: banner, LastSeenAt: ts, ID: cur.ID}); err != nil {
@@ -476,7 +499,7 @@ func applyServices(ctx context.Context, q *dbgen.Queries, r collector.Result, ts
 			}
 		case errors.Is(err, sql.ErrNoRows):
 			err := q.InsertService(ctx, dbgen.InsertServiceParams{
-				DeviceID: id, Port: int64(in.Port), Proto: proto, Name: name, Banner: banner, FirstSeenAt: ts, LastSeenAt: ts,
+				DeviceID: id, Ip: svcIP, Port: int64(in.Port), Proto: proto, Name: name, Banner: banner, FirstSeenAt: ts, LastSeenAt: ts,
 			})
 			if err != nil {
 				return fmt.Errorf("insert service: %w", err)
@@ -498,4 +521,16 @@ func applyServices(ctx context.Context, q *dbgen.Queries, r collector.Result, ts
 		}
 	}
 	return nil
+}
+
+// normalizeIP6 returns the canonical form of an IPv6 address, or "" for anything else: an
+// IPv4 address, an IPv4-mapped one, a bare zone, or text that is not an address. The zone of
+// a link local address (fe80::1%eth0) is dropped, because it names the interface of the
+// scanning host and means nothing anywhere else.
+func normalizeIP6(s string) string {
+	a, err := netip.ParseAddr(strings.TrimSpace(s))
+	if err != nil || !a.Is6() || a.Is4In6() {
+		return ""
+	}
+	return a.WithZone("").String()
 }

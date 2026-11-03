@@ -165,7 +165,7 @@ func Export(ctx context.Context, src Source, format string, now time.Time, opts 
 
 // deviceName is what the panel calls a device: its label, else its host name, else its IP.
 func deviceName(d model.Device) string {
-	for _, s := range []string{d.Label, d.Hostname, d.IP, d.MAC} {
+	for _, s := range []string{d.Label, d.Hostname, d.IP, d.IP6, d.MAC} {
 		if s != "" {
 			return s
 		}

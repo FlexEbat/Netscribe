@@ -79,6 +79,7 @@ type Device struct {
 	OsGuess     string
 	Trusted     int64
 	GroupID     sql.NullInt64
+	Ip6         string
 }
 
 type DeviceGroup struct {
@@ -148,12 +149,13 @@ type Scan struct {
 type Service struct {
 	ID          int64
 	DeviceID    int64
+	Ip          string
 	Port        int64
 	Proto       string
 	Name        string
+	Banner      string
 	FirstSeenAt string
 	LastSeenAt  string
-	Banner      string
 }
 
 type Session struct {

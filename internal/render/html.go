@@ -68,7 +68,7 @@ func HTML(d Data, now time.Time) ([]byte, error) {
 			v.Online++
 		}
 		v.DeviceRows = append(v.DeviceRows, htmlDevice{
-			Name: names[dev.ID], IP: dash(dev.IP), MAC: dash(dev.MAC), Kind: string(dev.Kind), Vendor: dash(dev.Vendor),
+			Name: names[dev.ID], IP: dash(dev.Addresses()), MAC: dash(dev.MAC), Kind: string(dev.Kind), Vendor: dash(dev.Vendor),
 			State: state(dev.Online), Online: dev.Online,
 		})
 	}

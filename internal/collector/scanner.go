@@ -103,7 +103,7 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		wake: make(chan struct{}, 1), failed: make(chan struct{}, 1),
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
-		enrichers:  []Collector{probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services, httpBanner, mdns, ssdp},
+		enrichers:  []Collector{NewNDP(log), probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services, httpBanner, mdns, ssdp},
 		late:       []Collector{NewSSH(log), docker},
 		docker:     docker,
 		classifier: classifier,
@@ -384,6 +384,17 @@ func (s *Scanner) enrich(ctx context.Context, targets []netip.Prefix, base Resul
 	known := map[model.DeviceKey]struct{}{}
 	remember := func(inputs []model.DeviceInput) {
 		for _, d := range inputs {
+			if d.IP6 != "" && d.Key.MAC != "" {
+				// The IPv6 address goes to the device that has the MAC, or starts a device
+				// that has no IPv4 address at all.
+				if i := slices.IndexFunc(devices, func(x model.Device) bool { return x.MAC == d.Key.MAC }); i >= 0 {
+					devices[i].IP6 = d.IP6
+				} else if d.Key.IP == "" {
+					devices = append(devices, model.Device{MAC: d.Key.MAC, IP6: d.IP6, Hostname: d.Hostname})
+					known[d.Key] = struct{}{}
+					continue
+				}
+			}
 			if _, ok := known[d.Key]; ok || d.Key.IP == "" {
 				continue
 			}
@@ -619,7 +630,7 @@ func (s *Scanner) resolveHostnames(ctx context.Context, devs []model.DeviceInput
 	var wg sync.WaitGroup
 loop:
 	for i := range devs {
-		if devs[i].Hostname != "" || devs[i].Key.IP == "" {
+		if devs[i].Hostname != "" || (devs[i].Key.IP == "" && devs[i].IP6 == "") {
 			continue
 		}
 		select {
@@ -633,7 +644,11 @@ loop:
 			defer func() { <-sem }()
 			lctx, cancel := context.WithTimeout(ctx, s.dnsWait)
 			defer cancel()
-			names, err := s.resolver.LookupAddr(lctx, d.Key.IP)
+			addr := d.Key.IP
+			if addr == "" {
+				addr = d.IP6
+			}
+			names, err := s.resolver.LookupAddr(lctx, addr)
 			if err != nil || len(names) == 0 {
 				return
 			}

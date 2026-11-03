@@ -69,34 +69,41 @@ func (c *Services) Collect(ctx context.Context, in Input) (Result, error) {
 	open := map[string][]int{}
 loop:
 	for _, d := range in.Devices {
-		if d.IP == "" {
+		if d.IP == "" && d.IP6 == "" {
 			continue
 		}
 		res.ServicesPolled = append(res.ServicesPolled, model.DeviceKey{MAC: d.MAC, IP: d.IP})
-		for _, port := range ports {
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				break loop
+		// Both addresses of a device are scanned. A port that answers on the IPv6 address
+		// only is a service of its own; one that answers on both is the same service.
+		for _, addr := range []struct{ ip, own string }{{d.IP, ""}, {d.IP6, d.IP6}} {
+			if addr.ip == "" {
+				continue
 			}
-			wg.Add(1)
-			go func(d model.Device, port int) {
-				defer wg.Done()
-				defer func() { <-sem }()
-				cctx, cancel := context.WithTimeout(ctx, timeout)
-				conn, err := c.dial(cctx, "tcp", net.JoinHostPort(d.IP, strconv.Itoa(port)))
-				cancel()
-				if err != nil {
-					return // closed, filtered or unreachable: not a service
+			for _, port := range ports {
+				select {
+				case sem <- struct{}{}:
+				case <-ctx.Done():
+					break loop
 				}
-				_ = conn.Close() // the handshake is all that is wanted
-				mu.Lock()
-				res.Services = append(res.Services, model.ServiceInput{
-					Device: model.DeviceKey{MAC: d.MAC, IP: d.IP}, Port: port, Proto: "tcp", Name: portNameOf(port),
-				})
-				open[d.IP] = append(open[d.IP], port)
-				mu.Unlock()
-			}(d, port)
+				wg.Add(1)
+				go func(d model.Device, ip, own string, port int) {
+					defer wg.Done()
+					defer func() { <-sem }()
+					cctx, cancel := context.WithTimeout(ctx, timeout)
+					conn, err := c.dial(cctx, "tcp", net.JoinHostPort(ip, strconv.Itoa(port)))
+					cancel()
+					if err != nil {
+						return // closed, filtered or unreachable: not a service
+					}
+					_ = conn.Close() // the handshake is all that is wanted
+					mu.Lock()
+					res.Services = append(res.Services, model.ServiceInput{
+						Device: model.DeviceKey{MAC: d.MAC, IP: d.IP}, IP: own, Port: port, Proto: "tcp", Name: portNameOf(port),
+					})
+					open[ip] = append(open[ip], port)
+					mu.Unlock()
+				}(d, addr.ip, addr.own, port)
+			}
 		}
 	}
 	wg.Wait()
@@ -104,12 +111,19 @@ loop:
 		return Result{}, err
 	}
 
+	res.Services = dropIPv6Twins(res.Services)
 	sort.Slice(res.Services, func(i, j int) bool {
 		a, b := res.Services[i], res.Services[j]
-		if a.Device.IP != b.Device.IP {
+		if a.Device != b.Device {
+			if a.Device.MAC != b.Device.MAC {
+				return a.Device.MAC < b.Device.MAC
+			}
 			return a.Device.IP < b.Device.IP
 		}
-		return a.Port < b.Port
+		if a.Port != b.Port {
+			return a.Port < b.Port
+		}
+		return a.IP < b.IP
 	})
 	for _, p := range open {
 		sort.Ints(p)
@@ -118,4 +132,28 @@ loop:
 	c.ports = open
 	c.mu.Unlock()
 	return res, nil
+}
+
+// dropIPv6Twins removes the services of an IPv6 address that answer on the same port as the
+// IPv4 address of the same device: one service listening on both is one service.
+func dropIPv6Twins(in []model.ServiceInput) []model.ServiceInput {
+	type key struct {
+		dev   model.DeviceKey
+		port  int
+		proto string
+	}
+	v4 := map[key]struct{}{}
+	for _, s := range in {
+		if s.IP == "" {
+			v4[key{s.Device, s.Port, s.Proto}] = struct{}{}
+		}
+	}
+	out := in[:0]
+	for _, s := range in {
+		if _, twin := v4[key{s.Device, s.Port, s.Proto}]; s.IP != "" && twin {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }
