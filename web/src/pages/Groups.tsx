@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { can } from "@/lib/permissions"
+import { t } from "@/i18n"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; groups: Group[] }
 type Editing = { kind: "new" } | { kind: "edit"; group: Group } | { kind: "delete"; group: Group }
@@ -69,39 +70,33 @@ export function Groups() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">Groups</h1>
+        <h1 className="text-2xl font-semibold">{t("groups.groups")}</h1>
         {canWrite ? (
           <Button size="sm" onClick={() => setEditing({ kind: "new" })}>
             <Plus className="size-4" aria-hidden="true" />
-            Add group
+            {t("groups.addGroup")}
           </Button>
         ) : null}
       </div>
-      <p className="text-sm text-muted-foreground">
-        A group names a site, a VLAN or a range of addresses. A device is in the group that a person
-        chose for it, else in the first group whose ranges contain its address.
-      </p>
+      <p className="text-sm text-muted-foreground">{t("groups.aGroupNamesASite")}</p>
       {state.status === "loading" ? (
-        <Skeleton role="status" aria-label="Loading the groups" className="h-24 w-full" />
+        <Skeleton role="status" aria-label={t("groups.loadingTheGroups")} className="h-24 w-full" />
       ) : null}
       {state.status === "failed" ? (
-        <Alert variant="destructive">The groups could not be loaded. Try again later.</Alert>
+        <Alert variant="destructive">{t("groups.theGroupsCouldNotBe")}</Alert>
       ) : null}
       {state.status === "ready" && state.groups.length === 0 ? (
-        <EmptyState
-          title="No groups yet"
-          text="Add a group to sort the devices into sites or VLANs."
-        />
+        <EmptyState title={t("groups.noGroupsYet")} text={t("groups.noGroupsText")} />
       ) : null}
       {state.status === "ready" && state.groups.length > 0 ? (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>VLAN</TableHead>
-              <TableHead>Ranges</TableHead>
-              <TableHead>Devices</TableHead>
-              {canWrite ? <TableHead>Actions</TableHead> : null}
+              <TableHead>{t("groups.name")}</TableHead>
+              <TableHead>{t("groups.vlan")}</TableHead>
+              <TableHead>{t("groups.ranges")}</TableHead>
+              <TableHead>{t("groups.devices")}</TableHead>
+              {canWrite ? <TableHead>{t("groups.actions")}</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -123,18 +118,18 @@ export function Groups() {
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`Edit ${g.name}`}
+                      aria-label={t("groups.editName", { name: g.name })}
                       onClick={() => setEditing({ kind: "edit", group: g })}
                     >
-                      Edit
+                      {t("groups.edit")}
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`Delete ${g.name}`}
+                      aria-label={t("groups.deleteName", { name: g.name })}
                       onClick={() => setEditing({ kind: "delete", group: g })}
                     >
-                      Delete
+                      {t("groups.delete")}
                     </Button>
                   </TableCell>
                 ) : null}
@@ -177,7 +172,7 @@ function GroupForm({
     setError("")
     const number = vlan.trim() === "" ? null : Number(vlan)
     if (number !== null && !Number.isInteger(number)) {
-      setError("The VLAN must be a whole number from 1 to 4094.")
+      setError(t("groups.vlanInvalid"))
       return
     }
     const list = ranges.split(/[\s,]+/).filter((r) => r !== "")
@@ -197,7 +192,7 @@ function GroupForm({
       }
       onDone()
     } catch (e) {
-      setError(message(e, "The group could not be saved. Try again later."))
+      setError(message(e, t("groups.couldNotSave")))
       setSaving(false)
     }
   }
@@ -206,18 +201,18 @@ function GroupForm({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-describedby={undefined}>
         <DialogTitle className="text-lg font-semibold">
-          {group ? `Edit ${group.name}` : "Add a group"}
+          {group ? t("groups.editName", { name: group.name }) : t("groups.addAGroup")}
         </DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          Ranges are written as networks, one per line, for example 192.168.1.0/24.
+          {t("groups.rangesAreWrittenAsNetworks")}
         </DialogDescription>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <Label htmlFor={`${id}-name`}>Name</Label>
+            <Label htmlFor={`${id}-name`}>{t("groups.name")}</Label>
             <Input id={`${id}-name`} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor={`${id}-description`}>Description</Label>
+            <Label htmlFor={`${id}-description`}>{t("groups.description")}</Label>
             <Input
               id={`${id}-description`}
               value={description}
@@ -225,7 +220,7 @@ function GroupForm({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor={`${id}-vlan`}>VLAN (optional)</Label>
+            <Label htmlFor={`${id}-vlan`}>{t("groups.vlanOptional")}</Label>
             <Input
               id={`${id}-vlan`}
               inputMode="numeric"
@@ -234,7 +229,7 @@ function GroupForm({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <Label htmlFor={`${id}-ranges`}>Ranges</Label>
+            <Label htmlFor={`${id}-ranges`}>{t("groups.ranges")}</Label>
             <Textarea
               id={`${id}-ranges`}
               className="font-mono"
@@ -246,10 +241,10 @@ function GroupForm({
           {error ? <Alert variant="destructive">{error}</Alert> : null}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
-              Cancel
+              {t("groups.cancel")}
             </Button>
             <Button disabled={saving} onClick={() => void submit()}>
-              {group ? "Save" : "Add group"}
+              {t(group ? "groups.save" : "groups.addGroup")}
             </Button>
           </div>
         </div>
@@ -271,10 +266,11 @@ function DeleteGroup({
   return (
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
       <AlertDialogContent>
-        <AlertDialogTitle className="text-lg font-semibold">Delete {group.name}?</AlertDialogTitle>
+        <AlertDialogTitle className="text-lg font-semibold">
+          {t("groups.deleteGroupName", { name: group.name })}
+        </AlertDialogTitle>
         <AlertDialogDescription className="text-sm text-muted-foreground">
-          The group goes away. Its devices stay and fall back to the next group whose ranges contain
-          their address, or to none.
+          {t("groups.theGroupGoesAwayIts")}
         </AlertDialogDescription>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -282,17 +278,17 @@ function DeleteGroup({
           </p>
         ) : null}
         <div className="flex justify-end gap-2">
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("groups.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault()
               setError("")
               deleteGroup(group.id).then(onDone, (err) =>
-                setError(message(err, "The group could not be deleted. Try again later.")),
+                setError(message(err, t("groups.couldNotDelete"))),
               )
             }}
           >
-            Delete
+            {t("groups.delete")}
           </AlertDialogAction>
         </div>
       </AlertDialogContent>

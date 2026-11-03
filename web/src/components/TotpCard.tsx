@@ -13,14 +13,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { t } from "@/i18n"
+import { tRich } from "@/i18n/rich"
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 403) return "The password or the code is not right."
+    if (error.status === 403) return t("totpCard.wrongCode")
     if (error.status === 400) return error.message
     if (error.status === 409) return error.message
   }
-  return "That did not work. Try again."
+  return t("totpCard.didNotWork")
 }
 
 /** The second factor of the account: an authenticator app and recovery codes. */
@@ -38,7 +40,7 @@ export function TotpCard() {
     let live = true
     getTotpStatus()
       .then((s) => live && setStatus(s))
-      .catch(() => live && setError("The state of the second factor could not be loaded."))
+      .catch(() => live && setError(t("totpCard.couldNotLoad")))
     return () => {
       live = false
     }
@@ -79,18 +81,15 @@ export function TotpCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Second factor</CardTitle>
-        <CardDescription>
-          A code from an authenticator app, asked for after the password. A stolen password is then
-          not enough to sign in.
-        </CardDescription>
+        <CardTitle>{t("totpCard.secondFactor")}</CardTitle>
+        <CardDescription>{t("totpCard.aCodeFromAnAuthenticator")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error ? <Alert variant="destructive">{error}</Alert> : null}
         {recovery ? (
           <Alert>
-            <p className="font-medium">Save these recovery codes now. They are shown once.</p>
-            <p className="mt-1 text-sm">Each one works one time, if you lose your phone.</p>
+            <p className="font-medium">{t("totpCard.saveTheseRecoveryCodesNow")}</p>
+            <p className="mt-1 text-sm">{t("totpCard.eachOneWorksOneTime")}</p>
             <ul className="mt-2 grid grid-cols-2 gap-1 font-mono text-sm">
               {recovery.map((c) => (
                 <li key={c}>{c}</li>
@@ -101,12 +100,9 @@ export function TotpCard() {
 
         {status === null ? null : status.enabled ? (
           <>
-            <p className="text-sm">
-              The second factor is on. {status.recoveryCodesLeft} recovery{" "}
-              {status.recoveryCodesLeft === 1 ? "code is" : "codes are"} left.
-            </p>
+            <p className="text-sm">{t("totpCard.on", { n: status.recoveryCodesLeft })}</p>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="totp-off-password">Your password</Label>
+              <Label htmlFor="totp-off-password">{t("totpCard.yourPassword")}</Label>
               <Input
                 id="totp-off-password"
                 type="password"
@@ -114,7 +110,7 @@ export function TotpCard() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <Label htmlFor="totp-off-code">A current code or a recovery code</Label>
+              <Label htmlFor="totp-off-code">{t("totpCard.aCurrentCodeOrA")}</Label>
               <Input id="totp-off-code" value={code} onChange={(e) => setCode(e.target.value)} />
             </div>
             <div>
@@ -123,24 +119,25 @@ export function TotpCard() {
                 disabled={busy || password === "" || code === ""}
                 onClick={() => void disable()}
               >
-                Turn off the second factor
+                {t("totpCard.turnOffTheSecondFactor")}
               </Button>
             </div>
           </>
         ) : setup ? (
           <>
-            <p className="text-sm">
-              Add this key to your authenticator app, then type the code it shows.
-            </p>
+            <p className="text-sm">{t("totpCard.addThisKeyToYour")}</p>
             <p className="font-mono text-sm break-all">{setup.secret}</p>
             <p className="text-sm text-muted-foreground">
-              Or open this address on the phone:{" "}
-              <a className="underline" href={setup.uri}>
-                add to the app
-              </a>
+              {tRich("totpCard.openOnPhone", {
+                link: (
+                  <a className="underline" href={setup.uri}>
+                    {t("totpCard.addToTheApp")}
+                  </a>
+                ),
+              })}
             </p>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="totp-code">Code from the app</Label>
+              <Label htmlFor="totp-code">{t("totpCard.codeFromTheApp")}</Label>
               <Input
                 id="totp-code"
                 inputMode="numeric"
@@ -151,14 +148,14 @@ export function TotpCard() {
             </div>
             <div>
               <Button disabled={busy || code === ""} onClick={() => void enable()}>
-                Turn on the second factor
+                {t("totpCard.turnOnTheSecondFactor")}
               </Button>
             </div>
           </>
         ) : (
           <>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="totp-password">Your password</Label>
+              <Label htmlFor="totp-password">{t("totpCard.yourPassword")}</Label>
               <Input
                 id="totp-password"
                 type="password"
@@ -169,7 +166,7 @@ export function TotpCard() {
             </div>
             <div>
               <Button disabled={busy || password === ""} onClick={() => void start()}>
-                Set up a second factor
+                {t("totpCard.setUpASecondFactor")}
               </Button>
             </div>
           </>

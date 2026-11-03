@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/EmptyState"
 import { Alert } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { kindClasses, kindLabels, scanPoints } from "@/lib/changes"
+import { formatDateTime, t } from "@/i18n"
 
 type State =
   | { status: "loading" }
@@ -37,7 +38,7 @@ export function Changes() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Changes</h1>
+      <h1 className="text-2xl font-semibold">{t("changes.changes")}</h1>
       <Body state={state} />
     </div>
   )
@@ -46,7 +47,7 @@ export function Changes() {
 function Body({ state }: { state: State }) {
   if (state.status === "loading") {
     return (
-      <div role="status" aria-label="Loading changes" className="flex flex-col gap-2">
+      <div role="status" aria-label={t("changes.loadingChanges")} className="flex flex-col gap-2">
         <Skeleton className="h-48 w-full" />
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
@@ -54,7 +55,7 @@ function Body({ state }: { state: State }) {
     )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The changes could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("changes.theChangesCouldNotBe")}</Alert>
   }
   return (
     <>
@@ -67,17 +68,13 @@ function Body({ state }: { state: State }) {
 function DeviceChart({ scans }: { scans: Scan[] }) {
   const points = scanPoints(scans)
   if (points.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        The chart of devices per scan appears after the first completed scan.
-      </p>
-    )
+    return <p className="text-sm text-muted-foreground">{t("changes.theChartOfDevicesPer")}</p>
   }
   const last = points[points.length - 1]
   return (
-    <figure className="flex flex-col gap-2" aria-label="Devices per scan">
+    <figure className="flex flex-col gap-2" aria-label={t("changes.devicesPerScan")}>
       <figcaption className="text-sm text-muted-foreground">
-        Devices per completed scan. Last: {last?.devices} in scan #{last?.scanId}.
+        {t("changes.chartCaption", { devices: last?.devices ?? 0, scan: last?.scanId ?? 0 })}
       </figcaption>
       <div className="h-60 w-full">
         <ResponsiveContainer
@@ -108,19 +105,14 @@ function DeviceChart({ scans }: { scans: Scan[] }) {
 
 function Feed({ changes }: { changes: Change[] }) {
   if (changes.length === 0) {
-    return (
-      <EmptyState
-        title="No changes yet"
-        text="Changes appear here when a scan finds something new, lost or different. The first scan only sets the baseline."
-      />
-    )
+    return <EmptyState title={t("changes.noChangesYet")} text={t("changes.noChangesText")} />
   }
   return (
-    <ul aria-label="Changes" className="flex flex-col divide-y rounded-md border">
+    <ul aria-label={t("changes.changes")} className="flex flex-col divide-y rounded-md border">
       {changes.map((c) => (
         <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
           <time dateTime={c.at} className="w-44 shrink-0 text-xs text-muted-foreground">
-            {new Date(c.at).toLocaleString()}
+            {formatDateTime(c.at)}
           </time>
           <span
             className={`w-36 shrink-0 rounded border px-2 py-0.5 text-center text-xs font-medium ${kindClasses(c.kind)}`}

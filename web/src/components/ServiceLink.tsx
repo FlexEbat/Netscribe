@@ -3,6 +3,7 @@ import { useState } from "react"
 import type { Service } from "@/api/client"
 import { Button } from "@/components/ui/button"
 import { sshCommand, webUrl } from "@/lib/links"
+import { t } from "@/i18n"
 
 /**
  * What a person can do with a service: open a web page, or copy the ssh command. It shows
@@ -27,9 +28,9 @@ export function ServiceLink({
         rel="noopener noreferrer"
         className="inline-flex items-center gap-1 text-sm underline underline-offset-4"
       >
-        Open
+        {t("serviceLink.open")}
         <ArrowSquareOut className="size-4" aria-hidden="true" />
-        <span className="sr-only">{url} in a new tab</span>
+        <span className="sr-only">{t("serviceLink.inNewTab", { url })}</span>
       </a>
     )
   }
@@ -54,7 +55,7 @@ export function ServiceLink({
           }}
         >
           <Copy className="size-4" aria-hidden="true" />
-          {state === "copied" ? "Copied" : "Copy ssh command"}
+          {t(state === "copied" ? "serviceLink.copied" : "serviceLink.copySsh")}
         </Button>
         {state === "failed" ? (
           <code className="text-sm break-all select-all">{command}</code>

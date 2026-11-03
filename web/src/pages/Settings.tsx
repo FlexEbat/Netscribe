@@ -20,6 +20,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import { t } from "@/i18n"
+import { tRich } from "@/i18n/rich"
 
 /** What the person typed or chose for each key. A key stays out until it is touched. */
 type Draft = Record<string, string | boolean>
@@ -68,7 +70,7 @@ function SettingRow({
 }) {
   const id = useId()
   const hint =
-    `${setting.help} ${setting.hot ? "Applies at once." : "Applies after a restart."}`.trim()
+    `${setting.help} ${t(setting.hot ? "settings.appliesAtOnce" : "settings.appliesAfterRestart")}`.trim()
   const field = (() => {
     switch (setting.type) {
       case "bool":
@@ -81,7 +83,7 @@ function SettingRow({
               checked={value === true}
               onChange={(e) => onChange(e.target.checked)}
             />
-            {value === true ? "On" : "Off"}
+            {t(value === true ? "settings.on" : "settings.off")}
           </label>
         )
       case "enum":
@@ -106,7 +108,7 @@ function SettingRow({
             type="password"
             autoComplete="off"
             value={String(value)}
-            placeholder={`${setting.count ?? 0} set. Type new ones to replace all, separated by commas`}
+            placeholder={t("settings.secretPlaceholder", { n: setting.count ?? 0 })}
             onChange={(e) => onChange(e.target.value)}
           />
         )
@@ -190,7 +192,7 @@ export function Settings() {
       setError(
         e instanceof ApiError && e.status !== 0 && e.status < 500
           ? e.message
-          : "The settings were not saved. Try again later.",
+          : t("settings.notSaved"),
       )
     } finally {
       setSaving(false)
@@ -202,10 +204,10 @@ export function Settings() {
     try {
       const next = await checkForUpdate()
       setInfo(next)
-      if (next.update.error) setNote("GitHub could not be reached: " + next.update.error)
-      else if (!next.update.available) setNote("This is the newest release.")
+      if (next.update.error) setNote(t("settings.githubUnreachable", { error: next.update.error }))
+      else if (!next.update.available) setNote(t("settings.newest"))
     } catch (e) {
-      setNote(e instanceof ApiError && e.status === 409 ? e.message : "The check failed.")
+      setNote(e instanceof ApiError && e.status === 409 ? e.message : t("settings.checkFailed"))
     }
   }
 
@@ -214,16 +216,20 @@ export function Settings() {
     try {
       await restartService()
       setSaved(null)
-      setNote("Restarting. The panel is back in a few seconds.")
+      setNote(t("settings.restarting"))
     } catch {
-      setError("The restart could not be started.")
+      setError(t("settings.restartFailed"))
     }
   }
 
-  if (loadError) return <Alert variant="destructive">The settings could not be loaded.</Alert>
+  if (loadError) return <Alert variant="destructive">{t("settings.theSettingsCouldNotBe")}</Alert>
   if (!groups) {
     return (
-      <div role="status" aria-label="Loading settings" className="flex max-w-3xl flex-col gap-4">
+      <div
+        role="status"
+        aria-label={t("settings.loadingSettings")}
+        className="flex max-w-3xl flex-col gap-4"
+      >
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-48 w-full" />
         <Skeleton className="h-48 w-full" />
@@ -233,28 +239,34 @@ export function Settings() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <h1 className="text-2xl font-semibold">{t("settings.settings")}</h1>
       <p className="text-sm text-muted-foreground">
-        The same settings as <code className="font-mono">netscribe config</code>. The address the
-        panel listens on, TLS and trusted proxies are changed only on the server, so a mistake here
-        cannot lock you out.
+        {tRich("settings.intro", {
+          file: <code className="font-mono">{t("settings.netscribeConfig")}</code>,
+        })}
       </p>
 
       {info ? (
         <Card>
           <CardHeader>
-            <CardTitle>Version</CardTitle>
+            <CardTitle>{t("settings.version")}</CardTitle>
             <CardDescription>
-              Running {info.version}
-              {info.update.latest ? `, newest release ${info.update.latest.tag}` : ""}.
+              {info.update.latest
+                ? t("settings.runningNewest", {
+                    version: info.version,
+                    tag: info.update.latest.tag,
+                  })
+                : t("settings.running", { version: info.version })}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-3">
             <Button variant="outline" onClick={() => void recheck()}>
-              Check for updates
+              {t("settings.checkForUpdates")}
             </Button>
             {info.update.available ? (
-              <Button onClick={() => setDialog(true)}>Update to {info.update.latest?.tag}</Button>
+              <Button onClick={() => setDialog(true)}>
+                {t("settings.updateTo", { tag: info.update.latest?.tag ?? "" })}
+              </Button>
             ) : null}
             {note ? (
               <span role="status" className="text-sm text-muted-foreground">
@@ -291,19 +303,21 @@ export function Settings() {
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {saved ? (
         <Alert>
-          Saved {saved.saved.length} {saved.saved.length === 1 ? "setting" : "settings"}.
+          {t("settings.savedN", { n: saved.saved.length })}
           {saved.needRestart.length > 0 ? (
             <>
               {" "}
-              These need a restart to apply: {saved.needRestart.join(", ")}.{" "}
+              {t("settings.needRestart", { list: saved.needRestart.join(", ") })}{" "}
               {info?.helper.available ? (
                 <Button variant="outline" size="sm" onClick={() => void restart()}>
-                  Restart now
+                  {t("settings.restartNow")}
                 </Button>
               ) : (
-                <>
-                  Run <code className="font-mono">sudo systemctl restart netscribe</code>.
-                </>
+                tRich("settings.runCommand", {
+                  cmd: (
+                    <code className="font-mono">{t("settings.sudoSystemctlRestartNetscribe")}</code>
+                  ),
+                })
               )}
             </>
           ) : null}
@@ -311,10 +325,10 @@ export function Settings() {
       ) : null}
       <div className="flex gap-2">
         <Button disabled={!dirty || saving} onClick={() => void save()}>
-          Save changes
+          {t("settings.saveChanges")}
         </Button>
         <Button variant="outline" disabled={!dirty || saving} onClick={() => setDraft({})}>
-          Discard
+          {t("settings.discard")}
         </Button>
       </div>
 

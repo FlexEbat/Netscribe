@@ -9,6 +9,8 @@ import { AmbientBackground } from "@/components/AmbientBackground"
 import { Toaster } from "@/components/ui/sonner"
 import { can } from "@/lib/permissions"
 import { initTheme } from "@/lib/theme"
+import { t } from "@/i18n"
+import { I18nRoot } from "@/i18n/root"
 import "@fontsource-variable/geist"
 import "@fontsource-variable/geist-mono"
 import "./index.css"
@@ -28,8 +30,9 @@ function ConfigToasts() {
   useEffect(() => {
     if (!allowed) return
     return openEvents({
-      "config.reloaded": () => toast.success("Config reloaded"),
-      "config.error": ({ error }) => toast.error("Config not reloaded", { description: error }),
+      "config.reloaded": () => toast.success(t("main.configReloaded")),
+      "config.error": ({ error }) =>
+        toast.error(t("main.configNotReloaded"), { description: error }),
     })
   }, [allowed])
   return null
@@ -40,11 +43,13 @@ if (!root) throw new Error("missing #root element")
 
 createRoot(root).render(
   <StrictMode>
-    <SessionProvider>
-      <AmbientBackground />
-      <ConfigToasts />
-      <RouterProvider router={router} />
-      <Toaster />
-    </SessionProvider>
+    <I18nRoot>
+      <SessionProvider>
+        <AmbientBackground />
+        <ConfigToasts />
+        <RouterProvider router={router} />
+        <Toaster />
+      </SessionProvider>
+    </I18nRoot>
   </StrictMode>,
 )

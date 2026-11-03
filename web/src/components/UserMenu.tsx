@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { User } from "@/lib/permissions"
 import { parseChoice, setTheme, useTheme } from "@/lib/theme"
+import { languageNames, languages, parseLang, setLang, t, useLang } from "@/i18n"
 
 interface UserMenuProps {
   user: User
@@ -22,6 +23,7 @@ interface UserMenuProps {
 
 export function UserMenu({ user, onSignOut }: UserMenuProps) {
   const { choice } = useTheme()
+  const lang = useLang()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -48,20 +50,33 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
         <DropdownMenuItem asChild>
           <Link to="/account">
             <UserIcon aria-hidden="true" className="size-4" />
-            Account
+            {t("userMenu.account")}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Theme</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {t("userMenu.theme")}
+        </DropdownMenuLabel>
         <DropdownMenuRadioGroup value={choice} onValueChange={(v) => setTheme(parseChoice(v))}>
-          <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="light">{t("userMenu.light")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark">{t("userMenu.dark")}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system">{t("userMenu.system")}</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          {t("userMenu.language")}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={lang} onValueChange={(v) => setLang(parseLang(v))}>
+          {languages.map((l) => (
+            <DropdownMenuRadioItem key={l} value={l} lang={l}>
+              {languageNames[l]}
+            </DropdownMenuRadioItem>
+          ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSignOut}>
           <SignOut aria-hidden="true" className="size-4" />
-          Sign out
+          {t("userMenu.signOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -1,3 +1,4 @@
+import { t } from "@/i18n"
 export type Role = "viewer" | "operator" | "admin"
 
 export type Permission =
@@ -22,9 +23,15 @@ export interface User {
 }
 
 export const roleLabels: Record<Role, string> = {
-  viewer: "Viewer",
-  operator: "Operator",
-  admin: "Administrator",
+  get viewer() {
+    return t("role.viewer")
+  },
+  get operator() {
+    return t("role.operator")
+  },
+  get admin() {
+    return t("role.admin")
+  },
 }
 
 /** Hides what the server would refuse anyway. The server stays the only judge. */

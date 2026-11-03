@@ -4,6 +4,7 @@ import { getVersion, type VersionInfo } from "@/api/client"
 import { UpdateDialog } from "@/components/UpdateDialog"
 import { can, type Permission } from "@/lib/permissions"
 import { cn } from "@/lib/utils"
+import { t } from "@/i18n"
 
 const refreshEvery = 10 * 60 * 1000
 
@@ -37,7 +38,7 @@ export function VersionBadge({ permissions }: VersionBadgeProps) {
 
   if (!info) return null
   const newer = info.update.available && info.update.latest !== null
-  const label = info.version === "dev" ? "dev build" : info.version
+  const label = info.version === "dev" ? t("versionBadge.devBuild") : info.version
 
   return (
     <>
@@ -46,7 +47,10 @@ export function VersionBadge({ permissions }: VersionBadgeProps) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            aria-label={`Version ${label}. ${info.update.latest?.tag} is available. Open the update notice.`}
+            aria-label={t("versionBadge.available", {
+              label,
+              tag: info.update.latest?.tag ?? "",
+            })}
             className={cn(
               "update-glow pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-popover px-3 py-2 font-mono text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             )}

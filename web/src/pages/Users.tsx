@@ -32,16 +32,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { roleLabels, type Role, type User } from "@/lib/permissions"
+import { formatDateTime, t } from "@/i18n"
 
 const roles = Object.keys(roleLabels) as Role[]
-const lastAdminMessage = "The last administrator cannot be demoted, disabled or deleted."
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; users: User[] }
 type Dialog_ = { kind: "add" } | { kind: "password"; user: User } | { kind: "delete"; user: User }
 
 function message(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.status === 409) {
-    return error.message.includes("administrator") ? lastAdminMessage : error.message
+    return error.serverMessage.includes("administrator") ? t("users.lastAdmin") : error.message
   }
   if (error instanceof ApiError && error.status === 400) return error.message
   return fallback
@@ -68,35 +68,35 @@ export function Users() {
       await updateUser(user.id, changes)
       load()
     } catch (e) {
-      setNotice(message(e, "The change could not be saved. Try again later."))
+      setNotice(message(e, t("users.couldNotSaveChange")))
     }
   }
 
   if (state.status === "loading") {
-    return <Skeleton role="status" aria-label="Loading users" className="h-48 w-full" />
+    return <Skeleton role="status" aria-label={t("users.loadingUsers")} className="h-48 w-full" />
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The users could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("users.theUsersCouldNotBe")}</Alert>
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Users</h1>
+        <h1 className="text-2xl font-semibold">{t("users.users")}</h1>
         <Button size="sm" onClick={() => setDialog({ kind: "add" })}>
-          Add user
+          {t("users.addUser")}
         </Button>
       </div>
       {notice ? <Alert variant="destructive">{notice}</Alert> : null}
       <Table>
-        <TableCaption>Users ({state.users.length})</TableCaption>
+        <TableCaption>{t("users.caption", { n: state.users.length })}</TableCaption>
         <TableHeader>
           <TableRow>
-            <TableHead>User</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Last sign in</TableHead>
-            <TableHead>Actions</TableHead>
+            <TableHead>{t("users.user")}</TableHead>
+            <TableHead>{t("users.role")}</TableHead>
+            <TableHead>{t("users.status")}</TableHead>
+            <TableHead>{t("users.lastSignIn")}</TableHead>
+            <TableHead>{t("users.actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -112,7 +112,7 @@ export function Users() {
                 <div className="flex items-center gap-2">
                   <RoleBadge role={u.role} />
                   <select
-                    aria-label={`Role of ${u.username}`}
+                    aria-label={t("users.roleOf", { name: u.username })}
                     className="h-8 rounded-md border bg-input px-2 text-xs"
                     value={u.role}
                     onChange={(e) => void change(u, { role: e.target.value as Role })}
@@ -126,10 +126,16 @@ export function Users() {
                 </div>
               </TableCell>
               <TableCell>
-                {u.disabled ? "Disabled" : u.mustChangePassword ? "Must change password" : "Active"}
+                {t(
+                  u.disabled
+                    ? "users.disabled"
+                    : u.mustChangePassword
+                      ? "users.mustChange"
+                      : "users.active",
+                )}
               </TableCell>
               <TableCell>
-                {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "never"}
+                {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : t("users.never")}
               </TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-2">
@@ -138,21 +144,21 @@ export function Users() {
                     size="sm"
                     onClick={() => void change(u, { disabled: !u.disabled })}
                   >
-                    {u.disabled ? "Enable" : "Disable"}
+                    {t(u.disabled ? "users.enable" : "users.disable")}
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setDialog({ kind: "password", user: u })}
                   >
-                    Reset password
+                    {t("users.resetPassword")}
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setDialog({ kind: "delete", user: u })}
                   >
-                    Delete
+                    {t("users.delete")}
                   </Button>
                 </div>
               </TableCell>
@@ -209,7 +215,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
       await createUser({ username, role, password })
       onDone()
     } catch (e) {
-      setError(message(e, "The user could not be created. Try again later."))
+      setError(message(e, t("users.couldNotCreate")))
     } finally {
       setSaving(false)
     }
@@ -218,14 +224,14 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-describedby={undefined}>
-        <DialogTitle className="text-lg font-semibold">Add a user</DialogTitle>
+        <DialogTitle className="text-lg font-semibold">{t("users.addAUser")}</DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          The password is temporary: the user must choose a new one at the first sign-in.
+          {t("users.thePasswordIsTemporaryThe")}
         </DialogDescription>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4" noValidate>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="new-username">Username</Label>
+            <Label htmlFor="new-username">{t("users.username")}</Label>
             <Input
               id="new-username"
               value={username}
@@ -234,7 +240,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="new-role">Role</Label>
+            <Label htmlFor="new-role">{t("users.role")}</Label>
             <select
               id="new-role"
               className="h-9 rounded-lg border bg-input px-3 text-sm"
@@ -249,7 +255,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
             </select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="new-temp-password">Temporary password</Label>
+            <Label htmlFor="new-temp-password">{t("users.temporaryPassword")}</Label>
             <Input
               id="new-temp-password"
               type="password"
@@ -260,10 +266,10 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {t("users.cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Create user"}
+              {t(saving ? "users.saving" : "users.createUser")}
             </Button>
           </div>
         </form>
@@ -293,7 +299,7 @@ function ResetPasswordDialog({
       await resetPassword(user.id, password)
       onDone()
     } catch (e) {
-      setError(message(e, "The password could not be set. Try again later."))
+      setError(message(e, t("users.couldNotSetPassword")))
     } finally {
       setSaving(false)
     }
@@ -303,15 +309,15 @@ function ResetPasswordDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent aria-describedby={undefined}>
         <DialogTitle className="text-lg font-semibold">
-          Reset the password of {user.username}
+          {t("users.resetPasswordOf", { name: user.username })}
         </DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          The user is signed out everywhere and must choose a new password at the next sign-in.
+          {t("users.theUserIsSignedOut")}
         </DialogDescription>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4" noValidate>
           {error ? <Alert variant="destructive">{error}</Alert> : null}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="reset-password">Temporary password</Label>
+            <Label htmlFor="reset-password">{t("users.temporaryPassword")}</Label>
             <Input
               id="reset-password"
               type="password"
@@ -322,10 +328,10 @@ function ResetPasswordDialog({
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {t("users.cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Set password"}
+              {t(saving ? "users.saving" : "users.setPassword")}
             </Button>
           </div>
         </form>
@@ -348,10 +354,10 @@ function DeleteUserDialog({
     <AlertDialog open onOpenChange={(open) => !open && onClose()}>
       <AlertDialogContent>
         <AlertDialogTitle className="text-lg font-semibold">
-          Delete {user.username}?
+          {t("users.deleteName", { name: user.username })}
         </AlertDialogTitle>
         <AlertDialogDescription className="text-sm text-muted-foreground">
-          The account, its sessions and its access tokens are removed. This cannot be undone.
+          {t("users.theAccountItsSessionsAnd")}
         </AlertDialogDescription>
         {error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -359,17 +365,17 @@ function DeleteUserDialog({
           </p>
         ) : null}
         <div className="flex justify-end gap-2">
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel>{t("users.cancel")}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault()
               setError("")
               deleteUser(user.id).then(onDone, (err) =>
-                setError(message(err, "The user could not be deleted. Try again later.")),
+                setError(message(err, t("users.couldNotDelete"))),
               )
             }}
           >
-            Delete
+            {t("users.delete")}
           </AlertDialogAction>
         </div>
       </AlertDialogContent>

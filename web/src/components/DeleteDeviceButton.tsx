@@ -9,6 +9,7 @@ import {
   AlertDialogDescription,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { t } from "@/i18n"
 
 interface DeleteDeviceButtonProps {
   name: string
@@ -22,21 +23,23 @@ export function DeleteDeviceButton({ name, onConfirm }: DeleteDeviceButtonProps)
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
         <Trash className="size-4" aria-hidden="true" />
-        Delete
+        {t("deleteDeviceButton.delete")}
       </Button>
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogContent>
-          <AlertDialogTitle className="text-lg font-semibold">Delete {name}?</AlertDialogTitle>
+          <AlertDialogTitle className="text-lg font-semibold">
+            {t("deleteDeviceButton.deleteName", { name })}
+          </AlertDialogTitle>
           <AlertDialogDescription className="text-sm text-muted-foreground">
-            The device and its links are removed. A scan that sees the device again adds it back.
+            {t("deleteDeviceButton.theDeviceAndItsLinks")}
           </AlertDialogDescription>
           {failed ? (
             <p role="alert" className="text-sm text-destructive">
-              The device could not be deleted.
+              {t("deleteDeviceButton.theDeviceCouldNotBe")}
             </p>
           ) : null}
           <div className="flex justify-end gap-2">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("deleteDeviceButton.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault()
@@ -47,7 +50,7 @@ export function DeleteDeviceButton({ name, onConfirm }: DeleteDeviceButtonProps)
                 )
               }}
             >
-              Delete
+              {t("deleteDeviceButton.delete")}
             </AlertDialogAction>
           </div>
         </AlertDialogContent>

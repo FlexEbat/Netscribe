@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { t } from "@/i18n"
 
 export type ExportFormat = "md" | "html" | "pdf" | "drawio"
 
@@ -49,7 +50,7 @@ export function ExportMenu({ formats }: ExportMenuProps) {
       const { blob, filename } = await downloadExport(format)
       save(blob, filename)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The export failed")
+      setError(e instanceof Error ? e.message : t("exportMenu.failed"))
     } finally {
       setBusy(false)
     }
@@ -61,7 +62,7 @@ export function ExportMenu({ formats }: ExportMenuProps) {
         <DropdownMenuTrigger asChild>
           <Button size="sm" variant="outline" disabled={busy}>
             <DownloadSimple aria-hidden />
-            {busy ? "Preparing…" : "Export"}
+            {t(busy ? "exportMenu.preparing" : "exportMenu.export")}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

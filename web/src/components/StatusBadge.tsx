@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { t } from "@/i18n"
 
 export function StatusBadge({ online }: { online: boolean }) {
   return (
@@ -21,7 +22,7 @@ export function StatusBadge({ online }: { online: boolean }) {
           )}
         />
       </span>
-      {online ? "Online" : "Offline"}
+      {t(online ? "statusBadge.online" : "statusBadge.offline")}
     </Badge>
   )
 }

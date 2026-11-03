@@ -11,6 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { t } from "@/i18n"
 
 type Checked =
   | { status: "idle" }
@@ -42,7 +43,7 @@ export function ImportDialog({ onImported }: { onImported: (count: number) => vo
       setChecked(
         e instanceof ApiError && e.status !== 0
           ? { status: "bad", message: e.message, rows: e.rows }
-          : { status: "bad", message: "The file could not be checked. Try again later.", rows: [] },
+          : { status: "bad", message: t("importDialog.couldNotCheck"), rows: [] },
       )
     }
   }
@@ -58,7 +59,7 @@ export function ImportDialog({ onImported }: { onImported: (count: number) => vo
       setChecked(
         e instanceof ApiError && e.status !== 0
           ? { status: "bad", message: e.message, rows: e.rows }
-          : { status: "bad", message: "The import failed. Nothing was created.", rows: [] },
+          : { status: "bad", message: t("importDialog.failed"), rows: [] },
       )
     } finally {
       setImporting(false)
@@ -70,18 +71,19 @@ export function ImportDialog({ onImported }: { onImported: (count: number) => vo
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <UploadSimple className="size-4" aria-hidden="true" />
-          Import CSV
+          {t("importDialog.importCsv")}
         </Button>
       </DialogTrigger>
       <DialogContent aria-describedby={undefined}>
-        <DialogTitle className="text-lg font-semibold">Import devices from a CSV file</DialogTitle>
+        <DialogTitle className="text-lg font-semibold">
+          {t("importDialog.importDevicesFromACsv")}
+        </DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          The first line names the columns: label, ip, mac, hostname, kind, group, notes. A row
-          needs a label, an ip or a mac. The group must exist. Either every row is imported or none.
+          {t("importDialog.theFirstLineNamesThe")}
         </DialogDescription>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <Label htmlFor={`${id}-file`}>CSV file</Label>
+            <Label htmlFor={`${id}-file`}>{t("importDialog.csvFile")}</Label>
             <input
               id={`${id}-file`}
               type="file"
@@ -92,13 +94,12 @@ export function ImportDialog({ onImported }: { onImported: (count: number) => vo
           </div>
           {checked.status === "checking" ? (
             <p role="status" className="text-sm text-muted-foreground">
-              Checking the file
+              {t("importDialog.checkingTheFile")}
             </p>
           ) : null}
           {checked.status === "ok" ? (
             <p role="status" className="text-sm">
-              The file is fine. {checked.count} {checked.count === 1 ? "device" : "devices"} will be
-              created.
+              {t("importDialog.fileFine", { n: checked.count })}
             </p>
           ) : null}
           {checked.status === "bad" ? (
@@ -108,7 +109,7 @@ export function ImportDialog({ onImported }: { onImported: (count: number) => vo
                 <ul className="mt-2 list-disc pl-4 text-sm">
                   {checked.rows.map((r) => (
                     <li key={`${r.line}-${r.error}`}>
-                      Line {r.line}: {r.error}
+                      {t("importDialog.line", { line: r.line, error: r.error })}
                     </li>
                   ))}
                 </ul>
@@ -117,12 +118,12 @@ export function ImportDialog({ onImported }: { onImported: (count: number) => vo
           ) : null}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => reset(false)}>
-              Cancel
+              {t("importDialog.cancel")}
             </Button>
             <Button disabled={checked.status !== "ok" || importing} onClick={() => void run()}>
               {checked.status === "ok"
-                ? `Import ${checked.count} ${checked.count === 1 ? "device" : "devices"}`
-                : "Import"}
+                ? t("importDialog.importN", { n: checked.count })
+                : t("importDialog.import")}
             </Button>
           </div>
         </div>

@@ -8,18 +8,20 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { t } from "@/i18n"
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "Invalid username or password."
+    if (error.status === 401) return t("login.invalid")
     if (error.status === 429) {
-      const wait = error.retryAfter ? ` in ${error.retryAfter} seconds` : " later"
-      return `Too many attempts. Try again${wait}.`
+      return error.retryAfter
+        ? t("login.tooManyIn", { n: error.retryAfter })
+        : t("login.tooManyLater")
     }
-    if (error.status === 400) return "Enter a username and a password."
-    if (error.status === 503) return "The server is not ready yet."
+    if (error.status === 400) return t("login.enterBoth")
+    if (error.status === 503) return t("login.notReady")
   }
-  return "Sign-in failed. Try again later."
+  return t("login.failed")
 }
 
 export function Login() {
@@ -61,7 +63,7 @@ export function Login() {
     } catch (e) {
       if (challenge) {
         // the challenge lives for five minutes and five tries: after a refusal start again
-        setError("That code is not right, or it has expired. Sign in again.")
+        setError(t("login.codeWrong"))
         setChallenge(null)
         setCode("")
       } else {
@@ -80,13 +82,13 @@ export function Login() {
           <div className="flex flex-col items-center gap-3">
             <BrandMark className="size-12 rounded-2xl" />
             <h1 className="hero-heading text-center text-3xl font-semibold">
-              Network documentation, kept current.
+              {t("login.networkDocumentationKeptCurrent")}
             </h1>
           </div>
           <Card className="gap-6 p-8">
             <CardHeader>
-              <CardTitle className="text-xl">Netscribe</CardTitle>
-              <CardDescription>Sign in to continue.</CardDescription>
+              <CardTitle className="text-xl">{t("login.netscribe")}</CardTitle>
+              <CardDescription>{t("login.signInToContinue")}</CardDescription>
             </CardHeader>
             <CardContent>
               {notice ? <Alert>{notice}</Alert> : null}
@@ -94,7 +96,7 @@ export function Login() {
               <form onSubmit={onSubmit} className="flex flex-col gap-4">
                 {challenge ? (
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="code">Authentication code</Label>
+                    <Label htmlFor="code">{t("login.authenticationCode")}</Label>
                     <Input
                       id="code"
                       value={code}
@@ -105,12 +107,12 @@ export function Login() {
                       required
                     />
                     <p className="text-sm text-muted-foreground">
-                      The code from your authenticator app, or one of your recovery codes.
+                      {t("login.theCodeFromYourAuthenticator")}
                     </p>
                   </div>
                 ) : null}
                 <div className={challenge ? "hidden" : "flex flex-col gap-2"}>
-                  <Label htmlFor="username">Username</Label>
+                  <Label htmlFor="username">{t("login.username")}</Label>
                   <Input
                     id="username"
                     ref={usernameRef}
@@ -123,7 +125,7 @@ export function Login() {
                   />
                 </div>
                 <div className={challenge ? "hidden" : "flex flex-col gap-2"}>
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t("login.password")}</Label>
                   <Input
                     id="password"
                     type="password"
@@ -134,7 +136,7 @@ export function Login() {
                   />
                 </div>
                 <Button type="submit" disabled={busy} className="mt-2 h-10">
-                  {busy ? "Signing in…" : challenge ? "Verify" : "Sign in"}
+                  {t(busy ? "login.signingIn" : challenge ? "login.verify" : "login.signIn")}
                 </Button>
               </form>
             </CardContent>

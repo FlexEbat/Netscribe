@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { t } from "@/i18n"
 
 interface AddDeviceDialogProps {
   onCreated: (device: Device) => void
@@ -23,18 +24,19 @@ export function AddDeviceDialog({ onCreated }: AddDeviceDialogProps) {
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="size-4" aria-hidden="true" />
-          Add device
+          {t("addDeviceDialog.addDevice")}
         </Button>
       </DialogTrigger>
       <DialogContent aria-describedby={undefined}>
-        <DialogTitle className="text-lg font-semibold">Add a device</DialogTitle>
+        <DialogTitle className="text-lg font-semibold">
+          {t("addDeviceDialog.addADevice")}
+        </DialogTitle>
         <DialogDescription className="text-sm text-muted-foreground">
-          For something the scans cannot see: an unmanaged switch, a patch panel, a device at
-          another site. Give it a name, an address, or both.
+          {t("addDeviceDialog.forSomethingTheScansCannot")}
         </DialogDescription>
         <DeviceForm
           mode="create"
-          submitLabel="Add device"
+          submitLabel={t("addDeviceDialog.addDevice")}
           onCancel={() => setOpen(false)}
           onSubmit={async (values) => {
             const device = await createDevice(values)

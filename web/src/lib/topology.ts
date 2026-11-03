@@ -1,5 +1,6 @@
 import type { Container, Device, DeviceKind, Link, Topology } from "@/api/client"
 import { stateStroke } from "@/lib/containers"
+import { t } from "@/i18n"
 
 export interface DeviceNodeData extends Record<string, unknown> {
   device: Device
@@ -66,17 +67,39 @@ export function mergeNodes(
 }
 
 export const kindLabels: Record<DeviceKind, string> = {
-  router: "Router",
-  switch: "Switch",
-  ap: "Access point",
-  firewall: "Firewall",
-  server: "Server",
-  nas: "NAS",
-  printer: "Printer",
-  camera: "Camera",
-  iot: "IoT",
-  host: "Host",
-  unknown: "Unknown",
+  get router() {
+    return t("kind.router")
+  },
+  get switch() {
+    return t("kind.switch")
+  },
+  get ap() {
+    return t("kind.ap")
+  },
+  get firewall() {
+    return t("kind.firewall")
+  },
+  get server() {
+    return t("kind.server")
+  },
+  get nas() {
+    return t("kind.nas")
+  },
+  get printer() {
+    return t("kind.printer")
+  },
+  get camera() {
+    return t("kind.camera")
+  },
+  get iot() {
+    return t("kind.iot")
+  },
+  get host() {
+    return t("kind.host")
+  },
+  get unknown() {
+    return t("kind.unknown")
+  },
 }
 
 /** Containers stand under their host, this many to a row. The numbers mirror render/layout.go. */

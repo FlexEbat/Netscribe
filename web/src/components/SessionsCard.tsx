@@ -4,6 +4,7 @@ import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { formatDateTime, t } from "@/i18n"
 
 /** Where the account is signed in, with a way to end each of them. */
 export function SessionsCard() {
@@ -21,7 +22,7 @@ export function SessionsCard() {
         setSessions(list)
         setError("")
       })
-      .catch(() => live && setError("The sessions could not be loaded."))
+      .catch(() => live && setError(t("sessionsCard.couldNotLoad")))
     return () => {
       live = false
     }
@@ -33,7 +34,7 @@ export function SessionsCard() {
       await run()
       setVersion((v) => v + 1)
     } catch {
-      setError("That did not work. Try again.")
+      setError(t("sessionsCard.didNotWork"))
     } finally {
       setBusy(false)
     }
@@ -43,10 +44,8 @@ export function SessionsCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sessions</CardTitle>
-        <CardDescription>
-          Where your account is signed in. End the ones you do not know or no longer use.
-        </CardDescription>
+        <CardTitle>{t("sessionsCard.sessions")}</CardTitle>
+        <CardDescription>{t("sessionsCard.whereYourAccountIsSigned")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error ? <Alert variant="destructive">{error}</Alert> : null}
@@ -58,13 +57,17 @@ export function SessionsCard() {
             >
               <div className="flex flex-col gap-1 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{s.ip || "Unknown address"}</span>
-                  {s.current ? <Badge>This session</Badge> : null}
+                  <span className="font-medium">{s.ip || t("sessionsCard.unknownAddress")}</span>
+                  {s.current ? <Badge>{t("sessionsCard.thisSession")}</Badge> : null}
                 </div>
-                <span className="text-muted-foreground">{s.userAgent || "Unknown browser"}</span>
                 <span className="text-muted-foreground">
-                  Signed in {new Date(s.createdAt).toLocaleString()}, last used{" "}
-                  {new Date(s.lastSeenAt).toLocaleString()}
+                  {s.userAgent || t("sessionsCard.unknownBrowser")}
+                </span>
+                <span className="text-muted-foreground">
+                  {t("sessionsCard.signedIn", {
+                    created: formatDateTime(s.createdAt),
+                    last: formatDateTime(s.lastSeenAt),
+                  })}
                 </span>
               </div>
               {s.current ? null : (
@@ -72,10 +75,12 @@ export function SessionsCard() {
                   variant="outline"
                   size="sm"
                   disabled={busy}
-                  aria-label={`End the session from ${s.ip || "an unknown address"}`}
+                  aria-label={t("sessionsCard.endFrom", {
+                    address: s.ip || t("sessionsCard.anUnknownAddress"),
+                  })}
                   onClick={() => void act(() => endSession(s.id))}
                 >
-                  End
+                  {t("sessionsCard.end")}
                 </Button>
               )}
             </li>
@@ -84,7 +89,7 @@ export function SessionsCard() {
         {others > 0 ? (
           <div>
             <Button variant="outline" disabled={busy} onClick={() => void act(endOtherSessions)}>
-              End all other sessions
+              {t("sessionsCard.endAllOtherSessions")}
             </Button>
           </div>
         ) : null}

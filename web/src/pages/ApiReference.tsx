@@ -3,6 +3,8 @@ import { getApiDocument, type ApiDocument, type ApiOperation } from "@/api/clien
 import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { t } from "@/i18n"
+import { tRich } from "@/i18n/rich"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; doc: ApiDocument }
 
@@ -57,22 +59,27 @@ export function ApiReference() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">API reference</h1>
+      <h1 className="text-2xl font-semibold">{t("apiReference.apiReference")}</h1>
       <p className="text-sm text-muted-foreground">
-        Make an access token on your account page, then send it as{" "}
-        <code className="font-mono text-xs">Authorization: Bearer</code>. A token of scope read only
-        reads. A token never reaches the routes for users, tokens, the audit log, settings, backups
-        or updates. The same document as OpenAPI 3.1 is at{" "}
-        <code className="font-mono text-xs">/api/openapi.json</code>.
+        {tRich("apiReference.intro", {
+          header: (
+            <code className="font-mono text-xs">{t("apiReference.authorizationBearer")}</code>
+          ),
+          openapi: <code className="font-mono text-xs">{t("apiReference.apiOpenapiJson")}</code>,
+        })}
       </p>
       {state.status === "loading" ? (
-        <div role="status" aria-label="Loading the reference" className="flex flex-col gap-2">
+        <div
+          role="status"
+          aria-label={t("apiReference.loadingTheReference")}
+          className="flex flex-col gap-2"
+        >
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
         </div>
       ) : null}
       {state.status === "failed" ? (
-        <Alert variant="destructive">The reference could not be loaded. Try again later.</Alert>
+        <Alert variant="destructive">{t("apiReference.theReferenceCouldNotBe")}</Alert>
       ) : null}
       {groups
         ? [...groups.entries()].map(([name, list]) => (
@@ -87,7 +94,7 @@ export function ApiReference() {
                       </Badge>
                       <code className="font-mono text-sm">{path}</code>
                       <Badge variant={op["x-token"] ? "outline" : "default"}>
-                        {op["x-token"] ? "Tokens may call it" : "Not for tokens"}
+                        {t(op["x-token"] ? "apiReference.tokensMay" : "apiReference.notForTokens")}
                       </Badge>
                     </div>
                     <p className="mt-2 text-sm">{op.summary}</p>
@@ -105,7 +112,7 @@ export function ApiReference() {
                     ) : null}
                     {op.requestBody ? (
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Body: {op.requestBody.description}
+                        {t("apiReference.body", { text: op.requestBody.description })}
                       </p>
                     ) : null}
                     {op["x-token"] ? (

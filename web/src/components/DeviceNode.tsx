@@ -18,6 +18,7 @@ import type { DeviceKind } from "@/api/client"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { displayName, kindLabels, type DeviceNodeData } from "@/lib/topology"
+import { t } from "@/i18n"
 
 const icons: Record<DeviceKind, Icon> = {
   router: Network,
@@ -65,7 +66,9 @@ function DeviceNodeView({ data, selected }: NodeProps) {
           <span>{kindLabels[device.kind]}</span>
           {device.mac ? <span className="font-mono">{device.mac}</span> : null}
           {device.vendor ? <span>{device.vendor}</span> : null}
-          {containerCount > 0 ? <span>{containerCount} containers</span> : null}
+          {containerCount > 0 ? (
+            <span>{t("deviceNode.containers", { n: containerCount })}</span>
+          ) : null}
         </div>
       </TooltipContent>
     </Tooltip>

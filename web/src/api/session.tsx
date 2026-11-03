@@ -9,6 +9,7 @@ import {
 } from "react"
 import type { Permission, User } from "@/lib/permissions"
 import { ApiError, api, setCsrfToken, setUnauthorizedHandler } from "./client"
+import { t } from "@/i18n"
 
 interface MeResponse {
   user: User
@@ -71,9 +72,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         const signedOut = err instanceof ApiError && err.status === 401
         setState({
           status: "anonymous",
-          notice: signedOut
-            ? undefined
-            : "The server did not answer. Reload the page to try again.",
+          notice: signedOut ? undefined : t("session.noAnswer"),
         })
       })
     return () => {

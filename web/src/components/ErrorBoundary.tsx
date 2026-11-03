@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { EmptyState } from "@/components/EmptyState"
 import { Button } from "@/components/ui/button"
+import { t } from "@/i18n"
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -29,9 +30,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (!this.state.failed) return this.props.children
     return (
       <EmptyState
-        title="Something went wrong"
-        text="This page failed to render."
-        action={<Button onClick={() => this.setState({ failed: false })}>Try again</Button>}
+        title={t("errorBoundary.somethingWentWrong")}
+        text={t("errorBoundary.failedText")}
+        action={
+          <Button onClick={() => this.setState({ failed: false })}>
+            {t("errorBoundary.tryAgain")}
+          </Button>
+        }
       />
     )
   }

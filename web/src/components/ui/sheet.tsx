@@ -2,6 +2,7 @@ import { X } from "@phosphor-icons/react"
 import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { cn } from "@/lib/utils"
+import { t } from "@/i18n"
 
 const Sheet = DialogPrimitive.Root
 const SheetTitle = DialogPrimitive.Title
@@ -23,7 +24,7 @@ function SheetContent({
       >
         {children}
         <DialogPrimitive.Close
-          aria-label="Close"
+          aria-label={t("uiSheet.close")}
           className="absolute top-4 right-4 rounded-md p-1 text-muted-foreground hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <X className="size-4" aria-hidden="true" />

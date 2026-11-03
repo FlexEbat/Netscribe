@@ -24,6 +24,7 @@ import {
 import { filterContainers, formatPort, stateClasses, uniquePorts } from "@/lib/containers"
 import { compareIp } from "@/lib/ip"
 import { displayName } from "@/lib/topology"
+import { t } from "@/i18n"
 
 type State =
   | { status: "loading" }
@@ -50,12 +51,12 @@ export function Containers() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Containers</h1>
+      <h1 className="text-2xl font-semibold">{t("containers.containers")}</h1>
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"
-          aria-label="Filter containers"
-          placeholder="Filter by name, image, state or project"
+          aria-label={t("containers.filterContainers")}
+          placeholder={t("containers.filterByNameImageState")}
           className="max-w-sm"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -78,7 +79,11 @@ function hostName(d: Device | undefined): string {
 function Results({ state, query }: { state: State; query: string }) {
   if (state.status === "loading") {
     return (
-      <div role="status" aria-label="Loading containers" className="flex flex-col gap-2">
+      <div
+        role="status"
+        aria-label={t("containers.loadingContainers")}
+        className="flex flex-col gap-2"
+      >
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
         <Skeleton className="h-8 w-full" />
@@ -86,53 +91,45 @@ function Results({ state, query }: { state: State; query: string }) {
     )
   }
   if (state.status === "failed") {
-    return <Alert variant="destructive">The containers could not be loaded. Try again later.</Alert>
+    return <Alert variant="destructive">{t("containers.theContainersCouldNotBe")}</Alert>
   }
   const { data, devices } = state
   if (!data.docker.enabled) {
     return (
-      <EmptyState
-        title="Docker is turned off"
-        text="Containers are not collected. Set docker.enabled to true in the config to turn it on."
-      />
+      <EmptyState title={t("containers.dockerIsTurnedOff")} text={t("containers.disabledText")} />
     )
   }
   if (!data.docker.available) {
     return (
       <EmptyState
-        title="Docker cannot be read"
+        title={t("containers.dockerCannotBeRead")}
         text={
           data.docker.reason
-            ? `${capitalize(data.docker.reason)}. Containers appear here as soon as the daemon answers.`
-            : "Containers appear here as soon as the daemon answers."
+            ? t("containers.unreadableReason", { reason: capitalize(data.docker.reason) })
+            : t("containers.unreadableText")
         }
       />
     )
   }
   if (data.containers.length === 0) {
-    return (
-      <EmptyState
-        title="No containers yet"
-        text="This host runs no containers, or the first scan has not finished."
-      />
-    )
+    return <EmptyState title={t("containers.noContainersYet")} text={t("containers.noneText")} />
   }
   const shown = sorted(filterContainers(data.containers, query), devices)
   if (shown.length === 0) {
-    return <EmptyState title="No matches" text="No container matches the filter." />
+    return <EmptyState title={t("containers.noMatches")} text={t("containers.noMatchText")} />
   }
   return (
     <Table>
-      <TableCaption>Containers ({shown.length})</TableCaption>
+      <TableCaption>{t("containers.caption", { n: shown.length })}</TableCaption>
       <TableHeader>
         <TableRow>
-          <TableHead>Name</TableHead>
-          <TableHead>Image</TableHead>
-          <TableHead>State</TableHead>
-          <TableHead>Ports</TableHead>
-          <TableHead>Networks</TableHead>
-          <TableHead>Project</TableHead>
-          <TableHead>Host</TableHead>
+          <TableHead>{t("containers.name")}</TableHead>
+          <TableHead>{t("containers.image")}</TableHead>
+          <TableHead>{t("containers.state")}</TableHead>
+          <TableHead>{t("containers.ports")}</TableHead>
+          <TableHead>{t("containers.networks")}</TableHead>
+          <TableHead>{t("containers.project")}</TableHead>
+          <TableHead>{t("containers.host")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

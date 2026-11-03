@@ -5,16 +5,17 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { formatDateTime, t } from "@/i18n"
 
 /** What a refused backup or restore tells a person. */
 function backupMessage(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 403) return "The password is not right."
-    if (error.status === 413) return "The backup is too large."
-    if (error.status === 429) return "Too many wrong passwords. Wait a few minutes."
+    if (error.status === 403) return t("backupCard.passwordNotRight")
+    if (error.status === 413) return t("backupCard.tooLarge")
+    if (error.status === 429) return t("backupCard.tooManyPasswords")
     if ([400, 409, 501].includes(error.status)) return error.message
   }
-  return "That did not work. Look at the log of the service."
+  return t("backupCard.didNotWork")
 }
 
 /** Saves the browser's copy of a downloaded file under its name. */
@@ -51,7 +52,7 @@ export function BackupCard() {
     try {
       const { blob, filename } = await downloadBackup(password)
       save(blob, filename)
-      setDone("The backup was downloaded. It holds the secrets of the config: keep it safe.")
+      setDone(t("backupCard.downloaded"))
     } catch (e) {
       setError(backupMessage(e))
     } finally {
@@ -79,15 +80,12 @@ export function BackupCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Backup and restore</CardTitle>
-        <CardDescription>
-          One file holds the database and the config. The config has its secrets, so the file is as
-          private as the config, and both actions ask for your password again.
-        </CardDescription>
+        <CardTitle>{t("backupCard.backupAndRestore")}</CardTitle>
+        <CardDescription>{t("backupCard.oneFileHoldsTheDatabase")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="backup-password">Your password</Label>
+          <Label htmlFor="backup-password">{t("backupCard.yourPassword")}</Label>
           <Input
             id="backup-password"
             type="password"
@@ -98,11 +96,11 @@ export function BackupCard() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button disabled={busy || password === ""} onClick={() => void download()}>
-            Download a backup
+            {t("backupCard.downloadABackup")}
           </Button>
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="backup-file">Restore from a backup file</Label>
+          <Label htmlFor="backup-file">{t("backupCard.restoreFromABackupFile")}</Label>
           <Input
             id="backup-file"
             type="file"
@@ -115,21 +113,17 @@ export function BackupCard() {
         </div>
         {confirming && file ? (
           <Alert variant="destructive">
-            <p>
-              This replaces the devices, the accounts and the settings of this install with the ones
-              in {file.name}. The old files stay next to the new ones as *.before-restore. The
-              service restarts and everybody signs in again.
-            </p>
+            <p>{t("backupCard.replaceWarning", { name: file.name })}</p>
             <div className="mt-3 flex flex-wrap gap-3">
               <Button
                 variant="destructive"
                 disabled={busy || password === ""}
                 onClick={() => void restore()}
               >
-                Replace the data
+                {t("backupCard.replaceTheData")}
               </Button>
               <Button variant="outline" disabled={busy} onClick={() => setConfirming(false)}>
-                Cancel
+                {t("backupCard.cancel")}
               </Button>
             </div>
           </Alert>
@@ -140,7 +134,7 @@ export function BackupCard() {
               disabled={busy || !file || password === ""}
               onClick={() => setConfirming(true)}
             >
-              Restore
+              {t("backupCard.restore")}
             </Button>
           </div>
         )}
@@ -148,9 +142,10 @@ export function BackupCard() {
         {done ? <Alert>{done}</Alert> : null}
         {accepted ? (
           <Alert>
-            The backup of {new Date(accepted.createdAt).toLocaleString()} with {accepted.devices}{" "}
-            {accepted.devices === 1 ? "device" : "devices"} was accepted. The service restarts now:
-            sign in again in a minute.
+            {t("backupCard.accepted", {
+              date: formatDateTime(accepted.createdAt),
+              n: accepted.devices,
+            })}
           </Alert>
         ) : null}
       </CardContent>
