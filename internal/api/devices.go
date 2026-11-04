@@ -68,7 +68,7 @@ func (s *server) changed() {
 func deviceDetail(d model.Device) string {
 	name := d.Label
 	if name == "" {
-		name = d.IP
+		name = d.Address()
 	}
 	if name == "" {
 		name = d.MAC

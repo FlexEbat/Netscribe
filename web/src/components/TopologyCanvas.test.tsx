@@ -30,6 +30,7 @@ const device = (id: number): Device => ({
   id,
   mac: "",
   ip: `10.0.0.${id}`,
+  ip6: "",
   hostname: `host${id}`,
   vendor: "",
   kind: "host",

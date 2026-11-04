@@ -20,9 +20,11 @@ const (
 )
 
 type Device struct {
-	ID          int64      `json:"id"`
-	MAC         string     `json:"mac"`
-	IP          string     `json:"ip"`
+	ID  int64  `json:"id"`
+	MAC string `json:"mac"`
+	IP  string `json:"ip"`
+	// IP6 is the one IPv6 address of the device, in canonical form, empty when it has none.
+	IP6         string     `json:"ip6"`
 	Hostname    string     `json:"hostname"`
 	Vendor      string     `json:"vendor"`
 	Kind        DeviceKind `json:"kind"`
@@ -71,8 +73,11 @@ type Link struct {
 }
 
 type Service struct {
-	ID          int64     `json:"id"`
-	DeviceID    int64     `json:"deviceId"`
+	ID       int64 `json:"id"`
+	DeviceID int64 `json:"deviceId"`
+	// IP is the address the service answered on when that is not the IPv4 address of the
+	// device, that is its IPv6 address. Empty means the primary address.
+	IP          string    `json:"ip"`
 	Port        int       `json:"port"`
 	Proto       string    `json:"proto"`
 	Name        string    `json:"name"`
@@ -202,8 +207,8 @@ type AuditEntry struct {
 }
 
 type ManualDevice struct {
-	MAC, IP, Hostname, Label, Notes string
-	Kind                            DeviceKind
+	MAC, IP, IP6, Hostname, Label, Notes string
+	Kind                                 DeviceKind
 }
 
 type DeviceEdit struct { // a nil field stays unchanged
@@ -220,13 +225,32 @@ type ManualLink struct {
 	APort, BPort         string
 }
 
+// Address is the address a device is shown by: its IPv4 address, else its IPv6 address.
+func (d Device) Address() string {
+	if d.IP != "" {
+		return d.IP
+	}
+	return d.IP6
+}
+
+// Addresses lists every address of the device for a table cell, IPv4 first.
+func (d Device) Addresses() string {
+	if d.IP != "" && d.IP6 != "" {
+		return d.IP + ", " + d.IP6
+	}
+	return d.Address()
+}
+
 type DeviceKey struct {
 	MAC string
 	IP  string
 }
 
 type DeviceInput struct {
-	Key         DeviceKey
+	Key DeviceKey
+	// IP6 is the IPv6 address the device was found on. A device is still identified by its
+	// MAC: the address only fills the second column.
+	IP6         string
 	Hostname    string
 	Vendor      string
 	Description string
@@ -251,9 +275,12 @@ type LinkInput struct {
 
 type ServiceInput struct {
 	Device DeviceKey
-	Port   int
-	Proto  string
-	Name   string
+	// IP is the address the service answered on when that is not the IPv4 address of the
+	// device, that is its IPv6 address. Empty means the primary address.
+	IP    string
+	Port  int
+	Proto string
+	Name  string
 	// Banner is what the service said about itself, for example the HTTP Server header.
 	// It comes from the network, so the store cleans and cuts it.
 	Banner string

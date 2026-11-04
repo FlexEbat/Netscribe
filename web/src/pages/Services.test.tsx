@@ -12,6 +12,7 @@ function device(id: number, ip: string, hostname: string): Device {
     id,
     mac: `aa:bb:cc:dd:ee:0${id}`,
     ip,
+    ip6: "",
     hostname,
     vendor: "",
     kind: "host",
@@ -39,6 +40,7 @@ function service(id: number, deviceId: number, port: number, name: string): Serv
   return {
     id,
     deviceId,
+    ip: "",
     port,
     proto: "tcp",
     name,

@@ -35,9 +35,18 @@ func (s *Store) createManual(ctx context.Context, q *dbgen.Queries, in model.Man
 		kind = model.KindUnknown
 	}
 	mac, ip := strings.ToLower(strings.TrimSpace(in.MAC)), strings.TrimSpace(in.IP)
+	ip6 := normalizeIP6(in.IP6)
 	if mac == "" && ip != "" {
 		// An address that a discovered device already uses is that device, not a new one.
 		if _, err := q.GetDeviceByIP(ctx, ip); err == nil {
+			return dbgen.Device{}, ErrConflict
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return dbgen.Device{}, fmt.Errorf("create device: %w", err)
+		}
+	}
+	if ip6 != "" {
+		// An address another device already carries is that device, not a new one.
+		if _, err := q.GetDeviceByIP6(ctx, ip6); err == nil {
 			return dbgen.Device{}, ErrConflict
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return dbgen.Device{}, fmt.Errorf("create device: %w", err)
@@ -47,6 +56,7 @@ func (s *Store) createManual(ctx context.Context, q *dbgen.Queries, in model.Man
 	row, err := q.InsertManualDevice(ctx, dbgen.InsertManualDeviceParams{
 		Mac:         mac,
 		Ip:          ip,
+		Ip6:         ip6,
 		Hostname:    cleanText(in.Hostname),
 		Kind:        string(kind),
 		Label:       in.Label,

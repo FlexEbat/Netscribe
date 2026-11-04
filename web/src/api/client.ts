@@ -129,6 +129,8 @@ export interface Device {
   id: number
   mac: string
   ip: string
+  /** The one IPv6 address of the device, in canonical form, empty when it has none. */
+  ip6: string
   hostname: string
   vendor: string
   kind: DeviceKind
@@ -342,6 +344,8 @@ export interface DeviceInterface {
 export interface Service {
   id: number
   deviceId: number
+  /** The address the service answered on: empty for the IPv4 address, else the IPv6 one. */
+  ip: string
   port: number
   proto: string
   name: string
@@ -389,6 +393,8 @@ export interface DeviceInput {
   notes: string
   kind: DeviceKind
   ip: string
+  /** Sent only when the person typed one. */
+  ip6?: string
   mac: string
 }
 

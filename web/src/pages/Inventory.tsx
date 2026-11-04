@@ -363,6 +363,7 @@ function Results({
             </TableHead>
           ) : null}
           <TableHead>{t("inventory.ip")}</TableHead>
+          <TableHead>{t("inventory.ipv6")}</TableHead>
           <TableHead>{t("inventory.mac")}</TableHead>
           <TableHead>{t("inventory.hostname")}</TableHead>
           <TableHead>{t("inventory.kind")}</TableHead>
@@ -379,7 +380,7 @@ function Results({
                 <input
                   type="checkbox"
                   aria-label={t("inventory.selectName", {
-                    name: d.label || d.hostname || d.ip || d.mac,
+                    name: d.label || d.hostname || d.ip || d.ip6 || d.mac,
                   })}
                   checked={selected.has(d.id)}
                   onChange={(e) => {
@@ -392,6 +393,7 @@ function Results({
               </TableCell>
             ) : null}
             <TableCell className="font-mono">{d.ip || "–"}</TableCell>
+            <TableCell className="font-mono break-all">{d.ip6 || "–"}</TableCell>
             <TableCell className="font-mono">{d.mac || "–"}</TableCell>
             <TableCell>{d.label || d.hostname || "–"}</TableCell>
             <TableCell className="capitalize">{d.kind}</TableCell>
@@ -447,7 +449,7 @@ function TrustButton({ device, onDone }: { device: Device; onDone: () => void })
       size="sm"
       disabled={busy}
       aria-label={t("inventory.trustName", {
-        name: device.label || device.hostname || device.ip || device.mac,
+        name: device.label || device.hostname || device.ip || device.ip6 || device.mac,
       })}
       onClick={() => void trust()}
     >

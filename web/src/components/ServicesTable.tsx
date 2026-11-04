@@ -49,7 +49,7 @@ export function ServicesTable({
               {s.banner || "–"}
             </TableCell>
             <TableCell>
-              <ServiceLink address={address} service={s} />
+              <ServiceLink address={s.ip || address} service={s} />
             </TableCell>
           </TableRow>
         ))}

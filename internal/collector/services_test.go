@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/FlexEbat/Netscribe/internal/config"
+	"github.com/FlexEbat/Netscribe/internal/model"
 )
 
 func newTestServices(dial dialer) *Services {
@@ -200,5 +201,35 @@ func TestServicesTakesTheTimeoutAndTheLimitFromTheConfig(t *testing.T) {
 	defer mu.Unlock()
 	if got <= time.Second || got > 4*time.Second {
 		t.Errorf("deadline in %v, want the configured 4s and not the default half second", got)
+	}
+}
+
+func TestServicesScansTheIPv6AddressToo(t *testing.T) {
+	c := newTestServices(fakeDial(map[string]error{
+		"192.168.1.1:80":  nil, // answers on both addresses: one service
+		"[fd00::1]:80":    nil,
+		"[fd00::1]:22":    nil, // answers on IPv6 only: a service of its own
+		"[fd00::2]:443":   nil, // a device that has no IPv4 address
+		"192.168.1.1:443": syscallRefused(),
+	}))
+	in := servicesInput([]int{22, 80, 443}, "192.168.1.1")
+	in.Devices[0].MAC = "aa:bb:cc:00:00:01"
+	in.Devices[0].IP6 = "fd00::1"
+	in.Devices = append(in.Devices, model.Device{MAC: "aa:bb:cc:00:00:02", IP6: "fd00::2"})
+
+	res, err := c.Collect(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, s := range res.Services {
+		got = append(got, fmt.Sprintf("%s|%s|%d", s.Device.MAC, s.IP, s.Port))
+	}
+	want := []string{"aa:bb:cc:00:00:01|fd00::1|22", "aa:bb:cc:00:00:01||80", "aa:bb:cc:00:00:02|fd00::2|443"}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("services = %v, want %v", got, want)
+	}
+	if len(res.ServicesPolled) != 2 {
+		t.Errorf("polled = %+v, want both devices", res.ServicesPolled)
 	}
 }

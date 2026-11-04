@@ -148,7 +148,7 @@ func (s *server) importDevices(w http.ResponseWriter, r *http.Request) {
 	items := make([]store.ImportItem, 0, len(rows))
 	firstLine := map[string]int{} // a MAC or an address -> the line that had it first
 	for _, row := range rows {
-		in, err := (deviceBody{MAC: row.MAC, IP: row.IP, Hostname: row.Hostname, Label: row.Label, Notes: row.Notes, Kind: row.Kind}).manualDevice()
+		in, err := (deviceBody{MAC: row.MAC, IP: row.IP, IP6: row.IP6, Hostname: row.Hostname, Label: row.Label, Notes: row.Notes, Kind: row.Kind}).manualDevice()
 		var group *int64
 		if err == nil && row.Group != "" {
 			id, ok := byName[strings.ToLower(row.Group)]
@@ -158,8 +158,8 @@ func (s *server) importDevices(w http.ResponseWriter, r *http.Request) {
 			group = &id
 		}
 		if err == nil {
-			for _, key := range []string{"mac:" + in.MAC, "ip:" + in.IP} {
-				if key == "mac:" || key == "ip:" {
+			for _, key := range []string{"mac:" + in.MAC, "ip:" + in.IP, "ip6:" + in.IP6} {
+				if key == "mac:" || key == "ip:" || key == "ip6:" {
 					continue
 				}
 				if first, dup := firstLine[key]; dup {
@@ -172,8 +172,8 @@ func (s *server) importDevices(w http.ResponseWriter, r *http.Request) {
 			problems = append(problems, importProblem{Line: row.Line, Error: err.Error()})
 			continue
 		}
-		for _, key := range []string{"mac:" + in.MAC, "ip:" + in.IP} {
-			if key != "mac:" && key != "ip:" {
+		for _, key := range []string{"mac:" + in.MAC, "ip:" + in.IP, "ip6:" + in.IP6} {
+			if key != "mac:" && key != "ip:" && key != "ip6:" {
 				firstLine[key] = row.Line
 			}
 		}

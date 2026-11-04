@@ -38,7 +38,7 @@ func TestValidate(t *testing.T) {
 		{"empty listen", func(c *Config) { c.Listen = "" }, errListen},
 		{"target is not a CIDR", func(c *Config) { c.Scan.Targets = []string{"192.168.1.0"} }, errTargetCIDR},
 		{"target is not a CIDR at all", func(c *Config) { c.Scan.Targets = []string{"lan"} }, errTargetCIDR},
-		{"IPv6 target", func(c *Config) { c.Scan.Targets = []string{"fd00::/64"} }, errTargetIPv4},
+		{"IPv6 target wider than /112", func(c *Config) { c.Scan.Targets = []string{"fd00::/64"} }, errTargetV6Wide},
 		{"target wider than /16", func(c *Config) { c.Scan.Targets = []string{"10.0.0.0/8"} }, errTargetWide},
 		{"target exactly /16", func(c *Config) { c.Scan.Targets = []string{"10.1.0.0/16"} }, nil},
 		{"172.16 range is private", func(c *Config) { c.Scan.Targets = []string{"172.31.4.0/24"} }, nil},
@@ -336,7 +336,18 @@ func TestParseTarget(t *testing.T) {
 		{"8.8.8.8/32", true, nil},
 		{"10.0.0.0/8", false, errTargetWide},
 		{"nonsense", false, errTargetCIDR},
-		{"fd00::/64", false, errTargetIPv4},
+		{"fd00::/64", false, errTargetV6Wide},
+		{"fd00::/112", false, nil},
+		{"fd12:3456:789a::/120", false, nil},
+		{"fe80::/112", false, nil},
+		{"fe80::1/128", false, nil},
+		{"2001:db8::/112", false, errTargetPublic},
+		{"2001:db8::/112", true, nil},
+		{"2001:db8::/64", true, errTargetV6Wide},
+		{"fc00::/112", false, nil},
+		{"fc00::/111", false, errTargetV6Wide},
+		{"fc00::/6", false, errTargetV6Wide},
+		{"::ffff:10.0.0.0/120", false, errTargetCIDR},
 	} {
 		_, err := ParseTarget(tt.in, tt.public)
 		if !errors.Is(err, tt.want) || (tt.want == nil && err != nil) {
@@ -407,5 +418,22 @@ func TestNmapScope(t *testing.T) {
 	cfg, err := Load(writeConfig(t, 0o600, "scan:\n  targets: [192.168.1.0/24]\n"), false)
 	if err != nil || cfg.Discovery.NmapScope != "untyped" {
 		t.Errorf("scope = %q, err = %v, want the default untyped when the key is missing", cfg.Discovery.NmapScope, err)
+	}
+}
+
+func TestIPv6DiscoveryIsOnUnlessTheConfigSaysFalse(t *testing.T) {
+	var d DiscoveryConfig
+	if !d.IPv6Enabled() {
+		t.Error("a config without discovery.ipv6 must leave IPv6 discovery on")
+	}
+	off := false
+	d.IPv6 = &off
+	if d.IPv6Enabled() {
+		t.Error("discovery.ipv6: false must switch IPv6 discovery off")
+	}
+	on := true
+	d.IPv6 = &on
+	if !d.IPv6Enabled() {
+		t.Error("discovery.ipv6: true must leave IPv6 discovery on")
 	}
 }

@@ -236,10 +236,10 @@ func compose(scan model.Scan, enabled map[string]bool, in input) []string {
 }
 
 func deviceName(d model.Device) string {
-	for _, s := range []string{d.Label, d.Hostname, d.IP, d.MAC} {
+	for _, s := range []string{d.Label, d.Hostname, d.IP, d.IP6, d.MAC} {
 		if s != "" {
-			if d.IP != "" && s != d.IP {
-				return s + " (" + d.IP + ")"
+			if addr := d.Address(); addr != "" && s != addr {
+				return s + " (" + addr + ")"
 			}
 			return s
 		}

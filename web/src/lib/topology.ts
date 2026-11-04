@@ -23,8 +23,10 @@ export interface CanvasEdge {
 }
 
 /** The name a device is shown under: the label somebody set, else the hostname, else the IP. */
-export function displayName(d: Pick<Device, "label" | "hostname" | "ip" | "mac">): string {
-  return d.label || d.hostname || d.ip || d.mac || "device"
+export function displayName(
+  d: Pick<Device, "label" | "hostname" | "ip" | "mac"> & { ip6?: string },
+): string {
+  return d.label || d.hostname || d.ip || d.ip6 || d.mac || "device"
 }
 
 export function toNodes(topology: Topology): CanvasNode[] {

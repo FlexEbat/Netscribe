@@ -70,7 +70,7 @@ export function Services() {
 
 function deviceName(d: Device | undefined): string {
   if (!d) return "–"
-  return d.label || d.hostname || d.ip || d.mac || "–"
+  return d.label || d.hostname || d.ip || d.ip6 || d.mac || "–"
 }
 
 function Results({ state, query }: { state: State; query: string }) {
@@ -132,7 +132,11 @@ function Results({ state, query }: { state: State; query: string }) {
                   <span className="ml-2 font-mono text-muted-foreground">{d.ip}</span>
                 ) : null}
               </TableCell>
-              <TableCell>{d?.ip ? <ServiceLink address={d.ip} service={s} /> : null}</TableCell>
+              <TableCell>
+                {d && (s.ip || d.ip || d.ip6) ? (
+                  <ServiceLink address={s.ip || d.ip || d.ip6} service={s} />
+                ) : null}
+              </TableCell>
             </TableRow>
           )
         })}
