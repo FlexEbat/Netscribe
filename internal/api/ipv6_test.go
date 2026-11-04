@@ -18,7 +18,7 @@ func TestManualDeviceTakesAnIPv6AddressInCanonicalForm(t *testing.T) {
 	if d.IP != "192.168.1.9" || d.IP6 != "fd00::9" {
 		t.Errorf("device = %+v, want both addresses with the IPv6 one in canonical form", d)
 	}
-	if got := listDevices(t, e, s, "fd00::9"); len(got) != 1 || got[0].ID != d.ID {
+	if got := listDevices(t, e, s, "?q=fd00::9"); len(got) != 1 || got[0].ID != d.ID {
 		t.Errorf("a search for the IPv6 address found %+v, want the device", got)
 	}
 }
