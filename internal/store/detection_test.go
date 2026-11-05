@@ -105,7 +105,7 @@ func scanServices(t *testing.T, s *Store, key model.DeviceKey, svc ...model.Serv
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := collector.Result{Devices: []model.DeviceInput{{Key: key}}, Services: svc, ServicesPolled: []model.DeviceKey{key}}
+	res := collector.Result{Devices: []model.DeviceInput{dev(key.MAC, key.IP)}, Services: svc, ServicesPolled: []model.DeviceKey{key}}
 	if err := s.ApplyResult(ctx, sc.ID, res); err != nil {
 		t.Fatal(err)
 	}
