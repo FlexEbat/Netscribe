@@ -211,6 +211,7 @@ func TestACertificateEndingSoonIsReportedOnceUntilItChanges(t *testing.T) {
 		return model.ServiceInput{Device: key, Port: 8443, Proto: "tcp", Name: "https-alt", TLS: c}
 	}
 	soon := testNow.Add(5 * 24 * time.Hour)
+	scanOnce(t, s, lan, dev(key.MAC, key.IP)) // the first scan only sets the baseline
 	scanServices(t, s, key, svc(cert("a.lan", fp("c"), soon)))
 	scanServices(t, s, key, svc(cert("a.lan", fp("c"), soon)))
 	if got := tlsChangesOf(t, s, ChangeTLSExpiring); len(got) != 1 {
@@ -225,6 +226,7 @@ func TestACertificateEndingSoonIsReportedOnceUntilItChanges(t *testing.T) {
 func TestACertificateFarFromItsEndWritesNoExpiryEntry(t *testing.T) {
 	s := newTestStore(t)
 	key := model.DeviceKey{MAC: "aa:aa:aa:aa:aa:0a", IP: "192.168.1.10"}
+	scanOnce(t, s, lan, dev(key.MAC, key.IP))
 	scanServices(t, s, key, model.ServiceInput{Device: key, Port: 443, Proto: "tcp", Name: "https", TLS: cert("b.lan", fp("e"), testNow.Add(15*24*time.Hour))})
 	if got := tlsChangesOf(t, s, ChangeTLSExpiring); len(got) != 0 {
 		t.Errorf("entries = %+v, want none for a certificate ending in 15 days", got)
