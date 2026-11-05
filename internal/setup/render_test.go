@@ -136,3 +136,20 @@ func TestOverlaps(t *testing.T) {
 		t.Error("overlap of nested and separate prefixes")
 	}
 }
+
+func TestDropInGrantsRawSocketsForTheDHCPListenerOnlyWhenItIsOn(t *testing.T) {
+	if RenderDropInFor("", false, false) != "" {
+		t.Error("a drop-in was written although nothing needs a right")
+	}
+	if d := RenderDropInFor("docker", false, false); strings.Contains(d, "CAP_NET_RAW") {
+		t.Errorf("the docker group alone must not grant raw sockets:\n%s", d)
+	}
+	d := RenderDropInFor("", false, true)
+	if !strings.Contains(d, "AmbientCapabilities=CAP_NET_RAW") || !strings.Contains(d, "DHCP listener") {
+		t.Errorf("a drop-in for the DHCP listener must grant CAP_NET_RAW and say why:\n%s", d)
+	}
+	both := RenderDropInFor("", true, true)
+	if strings.Count(both, "AmbientCapabilities=") != 1 {
+		t.Errorf("Nmap and DHCP together must write the capability once:\n%s", both)
+	}
+}

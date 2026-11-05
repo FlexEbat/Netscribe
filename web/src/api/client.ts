@@ -131,6 +131,10 @@ export interface Device {
   ip: string
   /** The one IPv6 address of the device, in canonical form, empty when it has none. */
   ip6: string
+  /** 0 to 100: how sure the classifier is about the kind. */
+  kindScore: number
+  /** At most 5 short phrases: why the kind was chosen, or the candidates when it is unknown. */
+  kindReasons: string[]
   hostname: string
   vendor: string
   kind: DeviceKind
@@ -296,6 +300,8 @@ export type ChangeKind =
   | "link_removed"
   | "container_added"
   | "container_removed"
+  | "tls_changed"
+  | "tls_expiring"
 
 export interface Change {
   id: number
@@ -341,11 +347,23 @@ export interface DeviceInterface {
 }
 
 /** An open port of a device. */
+export interface TlsCert {
+  subject: string
+  sans: string[]
+  issuer: string
+  notBefore: string
+  notAfter: string
+  /** SHA-256 of the certificate, lower case hex. */
+  fingerprint: string
+}
+
 export interface Service {
   id: number
   deviceId: number
   /** The address the service answered on: empty for the IPv4 address, else the IPv6 one. */
   ip: string
+  /** The certificate the service presented in a handshake, null when none was read. */
+  tls: TlsCert | null
   port: number
   proto: string
   name: string

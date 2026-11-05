@@ -74,6 +74,9 @@ type Scanner struct {
 	// between scans.
 	docker *Docker
 
+	// dhcp listens between scans when discovery.dhcpListen is on.
+	dhcp *DHCP
+
 	// classifier sets the kind of devices nothing else has typed, facts gives it
 	// sysServices and open ports. Both are optional.
 	classifier *Classifier
@@ -89,6 +92,8 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 	probe, snmp, services := NewProbe(log), NewSNMP(log), NewServices(log)
 	openWebPorts := func(ip string) []int { return mergePorts(probe.openPorts(ip), services.openPorts(ip)) }
 	httpBanner, mdns, ssdp := NewHTTPBanner(log, openWebPorts), NewMDNS(log), NewSSDP(log)
+	dhcp := NewDHCP(log)
+	tlsCerts := NewTLSCerts(log, func(addr string) []int { return mergePorts(probe.openPorts(addr), services.openPorts(addr)) })
 	nmap := NewNmap(log)
 	nmap.ports = openWebPorts
 	docker := NewDocker(cfg.Docker, log)
@@ -103,7 +108,8 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		wake: make(chan struct{}, 1), failed: make(chan struct{}, 1),
 		// The order matters: the probe finds hosts the SNMP collector then asks, LLDP
 		// tells which ports are trunks, and the router and switch tables use both.
-		enrichers:  []Collector{NewNDP(log), probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services, httpBanner, mdns, ssdp},
+		dhcp:       dhcp,
+		enrichers:  []Collector{NewNDP(log), probe, snmp, lldp, NewSNMPARP(snmp, lldp, log), services, httpBanner, tlsCerts, mdns, ssdp, dhcp},
 		late:       []Collector{NewSSH(log), docker},
 		docker:     docker,
 		classifier: classifier,
@@ -111,7 +117,7 @@ func NewScanner(store ScanStore, cfg config.Config, log *slog.Logger) *Scanner {
 		facts: func(k model.DeviceKey) Facts {
 			f := Facts{
 				Services: -1, Ports: openWebPorts(k.IP),
-				HTTP: httpBanner.banner(k.IP), MDNS: mdns.serviceTypes(k.IP), SSDP: ssdp.announced(k.IP), Nmap: nmap.guess(k.IP),
+				HTTP: httpBanner.banner(k.IP), MDNS: mdns.serviceTypes(k.IP), SSDP: ssdp.announced(k.IP), Nmap: nmap.guess(k.IP), TLS: tlsCerts.certFacts(k.IP), DHCP: dhcp.facts(k.MAC),
 			}
 			if n, ok := snmp.servicesOf(k.IP); ok {
 				f.Services = n
@@ -278,6 +284,12 @@ func (s *Scanner) Schedule(ctx context.Context, targets func(config.Config) ([]n
 			t := time.NewTimer(d)
 			return t.C, t.Stop
 		}
+	}
+	if s.dhcp != nil {
+		s.dhcp.Listen(ctx, s.config().Discovery.DHCPListen, func() []netip.Prefix {
+			p, _ := targets(s.config()) // a bad target list leaves nothing to listen on
+			return p
+		})
 	}
 	for {
 		var tick <-chan time.Time
@@ -549,15 +561,16 @@ func (s *Scanner) NmapState() NmapState {
 func mergeServices(base, later []model.ServiceInput) []model.ServiceInput {
 	type key struct {
 		dev   model.DeviceKey
+		ip    string
 		port  int
 		proto string
 	}
 	index := make(map[key]int, len(base))
 	for i, s := range base {
-		index[key{s.Device, s.Port, s.Proto}] = i
+		index[key{s.Device, s.IP, s.Port, s.Proto}] = i
 	}
 	for _, s := range later {
-		k := key{s.Device, s.Port, s.Proto}
+		k := key{s.Device, s.IP, s.Port, s.Proto}
 		i, ok := index[k]
 		if !ok {
 			index[k] = len(base)
@@ -569,6 +582,9 @@ func mergeServices(base, later []model.ServiceInput) []model.ServiceInput {
 		}
 		if s.Banner != "" {
 			base[i].Banner = s.Banner
+		}
+		if s.TLS != nil {
+			base[i].TLS = s.TLS
 		}
 	}
 	return base

@@ -38,8 +38,10 @@ describe("scanPoints", () => {
 
 describe("kinds", () => {
   it("names every kind of change", () => {
-    expect(Object.keys(kindLabels)).toHaveLength(8)
+    expect(Object.keys(kindLabels)).toHaveLength(10)
     expect(kindLabels.container_removed).toBe("Container removed")
+    expect(kindLabels.tls_changed).toBe("Certificate changed")
+    expect(kindLabels.tls_expiring).toBe("Certificate ending")
   })
 
   it("colours what appeared, went away and changed apart", () => {
@@ -49,6 +51,8 @@ describe("kinds", () => {
     expect(new Set([added, gone, changed]).size).toBe(3)
     expect(kindClasses("link_added")).toBe(added)
     expect(kindClasses("container_removed")).toBe(gone)
+    expect(kindClasses("tls_changed")).toBe(changed)
+    expect(kindClasses("tls_expiring")).toBe(changed)
     expect(kindClasses("something_else")).toContain("bg-muted")
   })
 

@@ -202,6 +202,9 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 		if err != nil {
 			return 0, fmt.Errorf("insert device: %w", err)
 		}
+		if err := writeVerdict(ctx, q, id, in, model.DeviceKind(kind), true); err != nil {
+			return 0, err
+		}
 		return id, nil
 	}
 
@@ -209,7 +212,7 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 		kind = cur.Kind // an unknown kind never replaces a known one, a person's choice stays
 	}
 	hostname := firstNonEmpty(in.Hostname, cur.Hostname)
-	if in.Source == "mdns" {
+	if in.Source == "mdns" || in.Source == "dhcp" {
 		// A name from mDNS only fills an empty hostname, it never replaces a known one.
 		hostname = firstNonEmpty(cur.Hostname, in.Hostname)
 	}
@@ -235,7 +238,35 @@ func mergeDevice(ctx context.Context, q *dbgen.Queries, in model.DeviceInput, ts
 	if err != nil {
 		return 0, fmt.Errorf("update device %d: %w", cur.ID, err)
 	}
+	if cur.KindLocked == 0 {
+		if err := writeVerdict(ctx, q, cur.ID, in, model.DeviceKind(cur.Kind), false); err != nil {
+			return 0, err
+		}
+	}
 	return cur.ID, nil
+}
+
+// writeVerdict stores why the classifier chose the kind. A kind that arrived with the input
+// replaces the score and the reasons of the one before. An unknown kind only writes its
+// candidates, and only while the device has no kind: a known kind keeps its reasons.
+func writeVerdict(ctx context.Context, q *dbgen.Queries, id int64, in model.DeviceInput, stored model.DeviceKind, inserted bool) error {
+	known := in.Kind != "" && in.Kind != model.KindUnknown
+	candidates := !known && len(in.KindReasons) > 0 && (stored == "" || stored == model.KindUnknown)
+	if !known && !candidates {
+		return nil
+	}
+	if inserted && in.KindScore == 0 && len(in.KindReasons) == 0 {
+		return nil // the columns already hold the defaults
+	}
+	score := max(0, min(in.KindScore, 100))
+	if candidates {
+		score = 0
+	}
+	err := q.SetKindVerdict(ctx, dbgen.SetKindVerdictParams{KindScore: int64(score), KindReasons: encodeReasons(in.KindReasons), ID: id})
+	if err != nil {
+		return fmt.Errorf("store the reasons for the kind of device %d: %w", id, err)
+	}
+	return nil
 }
 
 // findDevice looks a device up by MAC, then among records without a MAC by IP.
@@ -322,6 +353,8 @@ func sourceRank(source string) int {
 	case "snmp":
 		return 2
 	case "arp", "probe":
+		return 1
+	case "ndp", "dhcp":
 		return 1
 	}
 	return 0
@@ -492,6 +525,7 @@ func applyServices(ctx context.Context, q *dbgen.Queries, r collector.Result, ts
 		name, banner := cleanText(in.Name), cleanBanner(in.Banner)
 		svcIP := normalizeIP6(in.IP)
 		cur, err := q.GetServiceByKey(ctx, dbgen.GetServiceByKeyParams{DeviceID: id, Ip: svcIP, Port: int64(in.Port), Proto: proto})
+		serviceID := cur.ID
 		switch {
 		case err == nil:
 			if err := q.TouchService(ctx, dbgen.TouchServiceParams{Name: name, Banner: banner, LastSeenAt: ts, ID: cur.ID}); err != nil {
@@ -504,8 +538,19 @@ func applyServices(ctx context.Context, q *dbgen.Queries, r collector.Result, ts
 			if err != nil {
 				return fmt.Errorf("insert service: %w", err)
 			}
+			added, err := q.GetServiceByKey(ctx, dbgen.GetServiceByKeyParams{DeviceID: id, Ip: svcIP, Port: int64(in.Port), Proto: proto})
+			if err != nil {
+				return fmt.Errorf("find new service: %w", err)
+			}
+			serviceID = added.ID
 		default:
 			return fmt.Errorf("find service: %w", err)
+		}
+		if params, ok := cleanTLS(in.TLS); ok {
+			params.ID = serviceID
+			if err := q.SetServiceTLS(ctx, params); err != nil {
+				return fmt.Errorf("store certificate of service %d: %w", serviceID, err)
+			}
 		}
 	}
 	for _, k := range r.ServicesPolled {

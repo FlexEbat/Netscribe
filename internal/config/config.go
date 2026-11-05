@@ -154,7 +154,16 @@ type DiscoveryConfig struct {
 	// IPv6 switches the IPv6 discovery on: one echo to ff02::1 on each interface that has a
 	// scan target, then a read of the neighbour table. A missing value means true.
 	IPv6 *bool `yaml:"ipv6"`
+	// TLSCerts reads the certificate of every open TLS port: a handshake, no data. A missing
+	// value means true.
+	TLSCerts *bool `yaml:"tlsCerts"`
+	// DHCPListen listens for the DHCP requests other machines broadcast, through a packet
+	// socket, and never answers. It needs CAP_NET_RAW, so it is off by default.
+	DHCPListen bool `yaml:"dhcpListen"`
 }
+
+// TLSCertsEnabled reports whether certificates are read. They are, unless the config says false.
+func (d DiscoveryConfig) TLSCertsEnabled() bool { return d.TLSCerts == nil || *d.TLSCerts }
 
 // IPv6Enabled reports whether IPv6 discovery is on. It is on unless the config says false.
 func (d DiscoveryConfig) IPv6Enabled() bool { return d.IPv6 == nil || *d.IPv6 }

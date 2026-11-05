@@ -64,6 +64,8 @@ discovery:
   nmapPath: "" # empty: look for nmap in PATH, otherwise an absolute path
   probeRoutedTargets: false # ICMP and TCP probes of subnets behind a router
   ipv6: true # find IPv6 addresses: one echo to ff02::1 per scanned interface, then the neighbour table
+  tlsCerts: true # read the certificate of every open TLS port: a handshake and no data
+  dhcpListen: false # read DHCP requests other machines broadcast, never answers; needs CAP_NET_RAW (the setup writes the systemd drop-in)
 
 export:
   chromePath: "" # empty: look for chromium and google-chrome in PATH

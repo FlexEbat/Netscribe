@@ -24,11 +24,15 @@ type Device struct {
 	MAC string `json:"mac"`
 	IP  string `json:"ip"`
 	// IP6 is the one IPv6 address of the device, in canonical form, empty when it has none.
-	IP6         string     `json:"ip6"`
-	Hostname    string     `json:"hostname"`
-	Vendor      string     `json:"vendor"`
-	Kind        DeviceKind `json:"kind"`
-	Description string     `json:"description"`
+	IP6      string     `json:"ip6"`
+	Hostname string     `json:"hostname"`
+	Vendor   string     `json:"vendor"`
+	Kind     DeviceKind `json:"kind"`
+	// KindScore (0 to 100) and KindReasons (at most 5 short phrases) say why the classifier
+	// chose the kind. For an unknown kind the reasons name the candidates.
+	KindScore   int      `json:"kindScore"`
+	KindReasons []string `json:"kindReasons"`
+	Description string   `json:"description"`
 	// OSGuess is the system nmap guessed, for example "Linux 5.3 - 5.4". It is empty when
 	// nmap never ran for the device or had no guess.
 	OSGuess    string `json:"osGuess"`
@@ -86,6 +90,19 @@ type Service struct {
 	LastSeenAt  time.Time `json:"lastSeenAt"`
 	// Risk is computed from the port and the protocol, nil when the service is not on the list.
 	Risk *Risk `json:"risk"`
+	// TLS is the certificate the service presented, nil when none was read.
+	TLS *TLSCert `json:"tls"`
+}
+
+// TLSCert is what a TLS service showed in its handshake. It is read, never validated: an
+// expired or self signed certificate is still data about the device.
+type TLSCert struct {
+	Subject     string    `json:"subject"` // the common name of the subject
+	SANs        []string  `json:"sans"`    // the first alternative names
+	Issuer      string    `json:"issuer"`  // the common name of the issuer
+	NotBefore   time.Time `json:"notBefore"`
+	NotAfter    time.Time `json:"notAfter"`
+	Fingerprint string    `json:"fingerprint"` // SHA-256 of the DER bytes, lower case hex
 }
 
 type PortMapping struct {
@@ -257,6 +274,9 @@ type DeviceInput struct {
 	OSGuess     string // the system nmap guessed, kept when a later input has none
 	Kind        DeviceKind
 	Source      string
+	// KindScore and KindReasons say why the classifier chose Kind, see section 5.2.
+	KindScore   int
+	KindReasons []string
 }
 
 type InterfaceInput struct {
@@ -284,6 +304,9 @@ type ServiceInput struct {
 	// Banner is what the service said about itself, for example the HTTP Server header.
 	// It comes from the network, so the store cleans and cuts it.
 	Banner string
+	// TLS is the certificate read in the handshake, nil for a service that has none or whose
+	// handshake failed; the stored certificate stays then.
+	TLS *TLSCert
 }
 
 type ContainerInput struct {

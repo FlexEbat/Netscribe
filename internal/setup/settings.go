@@ -83,6 +83,9 @@ var settingGroups = []group{
 		{path: p("discovery.routerTables"), label: "Router tables over SNMP", kind: kBool, def: "on", help: "Reads ARP and bridge tables of routers and switches."},
 		{path: p("discovery.nmapPath"), label: "Path of nmap", kind: kText, def: "found in PATH",
 			help: "An absolute path of the nmap program. Empty means look for nmap in PATH."},
+		{path: p("discovery.ipv6"), label: "IPv6 discovery", kind: kBool, def: "on", help: "One echo to ff02::1 in each scanned segment, then a read of the neighbour table."},
+		{path: p("discovery.tlsCerts"), label: "TLS certificates", kind: kBool, def: "on", help: "A handshake, and no data, on the open TLS ports to read the certificate."},
+		{path: p("discovery.dhcpListen"), label: "Listen for DHCP requests", kind: kBool, def: "off", help: "Reads the DHCP requests other machines broadcast and never answers. Needs raw socket rights for the service."},
 	}},
 	{name: "Docker", hint: "the container view", items: []setting{
 		{path: p("docker.enabled"), label: "Read containers from Docker", kind: kBool, hot: true, def: "off",
@@ -711,7 +714,7 @@ func (s *session) syncDropIn(ctx context.Context) error {
 		s.acc = &acc
 	}
 	s.dockerNeeds()
-	drop := RenderDropIn(s.dockerGroup, s.ans.Nmap)
+	drop := RenderDropInFor(s.dockerGroup, s.ans.Nmap, s.cfg.Discovery.DHCPListen)
 	if drop == "" {
 		return nil
 	}
@@ -719,7 +722,11 @@ func (s *session) syncDropIn(ctx context.Context) error {
 	if old, _ := s.env.ReadFile(path); string(old) == drop {
 		return nil
 	}
-	ok, err := s.p.confirm("Nmap needs raw-socket rights. Write the systemd drop-in that grants them?", true)
+	why := "Nmap needs raw-socket rights."
+	if !s.ans.Nmap {
+		why = "Listening for DHCP requests needs raw-socket rights."
+	}
+	ok, err := s.p.confirm(why+" Write the systemd drop-in that grants them?", true)
 	if err != nil || !ok {
 		return err
 	}

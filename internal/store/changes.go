@@ -23,6 +23,8 @@ const (
 	ChangeLinkRemoved      = "link_removed"
 	ChangeContainerAdded   = "container_added"
 	ChangeContainerRemoved = "container_removed"
+	ChangeTLSChanged       = "tls_changed"
+	ChangeTLSExpiring      = "tls_expiring"
 )
 
 const maxSummaryRunes = 300
@@ -32,10 +34,11 @@ type snapshot struct {
 	devices    map[int64]dbgen.Device
 	links      map[int64]dbgen.Link
 	containers map[string]dbgen.Container
+	services   map[int64]dbgen.Service
 }
 
 func takeSnapshot(ctx context.Context, q *dbgen.Queries) (snapshot, error) {
-	s := snapshot{devices: map[int64]dbgen.Device{}, links: map[int64]dbgen.Link{}, containers: map[string]dbgen.Container{}}
+	s := snapshot{devices: map[int64]dbgen.Device{}, links: map[int64]dbgen.Link{}, containers: map[string]dbgen.Container{}, services: map[int64]dbgen.Service{}}
 	devices, err := q.ListDevices(ctx)
 	if err != nil {
 		return s, fmt.Errorf("snapshot devices: %w", err)
@@ -56,6 +59,13 @@ func takeSnapshot(ctx context.Context, q *dbgen.Queries) (snapshot, error) {
 	}
 	for _, c := range containers {
 		s.containers[c.ID] = c
+	}
+	services, err := q.ListServices(ctx)
+	if err != nil {
+		return s, fmt.Errorf("snapshot services: %w", err)
+	}
+	for _, sv := range services {
+		s.services[sv.ID] = sv
 	}
 	return s, nil
 }
@@ -161,6 +171,48 @@ func diffSnapshots(before, after snapshot) []change {
 	for _, id := range cremoved {
 		c := before.containers[id]
 		out = append(out, change{ChangeContainerRemoved, id, fmt.Sprintf("Container %s (%s) is gone from %s", c.Name, c.Image, name(c.DeviceID))})
+	}
+	out = append(out, tlsChanges(before, after, name)...)
+	return out
+}
+
+// tlsChanges lists the certificate changes of the services a scan saw: a new fingerprint on a
+// service that had another one, and a certificate that came within 14 days of its end since
+// the scan before. The same data twice writes nothing.
+func tlsChanges(before, after snapshot, name func(int64) string) []change {
+	ids := make([]int64, 0, len(after.services))
+	for id := range after.services {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	var out []change
+	for _, id := range ids {
+		now := after.services[id]
+		if now.TlsFingerprint == "" {
+			continue
+		}
+		was, existed := before.services[id]
+		key := strconv.FormatInt(id, 10)
+		where := fmt.Sprintf("%s port %d", name(now.DeviceID), now.Port)
+		if existed && was.TlsFingerprint != "" && was.TlsFingerprint != now.TlsFingerprint {
+			out = append(out, change{ChangeTLSChanged, key, fmt.Sprintf("Certificate of %s changed: %s -> %s", where, dashIfEmpty(was.TlsSubject), dashIfEmpty(now.TlsSubject))})
+		}
+		if existed && was.LastSeenAt == now.LastSeenAt {
+			continue // the scan did not see this service, so it has nothing new to say
+		}
+		end, err := parseTime(now.TlsNotAfter)
+		seen, err2 := parseTime(now.LastSeenAt)
+		if err != nil || err2 != nil || end.Sub(seen) >= expiringSoon {
+			continue
+		}
+		if existed && was.TlsFingerprint == now.TlsFingerprint {
+			wasEnd, e1 := parseTime(was.TlsNotAfter)
+			wasSeen, e2 := parseTime(was.LastSeenAt)
+			if e1 == nil && e2 == nil && wasEnd.Sub(wasSeen) < expiringSoon {
+				continue // already reported by an earlier scan
+			}
+		}
+		out = append(out, change{ChangeTLSExpiring, key, fmt.Sprintf("Certificate of %s ends %s", where, end.UTC().Format("2006-01-02"))})
 	}
 	return out
 }

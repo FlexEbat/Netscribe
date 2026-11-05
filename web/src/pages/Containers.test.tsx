@@ -28,6 +28,8 @@ function device(id: number, ip: string, hostname: string): Device {
     mac: `aa:bb:cc:dd:ee:0${id}`,
     ip,
     ip6: "",
+    kindScore: 0,
+    kindReasons: [],
     hostname,
     vendor: "",
     kind: "server",

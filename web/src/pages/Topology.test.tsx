@@ -45,6 +45,8 @@ function device(id: number, overrides: Partial<Device> = {}): Device {
     mac: `aa:bb:cc:dd:ee:0${id}`,
     ip: `192.168.1.${id}`,
     ip6: "",
+    kindScore: 0,
+    kindReasons: [],
     hostname: `host-${id}`,
     vendor: "Acme",
     kind: "host",

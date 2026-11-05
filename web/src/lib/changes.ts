@@ -27,6 +27,12 @@ export const kindLabels: Record<ChangeKind, string> = {
   get container_removed() {
     return t("changes.containerRemoved")
   },
+  get tls_changed() {
+    return t("changes.tlsChanged")
+  },
+  get tls_expiring() {
+    return t("changes.tlsExpiring")
+  },
 }
 
 /** Tailwind classes of a change: green for what appeared, red for what went away, amber for what changed. */
@@ -42,6 +48,8 @@ export function kindClasses(kind: string): string {
     case "container_removed":
       return "border-red-500/50 bg-red-500/10 text-red-700 dark:text-red-400"
     case "device_changed":
+    case "tls_changed":
+    case "tls_expiring":
       return "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400"
     default:
       return "border-border bg-muted text-muted-foreground"
