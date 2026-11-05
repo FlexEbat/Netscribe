@@ -64,10 +64,9 @@ func (c *TLSCerts) certFacts(ip string) []string {
 }
 
 type certJob struct {
-	dev      model.Device
-	ip, own  string
-	port     int
-	deviceIP string
+	dev     model.Device
+	ip, own string
+	port    int
 }
 
 // Collect reads the certificates. It does nothing when discovery.tlsCerts is off.

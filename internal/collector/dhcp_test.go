@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/netip"
 	"os"
 	"strings"
@@ -29,18 +30,26 @@ func dhcpPacket(op byte, mac []byte, srcPort, dstPort uint16, opts ...dhcpOpt) [
 	copy(body[28:34], mac)
 	copy(body[236:240], []byte{0x63, 0x82, 0x53, 0x63})
 	for _, o := range opts {
-		body = append(body, o.code, byte(len(o.val)))
+		body = append(body, o.code, b8(len(o.val)))
 		body = append(body, o.val...)
 	}
 	body = append(body, 255)
 	udp := binary.BigEndian.AppendUint16(nil, srcPort)
 	udp = binary.BigEndian.AppendUint16(udp, dstPort)
-	udp = binary.BigEndian.AppendUint16(udp, uint16(8+len(body))) //nolint:gosec // a fixture of a few hundred bytes
+	udp = binary.BigEndian.AppendUint16(udp, u16(8+len(body)))
 	udp = append(udp, 0, 0)
 	udp = append(udp, body...)
 	ip := []byte{0x45, 0, 0, 0, 0, 0, 0, 0, 64, 17, 0, 0, 0, 0, 0, 0, 255, 255, 255, 255}
-	binary.BigEndian.PutUint16(ip[2:4], uint16(20+len(udp))) //nolint:gosec // a fixture of a few hundred bytes
+	binary.BigEndian.PutUint16(ip[2:4], u16(20+len(udp)))
 	return append(ip, udp...)
+}
+
+// b8 narrows a small number of a fixture to a byte.
+func b8(n int) byte {
+	if n < 0 || n > math.MaxUint8 {
+		panic("fixture too large")
+	}
+	return byte(n)
 }
 
 func request(msg byte, mac []byte, opts ...dhcpOpt) []byte {
@@ -175,7 +184,7 @@ func TestDHCPForgetsOldRequestsAndCapsMemory(t *testing.T) {
 	tick := time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC)
 	flood.now = func() time.Time { tick = tick.Add(time.Second); return tick } // one packet a second: under the rate limit
 	for i := 0; i < maxDHCPSeen+500; i++ {
-		mac := []byte{0x02, 0, byte(i >> 16), byte(i >> 8), byte(i), 1}
+		mac := []byte{0x02, 0, b8(i >> 16 & 0xff), b8(i >> 8 & 0xff), b8(i & 0xff), 1}
 		flood.handle(request(dhcpDiscover, mac))
 	}
 	flood.mu.Lock()
@@ -220,7 +229,7 @@ func TestDHCPListenStartsOnceAndOnlyWhenAsked(t *testing.T) {
 func TestDHCPReadsAtMostFiftyPacketsASecond(t *testing.T) {
 	c := newTestDHCP(t)
 	for i := 0; i < 80; i++ {
-		c.handle(request(dhcpDiscover, []byte{0x02, 0, 0, 0, byte(i), 1}))
+		c.handle(request(dhcpDiscover, []byte{0x02, 0, 0, 0, b8(i), 1}))
 	}
 	c.mu.Lock()
 	first := len(c.seen)
@@ -241,7 +250,7 @@ func TestDHCPReadsAtMostFiftyPacketsASecond(t *testing.T) {
 func TestDHCPCapsTheFingerprint(t *testing.T) {
 	params := make([]byte, 200)
 	for i := range params {
-		params[i] = byte(100 + i%100)
+		params[i] = b8(100 + i%100)
 	}
 	obs, err := parseDHCP(request(dhcpDiscover, testMAC, dhcpOpt{55, params}))
 	if err != nil {
