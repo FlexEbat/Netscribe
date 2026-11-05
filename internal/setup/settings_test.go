@@ -49,7 +49,7 @@ var example = map[string]string{
 	"snmp.timeout": "3s", "history.keepScans": "50", "audit.keepDays": "30",
 	"auth.minPasswordLength": "14", "auth.maxFailedLogins": "4", "auth.lockoutDuration": "20m",
 	"auth.sessionIdleTimeout": "20m", "auth.sessionMaxAge": "8h", "export.chromePath": "/usr/bin/chromium",
-	"discovery.nmapPath": "/usr/bin/nmap", "ssh.knownHosts": "/etc/ssh/ssh_known_hosts",
+	"discovery.nmapPath": "/usr/bin/nmap", "discovery.ipv6": "false", "discovery.tlsCerts": "false", "discovery.dhcpListen": "true", "ssh.knownHosts": "/etc/ssh/ssh_known_hosts",
 	"updates.check": "false", "metrics.enabled": "true",
 }
 
@@ -229,7 +229,7 @@ func TestConfigureToggleEnumAndSecrets(t *testing.T) {
 	f.secrets = []string{"another-community"}
 	// Discovery: Nmap off->on? Use the mDNS toggle (item 3): answer n. Then the scope enum (item 2): all.
 	// SNMP (menu 5): Communities (item 1): add one.
-	input := menu("3", "3", "n", "y", "2", "2", "y", "8", "5", "1", "1", "y", "3", "15")
+	input := menu("3", "3", "n", "y", "2", "2", "y", "11", "5", "1", "1", "y", "3", "15")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -266,7 +266,7 @@ func TestEnablingNmapOffersTheCapabilityDropIn(t *testing.T) {
 	f, o := installed(t)
 	f.bins["nmap"] = true
 	// Discovery (3), Nmap (1): yes, then the drop-in question: yes
-	input := menu("3", "1", "y", "y", "y", "8", "15")
+	input := menu("3", "1", "y", "y", "y", "11", "15")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}

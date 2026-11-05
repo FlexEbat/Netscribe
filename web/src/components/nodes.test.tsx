@@ -12,6 +12,8 @@ const device = (over: Partial<Device> = {}): Device => ({
   mac: "aa:bb:cc:dd:ee:ff",
   ip: "192.168.1.5",
   ip6: "",
+  kindScore: 0,
+  kindReasons: [],
   hostname: "gateway",
   vendor: "Acme",
   kind: "router",

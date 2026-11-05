@@ -16,3 +16,8 @@ SELECT * FROM services ORDER BY device_id, port, proto, ip;
 
 -- name: ListServicesByDevice :many
 SELECT * FROM services WHERE device_id = ? ORDER BY port, proto, ip;
+
+-- name: SetServiceTLS :exec
+UPDATE services
+SET tls_subject = ?, tls_sans = ?, tls_issuer = ?, tls_not_before = ?, tls_not_after = ?, tls_fingerprint = ?
+WHERE id = ?;

@@ -24,7 +24,7 @@ func (q *Queries) DeleteDeviceServicesBefore(ctx context.Context, arg DeleteDevi
 }
 
 const getServiceByKey = `-- name: GetServiceByKey :one
-SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at FROM services WHERE device_id = ? AND ip = ? AND port = ? AND proto = ?
+SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at, tls_subject, tls_sans, tls_issuer, tls_not_before, tls_not_after, tls_fingerprint FROM services WHERE device_id = ? AND ip = ? AND port = ? AND proto = ?
 `
 
 type GetServiceByKeyParams struct {
@@ -52,6 +52,12 @@ func (q *Queries) GetServiceByKey(ctx context.Context, arg GetServiceByKeyParams
 		&i.Banner,
 		&i.FirstSeenAt,
 		&i.LastSeenAt,
+		&i.TlsSubject,
+		&i.TlsSans,
+		&i.TlsIssuer,
+		&i.TlsNotBefore,
+		&i.TlsNotAfter,
+		&i.TlsFingerprint,
 	)
 	return i, err
 }
@@ -87,7 +93,7 @@ func (q *Queries) InsertService(ctx context.Context, arg InsertServiceParams) er
 }
 
 const listServices = `-- name: ListServices :many
-SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at FROM services ORDER BY device_id, port, proto, ip
+SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at, tls_subject, tls_sans, tls_issuer, tls_not_before, tls_not_after, tls_fingerprint FROM services ORDER BY device_id, port, proto, ip
 `
 
 func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
@@ -109,6 +115,12 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 			&i.Banner,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.TlsSubject,
+			&i.TlsSans,
+			&i.TlsIssuer,
+			&i.TlsNotBefore,
+			&i.TlsNotAfter,
+			&i.TlsFingerprint,
 		); err != nil {
 			return nil, err
 		}
@@ -124,7 +136,7 @@ func (q *Queries) ListServices(ctx context.Context) ([]Service, error) {
 }
 
 const listServicesByDevice = `-- name: ListServicesByDevice :many
-SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at FROM services WHERE device_id = ? ORDER BY port, proto, ip
+SELECT id, device_id, ip, port, proto, name, banner, first_seen_at, last_seen_at, tls_subject, tls_sans, tls_issuer, tls_not_before, tls_not_after, tls_fingerprint FROM services WHERE device_id = ? ORDER BY port, proto, ip
 `
 
 func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]Service, error) {
@@ -146,6 +158,12 @@ func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]S
 			&i.Banner,
 			&i.FirstSeenAt,
 			&i.LastSeenAt,
+			&i.TlsSubject,
+			&i.TlsSans,
+			&i.TlsIssuer,
+			&i.TlsNotBefore,
+			&i.TlsNotAfter,
+			&i.TlsFingerprint,
 		); err != nil {
 			return nil, err
 		}
@@ -158,6 +176,35 @@ func (q *Queries) ListServicesByDevice(ctx context.Context, deviceID int64) ([]S
 		return nil, err
 	}
 	return items, nil
+}
+
+const setServiceTLS = `-- name: SetServiceTLS :exec
+UPDATE services
+SET tls_subject = ?, tls_sans = ?, tls_issuer = ?, tls_not_before = ?, tls_not_after = ?, tls_fingerprint = ?
+WHERE id = ?
+`
+
+type SetServiceTLSParams struct {
+	TlsSubject     string
+	TlsSans        string
+	TlsIssuer      string
+	TlsNotBefore   string
+	TlsNotAfter    string
+	TlsFingerprint string
+	ID             int64
+}
+
+func (q *Queries) SetServiceTLS(ctx context.Context, arg SetServiceTLSParams) error {
+	_, err := q.db.ExecContext(ctx, setServiceTLS,
+		arg.TlsSubject,
+		arg.TlsSans,
+		arg.TlsIssuer,
+		arg.TlsNotBefore,
+		arg.TlsNotAfter,
+		arg.TlsFingerprint,
+		arg.ID,
+	)
+	return err
 }
 
 const touchService = `-- name: TouchService :exec

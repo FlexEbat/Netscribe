@@ -92,14 +92,23 @@ func RenderUnit(o Options) (string, error) {
 
 // RenderDropIn returns a systemd drop-in with the rights the chosen features need, or
 // an empty string when none is needed.
-func RenderDropIn(group string, nmap bool) string {
+func RenderDropIn(group string, nmap bool) string { return RenderDropInFor(group, nmap, false) }
+
+// RenderDropInFor is RenderDropIn that also grants the raw-socket right the DHCP listener
+// needs. Nmap and the listener ask for the same two capabilities, so the lines are written
+// once whichever of them is on.
+func RenderDropInFor(group string, nmap, dhcp bool) string {
 	var lines []string
 	if group != "" {
 		lines = append(lines, "# Read the container data from the Docker socket.", "SupplementaryGroups="+group)
 	}
-	if nmap {
+	if nmap || dhcp {
+		reason := "Nmap needs raw sockets for the operating system detection."
+		if !nmap {
+			reason = "The DHCP listener reads broadcast requests through a packet socket."
+		}
 		lines = append(lines,
-			"# Nmap needs raw sockets for the operating system detection.",
+			"# "+reason,
 			"AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN",
 			"CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN")
 	}

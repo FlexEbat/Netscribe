@@ -29,7 +29,7 @@ func (s *Store) ListServices(ctx context.Context, deviceID int64) ([]model.Servi
 		}
 		out = append(out, model.Service{
 			ID: r.ID, DeviceID: r.DeviceID, IP: r.Ip, Port: int(r.Port), Proto: r.Proto, Name: r.Name, Banner: r.Banner,
-			FirstSeenAt: first, LastSeenAt: last, Risk: model.RateService(int(r.Port), r.Proto),
+			FirstSeenAt: first, LastSeenAt: last, Risk: model.RateService(int(r.Port), r.Proto), TLS: decodeTLS(r),
 		})
 	}
 	return out, nil

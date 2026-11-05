@@ -442,6 +442,11 @@ func checkFeatures(env Env, o Options, cfg config.Config) []Finding {
 			"Nmap can type devices that nothing else could", "set discovery.nmap: true"))
 	}
 
+	if cfg.Discovery.DHCPListen && !hasSetting(text, "AmbientCapabilities", "CAP_NET_RAW") {
+		out = append(out, finding(areaFeature, LevelWarn, "DHCP listening runs without raw-socket rights",
+			"the packet socket needs CAP_NET_RAW", "netscribe setup writes a systemd drop-in with the rights"))
+	}
+
 	if p, ok := findChrome(env, cfg.Export.ChromePath); ok {
 		out = append(out, finding(areaFeature, LevelOK, "PDF export has a browser: "+p, "", ""))
 	} else {

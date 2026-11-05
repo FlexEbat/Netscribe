@@ -177,6 +177,8 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		MAC:         r.Mac,
 		IP:          r.Ip,
 		IP6:         r.Ip6,
+		KindScore:   int(r.KindScore),
+		KindReasons: decodeReasons(r.KindReasons),
 		Hostname:    r.Hostname,
 		Vendor:      r.Vendor,
 		Kind:        model.DeviceKind(r.Kind),

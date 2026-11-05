@@ -61,3 +61,6 @@ UPDATE devices SET
     WHEN kind = 'unknown' AND kind_locked = 0 AND sqlc.arg(kind) <> '' AND sqlc.arg(kind) <> 'unknown'
     THEN sqlc.arg(kind) ELSE kind END
 WHERE id = sqlc.arg(id);
+
+-- name: SetKindVerdict :exec
+UPDATE devices SET kind_score = ?, kind_reasons = ? WHERE id = ?;

@@ -1,5 +1,6 @@
 import type { Service } from "@/api/client"
 import { RiskBadge } from "@/components/RiskBadge"
+import { CertCell } from "@/components/CertCell"
 import { ServiceLink } from "@/components/ServiceLink"
 import {
   Table,
@@ -33,6 +34,7 @@ export function ServicesTable({
           <TableHead>{t("servicesTable.port")}</TableHead>
           <TableHead>{t("servicesTable.protocol")}</TableHead>
           <TableHead>{t("servicesTable.banner")}</TableHead>
+          <TableHead>{t("servicesTable.certificate")}</TableHead>
           <TableHead>{t("servicesTable.open")}</TableHead>
         </TableRow>
       </TableHeader>
@@ -47,6 +49,9 @@ export function ServicesTable({
             <TableCell className="uppercase">{s.proto}</TableCell>
             <TableCell className="max-w-64 break-words text-muted-foreground">
               {s.banner || "–"}
+            </TableCell>
+            <TableCell>
+              <CertCell cert={s.tls} />
             </TableCell>
             <TableCell>
               <ServiceLink address={s.ip || address} service={s} />

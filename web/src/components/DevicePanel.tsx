@@ -359,6 +359,31 @@ function Body({ state }: { state: State }) {
   )
 }
 
+/** The kind of a device with how sure the classifier was and why, or who set it. */
+function KindCell({ device: d }: { device: Device }) {
+  const hint = d.kindLocked
+    ? t("devicePanel.setByPerson")
+    : d.kindScore > 0
+      ? t("devicePanel.kindScore", { n: d.kindScore })
+      : ""
+  const reasons = d.kindLocked ? [] : d.kindReasons
+  return (
+    <div className="flex flex-col gap-1">
+      <span>
+        {kindLabels[d.kind]}
+        {hint ? <span className="text-muted-foreground"> ({hint})</span> : null}
+      </span>
+      {reasons.length > 0 ? (
+        <ul className="list-disc pl-4 text-xs text-muted-foreground">
+          {reasons.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
 function Details({ device: d }: { device: Device }) {
   const group = d.group
     ? `${d.group.name}${d.group.vlan ? t("devicePanel.vlan", { n: d.group.vlan }) : ""}${d.groupAuto ? t("devicePanel.fromRange") : ""}`
@@ -367,7 +392,7 @@ function Details({ device: d }: { device: Device }) {
     [t("devicePanel.status"), <StatusBadge key="s" online={d.online} />],
     [t("devicePanel.trust"), d.trusted ? t("devicePanel.trusted") : <UnknownBadge key="t" />],
     [t("devicePanel.group"), group],
-    [t("devicePanel.kind"), kindLabels[d.kind]],
+    [t("devicePanel.kind"), <KindCell key="k" device={d} />],
     ["IP", d.ip || "–"],
     [t("devicePanel.ipv6"), d.ip6 || "–"],
     ["MAC", d.mac || "–"],

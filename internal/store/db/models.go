@@ -80,6 +80,8 @@ type Device struct {
 	Trusted     int64
 	GroupID     sql.NullInt64
 	Ip6         string
+	KindScore   int64
+	KindReasons string
 }
 
 type DeviceGroup struct {
@@ -147,15 +149,21 @@ type Scan struct {
 }
 
 type Service struct {
-	ID          int64
-	DeviceID    int64
-	Ip          string
-	Port        int64
-	Proto       string
-	Name        string
-	Banner      string
-	FirstSeenAt string
-	LastSeenAt  string
+	ID             int64
+	DeviceID       int64
+	Ip             string
+	Port           int64
+	Proto          string
+	Name           string
+	Banner         string
+	FirstSeenAt    string
+	LastSeenAt     string
+	TlsSubject     string
+	TlsSans        string
+	TlsIssuer      string
+	TlsNotBefore   string
+	TlsNotAfter    string
+	TlsFingerprint string
 }
 
 type Session struct {

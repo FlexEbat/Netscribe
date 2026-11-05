@@ -229,7 +229,7 @@ func TestCappedKeepsOnlyTheFirstBytes(t *testing.T) {
 	}
 }
 
-const nmapRules = "nmap,type=router,router\nnmap,type=printer,printer\nmdns,_ipp._tcp,printer\nport,22,server\n"
+const nmapRules = "nmap,type=router,router,55\nnmap,type=printer,printer,55\nmdns,_ipp._tcp,printer,70\nport,22,server,40\n"
 
 func TestClassifierNmapRulesAndOrder(t *testing.T) {
 	c := mustClassifier(t, nmapRules)
@@ -239,7 +239,7 @@ func TestClassifierNmapRulesAndOrder(t *testing.T) {
 	if got := c.Kind("", "", Facts{Services: -1, Nmap: []string{"type=general purpose"}}); got != model.KindUnknown {
 		t.Errorf("kind = %q, a general purpose guess must not type a device", got)
 	}
-	// mDNS is tried before nmap, a port after it.
+	// mDNS weighs more than nmap, a port less.
 	if got := c.Kind("", "", Facts{Services: -1, MDNS: []string{"_ipp._tcp"}, Nmap: []string{"type=router"}}); got != model.KindPrinter {
 		t.Errorf("kind = %q, want mdns to beat nmap", got)
 	}

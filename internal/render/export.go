@@ -219,6 +219,8 @@ var changeLabels = map[string]string{
 	"link_removed":      "Link removed",
 	"container_added":   "Container added",
 	"container_removed": "Container removed",
+	"tls_changed":       "Certificate changed",
+	"tls_expiring":      "Certificate ending",
 }
 
 // changeLabel names a kind of change, or returns the kind itself when it is not known.

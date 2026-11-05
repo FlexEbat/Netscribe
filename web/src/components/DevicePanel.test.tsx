@@ -13,6 +13,8 @@ const device: Device = {
   mac: "aa:bb:cc:dd:ee:03",
   ip: "192.168.1.3",
   ip6: "",
+  kindScore: 0,
+  kindReasons: [],
   hostname: "sw1",
   vendor: "Cisco Systems",
   kind: "switch",
@@ -44,6 +46,7 @@ function service(id: number, overrides: Partial<Service> = {}): Service {
     id,
     deviceId: 3,
     ip: "",
+    tls: null,
     port: 22,
     proto: "tcp",
     name: "ssh",
@@ -119,7 +122,7 @@ describe("DevicePanel", () => {
     expect(within(rows[1]!).getByText("tcp")).toBeInTheDocument()
     expect(within(rows[2]!).getByText("https")).toBeInTheDocument()
     // A service without a name and without a banner shows a dash in both columns.
-    expect(within(rows[3]!).getAllByText("–")).toHaveLength(2)
+    expect(within(rows[3]!).getAllByText("–")).toHaveLength(3)
   })
 
   it("says so when no port is open", async () => {
@@ -346,6 +349,7 @@ describe("DevicePanel service links", () => {
       id,
       deviceId: 3,
       ip: "",
+      tls: null,
       port,
       proto: "tcp",
       name,
@@ -384,6 +388,7 @@ describe("DevicePanel IPv6", () => {
       id,
       deviceId: 3,
       ip,
+      tls: null,
       port,
       proto: "tcp",
       name: "http",
@@ -406,5 +411,82 @@ describe("DevicePanel IPv6", () => {
     await userEvent.click(await screen.findByRole("tab", { name: /Services/ }))
     const hrefs = (await screen.findAllByRole("link")).map((a) => a.getAttribute("href"))
     expect(hrefs).toEqual(["http://192.168.1.3", "http://[fd00::3]:8080"])
+  })
+})
+
+describe("DevicePanel detection", () => {
+  const cert = (notAfter: string) => ({
+    subject: "nas.lan",
+    sans: ["nas.lan", "nas"],
+    issuer: "nas.lan",
+    notBefore: "2020-01-01T00:00:00.000Z",
+    notAfter,
+    fingerprint: "ab".repeat(32),
+  })
+  const svc = (id: number, port: number, tls: ReturnType<typeof cert> | null): Service => ({
+    id,
+    deviceId: 3,
+    ip: "",
+    tls,
+    port,
+    proto: "tcp",
+    name: "https",
+    banner: "",
+    firstSeenAt: "2026-10-09T12:00:00.000Z",
+    lastSeenAt: "2026-10-09T12:00:00.000Z",
+    risk: null,
+  })
+
+  it("shows the score and the reasons next to the kind", async () => {
+    mockFetch({
+      "GET /api/devices/3": () =>
+        json(200, {
+          device: { ...device, kindScore: 90, kindReasons: ["port 9100", "HTTP banner: cups"] },
+          interfaces: [],
+          services: [],
+        }),
+    })
+    render(<DevicePanel deviceId={3} onClose={() => {}} />)
+    expect(await screen.findByText("(score 90)")).toBeInTheDocument()
+    expect(screen.getByText("port 9100")).toBeInTheDocument()
+    expect(screen.getByText("HTTP banner: cups")).toBeInTheDocument()
+  })
+
+  it("says a person set the kind and hides the classifier's reasons", async () => {
+    mockFetch({
+      "GET /api/devices/3": () =>
+        json(200, {
+          device: { ...device, kindLocked: true, kindScore: 90, kindReasons: ["port 9100"] },
+          interfaces: [],
+          services: [],
+        }),
+    })
+    render(<DevicePanel deviceId={3} onClose={() => {}} />)
+    expect(await screen.findByText("(set by a person)")).toBeInTheDocument()
+    expect(screen.queryByText("port 9100")).not.toBeInTheDocument()
+  })
+
+  it("shows an expired certificate, one ending soon and a good one", async () => {
+    const day = 24 * 60 * 60 * 1000
+    mockFetch({
+      "GET /api/devices/3": () =>
+        json(200, {
+          device,
+          interfaces: [],
+          services: [
+            svc(1, 443, cert(new Date(Date.now() - 3 * day).toISOString())),
+            svc(2, 8443, cert(new Date(Date.now() + 5 * day).toISOString())),
+            svc(3, 993, cert(new Date(Date.now() + 200 * day).toISOString())),
+            svc(4, 995, null),
+          ],
+        }),
+    })
+    render(<DevicePanel deviceId={3} onClose={() => {}} />)
+    await userEvent.click(await screen.findByRole("tab", { name: /Services/ }))
+    expect(await screen.findByText(/^Expired /)).toBeInTheDocument()
+    expect(screen.getByText(/^Ends /)).toBeInTheDocument()
+    expect(screen.getByText(/^Valid until /)).toBeInTheDocument()
+    expect(screen.getAllByText("nas.lan").length).toBeGreaterThanOrEqual(3)
+    expect(screen.getAllByText("Also for nas.lan, nas").length).toBe(3)
   })
 })
