@@ -20,6 +20,7 @@ func fullServer() *server {
 		version:    "v-test",
 		updates:    &update.Checker{},
 		helper:     struct{ SystemHelper }{},
+		auto:       struct{ AutoUpdates }{},
 		health:     struct{ HealthRunner }{},
 		sessions:   struct{ SessionStore }{},
 		mfa:        struct{ MFAStore }{},

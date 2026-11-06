@@ -247,11 +247,13 @@ func serve(args []string, e streams) error {
 	scanner.SetEvents(hub)
 	updates := &update.Checker{}
 	go updates.Run(ctx, func() bool { return live.Current().Updates.Check }, func(err error) { logger.Warn("update check", "err", err) })
+	auto := newAutoUpdates(db, live.Current, updates, scanner, newHelperClient(cfg.Database), cfg.Database)
+	go auto.Run(ctx, func(err error) { logger.Warn("automatic update", "err", err) })
 	notifier := notify.New(notifySource{db}, func() config.NotifyConfig { return live.Current().Notify }, logger)
 	go notifyOnScans(ctx, hub, notifier)
 	router := api.NewRouter(api.Options{
 		Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
-		Helper: newHelperClient(cfg.Database), Sessions: db, MFA: db, Sealer: sealer, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
+		Helper: newHelperClient(cfg.Database), Auto: auto, Sessions: db, MFA: db, Sealer: sealer, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},

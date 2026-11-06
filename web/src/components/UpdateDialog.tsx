@@ -46,7 +46,7 @@ export function UpdateDialog({ info, canUpdate, onClose, onInfo }: UpdateDialogP
           onInfo(next)
           if (next.version !== from.current) {
             setPhase("done")
-          } else if (next.helper.state === "failed") {
+          } else if (next.helper.state === "failed" || next.helper.state === "rolled back") {
             setError(next.helper.message || t("updateDialog.failed"))
             setPhase("failed")
           }

@@ -32,6 +32,7 @@ function info(over: Partial<VersionInfo> = {}, available = false): VersionInfo {
       changelogUrl: "https://github.com/FlexEbat/Netscribe/releases/tag/v0.3.0",
     },
     helper: { available: true, state: "idle", action: "", message: "", at: null },
+    auto: null,
     ...over,
   }
 }

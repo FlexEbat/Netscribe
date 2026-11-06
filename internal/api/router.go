@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
 	"path"
@@ -157,6 +158,8 @@ type Options struct {
 	// Backup makes and checks backups. Without it GET /api/backup and POST /api/backup/restore
 	// are not registered.
 	Backup BackupService
+	// Auto serves the automatic update status and its resume route. Without it neither exists.
+	Auto AutoUpdates
 	// Helper takes the update and restart requests. Without it POST /api/update and
 	// POST /api/system/restart are not registered.
 	Helper SystemHelper
@@ -195,6 +198,7 @@ type server struct {
 	updates        *update.Checker
 	updatesEnabled func() bool
 	helper         SystemHelper
+	auto           AutoUpdates
 	settings       SettingsEditor
 	notifier       Notifications
 	backup         BackupService
@@ -224,7 +228,7 @@ const (
 
 func (s *server) routes() []Route {
 	table := []Route{
-		route(http.MethodGet, "/healthz", permPublic, healthz),
+		route(http.MethodGet, "/healthz", permPublic, s.healthz),
 		route(http.MethodPost, "/api/auth/login", permPublic, s.login),
 		route(http.MethodPost, "/api/auth/logout", permSession, s.logout),
 		route(http.MethodGet, "/api/auth/me", permSession, s.me),
@@ -261,6 +265,9 @@ func (s *server) routes() []Route {
 	)
 	if s.updates != nil {
 		table = append(table, route(http.MethodPost, "/api/update/check", model.PermSystemManage, s.recheck))
+	}
+	if s.auto != nil {
+		table = append(table, route(http.MethodPost, "/api/update/auto/resume", model.PermSystemManage, s.resumeAutoUpdates))
 	}
 	if s.helper != nil {
 		table = append(table,
@@ -394,6 +401,7 @@ func newServer(opts Options) *server {
 		updates:        opts.Updates,
 		updatesEnabled: opts.UpdatesEnabled,
 		helper:         opts.Helper,
+		auto:           opts.Auto,
 		backup:         opts.Backup,
 		metricsOn:      opts.MetricsEnabled,
 		health:         opts.Health,
@@ -430,7 +438,10 @@ func (s *server) register(r chi.Router, table []Route) {
 	}
 }
 
-func healthz(w http.ResponseWriter, _ *http.Request) {
+func (s *server) healthz(w http.ResponseWriter, r *http.Request) {
+	if s.version != "" && localProbe(r) {
+		w.Header().Set(update.VersionHeader, s.version) // for the helper, see update.VersionHeader
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	_, _ = w.Write([]byte("ok\n")) // a failed write to the client has no recovery
 }
@@ -487,4 +498,23 @@ func versionOrDev(v string) string {
 		return "dev"
 	}
 	return v
+}
+
+// localProbe reports whether the request came straight from this host: a loopback address
+// and none of the headers a proxy adds.
+func localProbe(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip, err := netip.ParseAddr(host)
+	if err != nil || !ip.Unmap().IsLoopback() {
+		return false
+	}
+	for _, h := range []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Real-Ip", "Forwarded", "Via"} {
+		if r.Header.Get(h) != "" {
+			return false
+		}
+	}
+	return true
 }

@@ -93,6 +93,7 @@ type envOptions struct {
 	version  string
 	updates  *update.Checker
 	helper   SystemHelper
+	auto     AutoUpdates
 	backup   BackupService
 	metrics  func() bool
 	health   HealthRunner
@@ -145,7 +146,7 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 		repo = o.wrapRepo(st)
 	}
 	s := newServer(Options{
-		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Waker: o.waker, Version: o.version, Updates: o.updates, Helper: o.helper, Backup: o.backup, MetricsEnabled: o.metrics, Health: o.health, Sessions: sessionsOr(o.sessions, st), MFA: st, Sealer: sealer, Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
+		Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Waker: o.waker, Version: o.version, Updates: o.updates, Helper: o.helper, Auto: o.auto, Backup: o.backup, MetricsEnabled: o.metrics, Health: o.health, Sessions: sessionsOr(o.sessions, st), MFA: st, Sealer: sealer, Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}
@@ -540,4 +541,27 @@ func sessionsOr(s SessionStore, st *store.Store) SessionStore {
 		return s
 	}
 	return st
+}
+
+func TestHealthzTellsTheVersionOnlyToTheSameHost(t *testing.T) {
+	e := newEnv(t, func(o *envOptions) { o.version = "v0.9.0" })
+	for name, tc := range map[string]struct {
+		opts []func(*http.Request)
+		want string
+	}{
+		"the same host":        {[]func(*http.Request){from("127.0.0.1:5000")}, "v0.9.0"},
+		"the same host, IPv6":  {[]func(*http.Request){from("[::1]:5000")}, "v0.9.0"},
+		"another host":         {[]func(*http.Request){from("192.168.1.9:5000")}, ""},
+		"through a proxy":      {[]func(*http.Request){from("127.0.0.1:5000"), withHeader("X-Forwarded-For", "203.0.113.9")}, ""},
+		"through Forwarded":    {[]func(*http.Request){from("127.0.0.1:5000"), withHeader("Forwarded", "for=203.0.113.9")}, ""},
+		"through a Via header": {[]func(*http.Request){from("127.0.0.1:5000"), withHeader("Via", "1.1 proxy")}, ""},
+	} {
+		rec := e.do(http.MethodGet, "/healthz", nil, tc.opts...)
+		if rec.Code != http.StatusOK || rec.Body.String() != "ok\n" {
+			t.Errorf("%s: %d %q, want 200 and the plain ok", name, rec.Code, rec.Body)
+		}
+		if got := rec.Header().Get("X-Netscribe-Version"); got != tc.want {
+			t.Errorf("%s: version header = %q, want %q", name, got, tc.want)
+		}
+	}
 }

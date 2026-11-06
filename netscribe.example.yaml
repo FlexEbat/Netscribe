@@ -72,6 +72,8 @@ export:
 
 updates:
   check: true # ask GitHub once in a while whether a newer release exists; nothing about this host is sent
+  auto: off # off, patch (same major and minor number) or minor (same major number); a new major version is never installed by itself
+  window: "03:00-05:00" # local time, an automatic update starts only inside it; may cross midnight, for example 23:00-02:00
 
 metrics:
   enabled: false # serve /metrics for Prometheus; reading it needs an access token with the read scope

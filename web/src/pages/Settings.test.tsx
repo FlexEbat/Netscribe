@@ -90,6 +90,7 @@ const version: VersionInfo = {
     changelogUrl: "https://github.com/FlexEbat/Netscribe/releases",
   },
   helper: { available: true, state: "idle", action: "", message: "", at: null },
+  auto: null,
 }
 
 function open(extra: Record<string, () => Response> = {}) {
@@ -191,5 +192,77 @@ describe("Settings", () => {
     render(<Settings />)
     await userEvent.click(await screen.findByRole("button", { name: "Check for updates" }))
     expect(await screen.findByText("This is the newest release.")).toBeTruthy()
+  })
+})
+
+describe("Settings automatic updates", () => {
+  const withAuto = (auto: VersionInfo["auto"]): VersionInfo => ({ ...version, auto })
+
+  it("says automatic updates are off and offers nothing to resume", async () => {
+    open({
+      "GET /api/version": () =>
+        json(200, withAuto({ mode: "off", window: "03:00-05:00", paused: false, last: null })),
+    })
+    render(<Settings />)
+    expect(await screen.findByText(/Automatic updates are off/)).toBeTruthy()
+    expect(screen.getByText("No automatic update has run yet.")).toBeTruthy()
+    expect(screen.queryByRole("button", { name: "Resume automatic updates" })).toBeNull()
+  })
+
+  it("shows the mode, the window and the last automatic update", async () => {
+    open({
+      "GET /api/version": () =>
+        json(
+          200,
+          withAuto({
+            mode: "minor",
+            window: "23:00-02:00",
+            paused: false,
+            last: { at: "2026-11-05T01:10:00.000Z", from: "v0.8.0", tag: "v0.9.0", result: "ok" },
+          }),
+        ),
+    })
+    render(<Settings />)
+    expect(await screen.findByText(/Mode minor, inside 23:00-02:00/)).toBeTruthy()
+    expect(screen.getByText(/Last automatic update: v0\.9\.0 on .*, installed\./)).toBeTruthy()
+  })
+
+  it("shows why it is paused after a rollback and lets a person resume", async () => {
+    const paused = withAuto({
+      mode: "minor",
+      window: "03:00-05:00",
+      paused: true,
+      pausedReason: "v0.9.0 did not start and v0.8.0 was put back",
+      last: {
+        at: "2026-11-05T03:10:00.000Z",
+        from: "v0.8.0",
+        tag: "v0.9.0",
+        result: "rolled back",
+        message: "the new program did not answer",
+      },
+    })
+    const mock = open({
+      "GET /api/version": () => json(200, paused),
+      "POST /api/update/auto/resume": () =>
+        json(
+          200,
+          withAuto({
+            mode: "minor",
+            window: "03:00-05:00",
+            paused: false,
+            last: paused.auto?.last ?? null,
+          }),
+        ),
+    })
+    render(<Settings />)
+    expect(await screen.findByText(/Automatic updates are paused/)).toBeTruthy()
+    expect(screen.getByText(/v0\.9\.0 did not start and v0\.8\.0 was put back/)).toBeTruthy()
+    expect(screen.getByText(/, rolled back\./)).toBeTruthy()
+
+    await userEvent.click(screen.getByRole("button", { name: "Resume automatic updates" }))
+    await waitFor(() => expect(screen.queryByText(/Automatic updates are paused/)).toBeNull())
+    expect(
+      mock.calls.some((c) => c.method === "POST" && c.path === "/api/update/auto/resume"),
+    ).toBe(true)
   })
 })

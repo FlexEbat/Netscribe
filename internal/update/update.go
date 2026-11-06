@@ -32,6 +32,11 @@ const (
 	askTimeout = 10 * time.Second
 )
 
+// VersionHeader carries the running version on /healthz for the helper, which asks from the
+// same host: after an update it waits for the new version to answer. A request that came
+// through a proxy, or from another host, gets no header.
+const VersionHeader = "X-Netscribe-Version"
+
 // Release is the newest published release.
 type Release struct {
 	Tag         string    `json:"tag"`     // v0.3.0

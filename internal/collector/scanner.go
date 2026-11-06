@@ -161,6 +161,9 @@ func (s *Scanner) SetEvents(p Publisher) { s.events = p }
 // Docker returns the Docker collector, which the server also runs between scans.
 func (s *Scanner) Docker() *Docker { return s.docker }
 
+// Busy reports whether a scan is running: the automatic update waits for it to end.
+func (s *Scanner) Busy() bool { return s.busy.Load() }
+
 func (s *Scanner) config() config.Config {
 	s.cfgMu.RLock()
 	defer s.cfgMu.RUnlock()

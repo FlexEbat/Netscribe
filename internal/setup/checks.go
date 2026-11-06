@@ -47,6 +47,9 @@ type Options struct {
 	WatchCount int
 	// HealthTimeout is how long the setup waits for the panel to answer after the start.
 	HealthTimeout time.Duration
+	// RollbackWait is how long the helper waits for a new version to answer before it puts
+	// the old program back.
+	RollbackWait time.Duration
 }
 
 // DefaultOptions are the paths of the packaged install, the same ones install.sh uses.
@@ -63,6 +66,7 @@ func DefaultOptions() Options {
 		HelperStatus: HelperStatusPath,
 
 		HealthTimeout: 20 * time.Second,
+		RollbackWait:  60 * time.Second,
 		WatchEvery:    2 * time.Second,
 	}
 }
