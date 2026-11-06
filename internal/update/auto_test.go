@@ -155,9 +155,9 @@ func TestAutoRequestsNothingWhenAConditionFails(t *testing.T) {
 		"nothing is known":      func(h *autoHarness) { h.latest = nil },
 		"no newer release":      func(h *autoHarness) { h.latest = &Release{Tag: "v0.8.0"} },
 		"a pre-release":         func(h *autoHarness) { h.latest = &Release{Tag: "v0.9.0-rc.1"} },
-		"a development build":   func(h *autoHarness) { h.Auto.Version = "dev" },
-		"an empty version":      func(h *autoHarness) { h.Auto.Version = "" },
-		"a pre-release build":   func(h *autoHarness) { h.Auto.Version = "v0.8.0-rc.1" },
+		"a development build":   func(h *autoHarness) { h.Version = "dev" },
+		"an empty version":      func(h *autoHarness) { h.Version = "" },
+		"a pre-release build":   func(h *autoHarness) { h.Version = "v0.8.0-rc.1" },
 		"a tried a few hours ago": func(h *autoHarness) {
 			if err := h.saveRecord(AutoRecord{At: h.now.Add(-23 * time.Hour), Tag: "v0.8.5", Result: ResultOK}); err != nil {
 				t.Fatal(err)
@@ -171,7 +171,7 @@ func TestAutoRequestsNothingWhenAConditionFails(t *testing.T) {
 	} {
 		h := newAuto(t)
 		if name == "a minor bump in patch" {
-			h.Auto.Version = "v0.8.0"
+			h.Version = "v0.8.0"
 		}
 		edit(h)
 		if h.tick(t) || len(h.helper.requests) != 0 {
@@ -248,7 +248,7 @@ func TestAutoNotesASuccessfulUpdate(t *testing.T) {
 	h := newAuto(t)
 	h.tick(t)
 	h.outcome = HelperOutcome{Action: "update", State: "done", At: h.now.Add(time.Minute)}
-	h.Auto.Version = "v0.9.0" // the service restarted as the new version
+	h.Version = "v0.9.0" // the service restarted as the new version
 	h.now = h.now.Add(2 * time.Minute)
 	h.tick(t)
 	if last := h.Last(); last == nil || last.Result != ResultOK {
