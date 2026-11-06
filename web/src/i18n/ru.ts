@@ -653,6 +653,21 @@ export const ru: Record<Key, Entry> = {
     "Где выполнен вход в вашу учётную запись. Завершите те сеансы, которых не знаете или которыми больше не пользуетесь.",
   "settings.appliesAfterRestart": "Применяется после перезапуска.",
   "settings.appliesAtOnce": "Применяется сразу.",
+  "settings.autoFailed": "не удалось",
+  "settings.autoLast": "Последнее автоматическое обновление: {tag}, {date}, {result}.",
+  "settings.autoNone": "Автоматических обновлений ещё не было.",
+  "settings.autoOffText":
+    "Автоматические обновления выключены. Выберите patch или minor в разделе «Обновления» ниже, чтобы включить их.",
+  "settings.autoOk": "установлено",
+  "settings.autoOnText":
+    "Режим {mode}, в окне {window} по местному времени и никогда во время сканирования.",
+  "settings.autoPaused":
+    "Автоматические обновления приостановлены: последнее обновление не сработало и было отменено. {reason}",
+  "settings.autoRequested": "запрошено",
+  "settings.autoResume": "Возобновить автоматические обновления",
+  "settings.autoResumeFailed": "Не удалось возобновить. Попробуйте позже.",
+  "settings.autoRolledBack": "отменено, возвращена прежняя версия",
+  "settings.autoUpdates": "Автоматические обновления",
   "settings.checkFailed": "Не удалось выполнить проверку.",
   "settings.checkForUpdates": "Проверить обновления",
   "settings.discard": "Отменить",

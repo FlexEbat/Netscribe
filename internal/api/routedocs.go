@@ -39,6 +39,7 @@ var routeDocs = map[string]RouteDoc{
 	"GET /api/tokens":                 {Summary: "Lists your access tokens, never their secret part.", Answer: "A list of tokens with name, scope and dates."},
 	"POST /api/tokens":                {Summary: "Creates an access token. The secret is shown once.", Body: `{"name","scope":"read"|"write","days"}`, Answer: "The token, with its secret."},
 	"DELETE /api/tokens/{id}":         {Summary: "Revokes an access token."},
+	"POST /api/update/auto/resume":    {Summary: "Lets automatic updates go on after a rollback paused them."},
 	"POST /api/update/check":          {Summary: "Looks for a newer release now."},
 	"POST /api/update":                {Summary: "Asks the helper to install the newest release.", Answer: "202 when the helper took the request."},
 	"POST /api/system/restart":        {Summary: "Asks the helper to restart the service.", Answer: "202 when the helper took the request."},

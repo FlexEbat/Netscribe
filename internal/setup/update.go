@@ -77,28 +77,46 @@ func notesPreview(notes string) []string {
 // restarts the service. wait asks for the panel to answer afterwards, which only a person at
 // the console wants: the helper has no config to learn the address from.
 func (s *session) installRelease(ctx context.Context, rel update.Release, wait bool) error {
+	if err := s.installBinary(ctx, rel); err != nil {
+		return err
+	}
+	_, err := s.activate(ctx, wait)
+	return err
+}
+
+// installBinary downloads the release, checks its checksum and replaces the program. When
+// it fails, nothing was replaced.
+func (s *session) installBinary(ctx context.Context, rel update.Release) error {
 	s.ui.doing("download " + update.Asset(rel.Tag, s.env.GOARCH) + " and check its checksum")
 	if err := s.env.InstallRelease(ctx, rel.Tag, s.o.BinPath); err != nil {
 		return err
 	}
 	s.ui.done("installed " + rel.Tag + " at " + s.o.BinPath)
-	// The new program carries the new units, so it writes them.
-	if hasSystemd(s.env) {
-		args := []string{"update", "--units", "--config", s.o.ConfigPath}
-		if err := s.runChecked(ctx, Command{Name: s.o.BinPath, Args: args}); err != nil {
-			s.ui.note("the units were not refreshed: %v", err)
-		}
-		if s.serviceActive(ctx) {
-			if err := s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"restart", "netscribe"}}); err != nil {
-				return err
-			}
-			s.ui.done("restarted the service")
-			if wait {
-				return s.waitHealthy(ctx)
-			}
-		}
-	}
 	return nil
+}
+
+// activate refreshes the units with the new program and restarts the service when it was
+// running. It tells whether it restarted it.
+func (s *session) activate(ctx context.Context, wait bool) (restarted bool, err error) {
+	// The new program carries the new units, so it writes them.
+	if !hasSystemd(s.env) {
+		return false, nil
+	}
+	args := []string{"update", "--units", "--config", s.o.ConfigPath}
+	if err := s.runChecked(ctx, Command{Name: s.o.BinPath, Args: args}); err != nil {
+		s.ui.note("the units were not refreshed: %v", err)
+	}
+	if !s.serviceActive(ctx) {
+		return false, nil
+	}
+	if err := s.runChecked(ctx, Command{Name: "systemctl", Args: []string{"restart", "netscribe"}}); err != nil {
+		return false, err
+	}
+	s.ui.done("restarted the service")
+	if wait {
+		return true, s.waitHealthy(ctx)
+	}
+	return true, nil
 }
 
 // RefreshUnits writes the units of the helper and the drop-in that lets the panel save its

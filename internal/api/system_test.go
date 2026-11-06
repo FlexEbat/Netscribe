@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FlexEbat/Netscribe/internal/model"
 	"github.com/FlexEbat/Netscribe/internal/setup"
@@ -210,5 +211,76 @@ func TestSettingsRefusalIsABadRequestAndAFailureIsNot(t *testing.T) {
 		if code := e.as(admin, http.MethodPut, "/api/settings", body).Code; code != http.StatusBadRequest {
 			t.Errorf("%s: status = %d, want 400", name, code)
 		}
+	}
+}
+
+type fakeAuto struct {
+	status  update.AutoStatus
+	resumed int
+	err     error
+}
+
+func (f *fakeAuto) Snapshot() update.AutoStatus { return f.status }
+func (f *fakeAuto) Resume() error {
+	if f.err != nil {
+		return f.err
+	}
+	f.resumed++
+	f.status.Paused, f.status.PausedReason = false, ""
+	return nil
+}
+
+func TestVersionShowsTheAutomaticUpdateStateWhenThereIsOne(t *testing.T) {
+	a := &fakeAuto{status: update.AutoStatus{
+		Mode: "minor", Window: "03:00-05:00", Paused: true, PausedReason: "v0.9.0 did not start",
+		Last: &update.AutoRecord{At: time.Date(2026, 11, 5, 3, 10, 0, 0, time.UTC), From: "v0.8.0", Tag: "v0.9.0", Result: "rolled back"},
+	}}
+	e, admin, _ := systemEnv(t, func(o *envOptions) { o.auto = a })
+	rec := e.as(admin, http.MethodGet, "/api/version", nil)
+	var out struct {
+		Auto *update.AutoStatus `json:"auto"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil || out.Auto == nil {
+		t.Fatalf("%d %s: %v", rec.Code, rec.Body, err)
+	}
+	if out.Auto.Mode != "minor" || !out.Auto.Paused || out.Auto.Last == nil || out.Auto.Last.Result != "rolled back" {
+		t.Errorf("auto = %+v, want the state of the service", out.Auto)
+	}
+
+	e2, admin2, _ := systemEnv(t)
+	rec = e2.as(admin2, http.MethodGet, "/api/version", nil)
+	if !strings.Contains(rec.Body.String(), `"auto":null`) {
+		t.Errorf("body = %s, want auto: null without automatic updates", rec.Body)
+	}
+}
+
+func TestResumeAutomaticUpdatesIsAuditedAndForAdministratorsOnly(t *testing.T) {
+	a := &fakeAuto{status: update.AutoStatus{Mode: "minor", Paused: true, PausedReason: "x"}}
+	e, admin, viewer := systemEnv(t, func(o *envOptions) { o.auto = a })
+	e.addUser("olga", model.RoleOperator)
+
+	for name, s := range map[string]session{"viewer": viewer, "operator": e.mustLogin("olga")} {
+		if code := e.as(s, http.MethodPost, "/api/update/auto/resume", nil).Code; code != http.StatusForbidden {
+			t.Errorf("%s: status = %d, want 403", name, code)
+		}
+	}
+	if a.resumed != 0 {
+		t.Fatalf("resumed %d times by people who may not", a.resumed)
+	}
+
+	rec := e.as(admin, http.MethodPost, "/api/update/auto/resume", nil)
+	if rec.Code != http.StatusOK || a.resumed != 1 || strings.Contains(rec.Body.String(), `"paused":true`) {
+		t.Fatalf("%d %s, resumed %d, want 200, not paused any more and one resume", rec.Code, rec.Body, a.resumed)
+	}
+	entries, err := e.store.ListAudit(context.Background(), store.AuditFilter{Action: "auto_update_resume", Limit: 10})
+	if err != nil || len(entries) != 1 {
+		t.Errorf("audit = %+v, %v, want one auto_update_resume entry", entries, err)
+	}
+}
+
+func TestResumeIsNotARouteWithoutAutomaticUpdates(t *testing.T) {
+	e, admin, _ := systemEnv(t)
+	if code := e.as(admin, http.MethodPost, "/api/update/auto/resume", nil).Code; code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 when the service has no automatic updates", code)
 	}
 }

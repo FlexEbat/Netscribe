@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/FlexEbat/Netscribe/internal/update"
 )
@@ -272,5 +273,118 @@ func TestUpdateOfADevBuildOnlyPointsAtTheRelease(t *testing.T) {
 	}
 	if err := Update(context.Background(), env, o, false); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func updateEnv(t *testing.T) (*fakeSys, Options, Env, *[]string) {
+	t.Helper()
+	f, o, env := helperSetup(t)
+	f.active = "active"
+	o.RollbackWait = 300 * time.Millisecond
+	env.LatestRelease = func(context.Context) (update.Release, error) {
+		return update.Release{Tag: "v0.3.0", Version: "0.3.0"}, nil
+	}
+	var installed []string
+	env.InstallRelease = func(_ context.Context, tag, dst string) error {
+		installed = append(installed, tag)
+		return os.WriteFile(dst, []byte("new "+tag), 0o755) //nolint:gosec // a test program
+	}
+	return f, o, env, &installed
+}
+
+func TestHelperUpdateKeepsThePreviousProgramBeforeReplacingIt(t *testing.T) {
+	f, o, env, _ := updateEnv(t)
+	prev := filepath.Join(filepath.Dir(o.BinPath), "netscribe.previous")
+	var order []string
+	inner := env.InstallRelease
+	env.InstallRelease = func(ctx context.Context, tag, dst string) error {
+		if _, err := os.Stat(prev); err != nil {
+			t.Errorf("the previous program was not kept before the install: %v", err)
+		}
+		order = append(order, "install")
+		return inner(ctx, tag, dst)
+	}
+	env.HealthVersion = func(context.Context, string) (string, error) { return "v0.3.0", nil }
+	if err := Helper(context.Background(), env, o, leaveRequest(t, o, "update")); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.copied) == 0 || f.copied[0] != [2]string{o.BinPath, prev} {
+		t.Errorf("copied = %v, want the old program copied to %s first", f.copied, prev)
+	}
+	if st := statusOf(t, o); st.State != "done" {
+		t.Errorf("status = %+v, want done", st)
+	}
+}
+
+func TestHelperRollsBackWhenTheNewProgramDoesNotAnswer(t *testing.T) {
+	f, o, env, _ := updateEnv(t)
+	env.HealthVersion = func(context.Context, string) (string, error) { return "", errors.New("connection refused") }
+
+	err := Helper(context.Background(), env, o, leaveRequest(t, o, "update"))
+	if err == nil {
+		t.Fatal("a program that does not answer was left in place without an error")
+	}
+	st := statusOf(t, o)
+	if st.State != "rolled back" || st.Action != "update" || !strings.Contains(st.Message, "v0.3.0") {
+		t.Errorf("status = %+v, want rolled back with the version in the message", st)
+	}
+	prev := filepath.Join(filepath.Dir(o.BinPath), "netscribe.previous")
+	if last := f.copied[len(f.copied)-1]; last != [2]string{prev, o.BinPath} {
+		t.Errorf("last copy = %v, want the previous program put back at %s", last, o.BinPath)
+	}
+	restarts := strings.Count(f.ran(), "systemctl restart netscribe")
+	if restarts != 2 {
+		t.Errorf("the service was restarted %d times, want 2: after the update and after the rollback", restarts)
+	}
+}
+
+func TestHelperRollsBackWhenTheWrongVersionAnswers(t *testing.T) {
+	_, o, env, _ := updateEnv(t)
+	env.HealthVersion = func(context.Context, string) (string, error) { return "v0.2.0", nil } // the old one
+	if err := Helper(context.Background(), env, o, leaveRequest(t, o, "update")); err == nil {
+		t.Fatal("want a rollback")
+	}
+	if st := statusOf(t, o); st.State != "rolled back" {
+		t.Errorf("status = %+v, want rolled back", st)
+	}
+}
+
+func TestHelperDoesNotRollBackWhenTheChecksumFails(t *testing.T) {
+	f, o, env, _ := updateEnv(t)
+	env.InstallRelease = func(context.Context, string, string) error {
+		return errors.New("netscribe_0.3.0_linux_amd64.tar.gz does not match its checksum: nothing was installed")
+	}
+	env.HealthVersion = func(context.Context, string) (string, error) {
+		t.Error("the panel was asked about a version that was never installed")
+		return "", nil
+	}
+	if err := Helper(context.Background(), env, o, leaveRequest(t, o, "update")); err == nil {
+		t.Fatal("want the error")
+	}
+	if st := statusOf(t, o); st.State != "failed" || !strings.Contains(st.Message, "checksum") {
+		t.Errorf("status = %+v, want failed with the checksum in it", st)
+	}
+	if strings.Contains(f.ran(), "systemctl restart") {
+		t.Error("the service was restarted for a release that was not installed")
+	}
+	if _, err := os.Stat(o.BinPath); err == nil {
+		if b, _ := os.ReadFile(o.BinPath); strings.HasPrefix(string(b), "new") {
+			t.Error("the program was replaced although the checksum failed")
+		}
+	}
+}
+
+func TestHelperUpdateWithoutARunningServiceHasNothingToWaitFor(t *testing.T) {
+	f, o, env, installed := updateEnv(t)
+	f.active = "inactive"
+	env.HealthVersion = func(context.Context, string) (string, error) {
+		t.Error("the panel was asked although the service was not running")
+		return "", nil
+	}
+	if err := Helper(context.Background(), env, o, leaveRequest(t, o, "update")); err != nil {
+		t.Fatal(err)
+	}
+	if len(*installed) != 1 {
+		t.Errorf("installed = %v, want the one release", *installed)
 	}
 }

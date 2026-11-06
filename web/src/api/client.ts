@@ -569,21 +569,48 @@ export interface UpdateStatus {
 
 export interface HelperState {
   available: boolean
-  /** idle, waiting, running, done or failed. */
+  /** idle, waiting, running, done, failed or rolled back. */
   state: string
   action: string
   message: string
   at: string | null
 }
 
+/** The last automatic update and how it ended: requested, ok, failed or rolled back. */
+export interface AutoRecord {
+  at: string
+  from: string
+  tag: string
+  result: string
+  message?: string
+}
+
+export interface AutoUpdateStatus {
+  /** off, patch or minor. */
+  mode: string
+  /** The local time range an automatic update may start in, such as 03:00-05:00. */
+  window: string
+  /** A rollback paused automatic updates until a person resumes them. */
+  paused: boolean
+  pausedReason?: string
+  last: AutoRecord | null
+}
+
 export interface VersionInfo {
   version: string
   update: UpdateStatus
   helper: HelperState
+  /** Null when the service has no automatic updates. */
+  auto: AutoUpdateStatus | null
 }
 
 export function getVersion(): Promise<VersionInfo> {
   return api<VersionInfo>("GET", "/api/version")
+}
+
+/** Lets automatic updates go on after a rollback paused them. */
+export function resumeAutoUpdates(): Promise<VersionInfo> {
+  return api<VersionInfo>("POST", "/api/update/auto/resume")
 }
 
 /** Asks GitHub now, which the server allows once in 30 seconds. */

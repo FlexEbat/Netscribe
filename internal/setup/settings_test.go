@@ -49,7 +49,7 @@ var example = map[string]string{
 	"snmp.timeout": "3s", "history.keepScans": "50", "audit.keepDays": "30",
 	"auth.minPasswordLength": "14", "auth.maxFailedLogins": "4", "auth.lockoutDuration": "20m",
 	"auth.sessionIdleTimeout": "20m", "auth.sessionMaxAge": "8h", "export.chromePath": "/usr/bin/chromium",
-	"discovery.nmapPath": "/usr/bin/nmap", "discovery.ipv6": "false", "discovery.tlsCerts": "false", "discovery.dhcpListen": "true", "ssh.knownHosts": "/etc/ssh/ssh_known_hosts",
+	"discovery.nmapPath": "/usr/bin/nmap", "updates.auto": "patch", "updates.window": "23:00-02:00", "discovery.ipv6": "false", "discovery.tlsCerts": "false", "discovery.dhcpListen": "true", "ssh.knownHosts": "/etc/ssh/ssh_known_hosts",
 	"updates.check": "false", "metrics.enabled": "true",
 }
 

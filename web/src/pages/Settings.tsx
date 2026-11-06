@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react"
 import {
   ApiError,
+  type AutoUpdateStatus,
   checkForUpdate,
   getSettings,
   getVersion,
   restartService,
+  resumeAutoUpdates,
   saveSettings,
   type Setting,
   type SettingsGroup,
@@ -20,7 +22,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { t } from "@/i18n"
+import { formatDateTime, t, type Key } from "@/i18n"
 import { tRich } from "@/i18n/rich"
 
 /** What the person typed or chose for each key. A key stays out until it is touched. */
@@ -277,6 +279,8 @@ export function Settings() {
         </Card>
       ) : null}
 
+      {info?.auto ? <AutoUpdatesCard auto={info.auto} onInfo={setInfo} /> : null}
+
       {groups.map((g) => (
         <Card key={g.name}>
           <CardHeader>
@@ -336,5 +340,84 @@ export function Settings() {
         <UpdateDialog info={info} canUpdate onClose={() => setDialog(false)} onInfo={setInfo} />
       ) : null}
     </div>
+  )
+}
+
+const autoResults = {
+  requested: "settings.autoRequested",
+  ok: "settings.autoOk",
+  failed: "settings.autoFailed",
+  "rolled back": "settings.autoRolledBack",
+} as const satisfies Record<string, Key>
+
+/** What the service did about automatic updates, and the way back after a rollback. */
+function AutoUpdatesCard({
+  auto,
+  onInfo,
+}: {
+  auto: AutoUpdateStatus
+  onInfo: (info: VersionInfo) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState("")
+
+  async function resume() {
+    setBusy(true)
+    setError("")
+    try {
+      onInfo(await resumeAutoUpdates())
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t("settings.autoResumeFailed"))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const result = auto.last
+    ? (autoResults[auto.last.result as keyof typeof autoResults] ?? null)
+    : null
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("settings.autoUpdates")}</CardTitle>
+        <CardDescription>
+          {auto.mode === "off"
+            ? t("settings.autoOffText")
+            : t("settings.autoOnText", { mode: auto.mode, window: auto.window })}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 text-sm">
+        {auto.paused ? (
+          <Alert variant="destructive">
+            <p>
+              {t("settings.autoPaused", {
+                reason: auto.pausedReason ?? "",
+              })}
+            </p>
+            <Button
+              variant="outline"
+              className="mt-2"
+              disabled={busy}
+              onClick={() => void resume()}
+            >
+              {t("settings.autoResume")}
+            </Button>
+          </Alert>
+        ) : null}
+        {error ? <Alert variant="destructive">{error}</Alert> : null}
+        {auto.last ? (
+          <p>
+            {t("settings.autoLast", {
+              tag: auto.last.tag,
+              date: formatDateTime(auto.last.at),
+              result: result ? t(result) : auto.last.result,
+            })}
+            {auto.last.message ? ` ${auto.last.message}` : ""}
+          </p>
+        ) : (
+          <p className="text-muted-foreground">{t("settings.autoNone")}</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -121,6 +121,10 @@ var settingGroups = []group{
 	{name: "Updates", hint: "newer releases", items: []setting{
 		{path: p("updates.check"), label: "Look for new releases", kind: kBool, hot: true, def: "on",
 			help: "Asks GitHub every few hours whether a newer release exists. Nothing about this host is sent. Off hides the update notice."},
+		{path: p("updates.auto"), label: "Install updates by itself", kind: kEnum, choices: []string{"off", "patch", "minor"}, hot: true, def: "off",
+			help: "patch installs a newer release with the same major and minor number, minor one with the same major number. A new major version is never installed by itself. The service must look for releases, and a root helper must be installed. If the new version does not answer in a minute, the old program is put back and this stays paused until you resume it."},
+		{path: p("updates.window"), label: "Window for automatic updates", kind: kText, hot: true, def: "03:00-05:00",
+			help: "Local time, from-to, for example 03:00-05:00. It may cross midnight. An update starts only inside the window, and never while a scan runs."},
 	}},
 }
 

@@ -88,6 +88,8 @@ var panelGetters = map[string]func(c config.Config) any{
 	"export.chromePath":            func(c config.Config) any { return c.Export.ChromePath },
 	"ssh.knownHosts":               func(c config.Config) any { return c.SSH.KnownHosts },
 	"updates.check":                func(c config.Config) any { return c.Updates.Check },
+	"updates.auto":                 func(c config.Config) any { return c.Updates.AutoMode() },
+	"updates.window":               func(c config.Config) any { return c.Updates.UpdateWindow() },
 	"metrics.enabled":              func(c config.Config) any { return c.Metrics.Enabled },
 }
 

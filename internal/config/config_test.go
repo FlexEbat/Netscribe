@@ -437,3 +437,54 @@ func TestIPv6DiscoveryIsOnUnlessTheConfigSaysFalse(t *testing.T) {
 		t.Error("discovery.ipv6: true must leave IPv6 discovery on")
 	}
 }
+
+func TestUpdatesAutoAndWindowHaveSafeDefaults(t *testing.T) {
+	var u UpdatesConfig
+	if u.AutoMode() != AutoOff || u.UpdateWindow() != "03:00-05:00" {
+		t.Errorf("defaults = %q, %q, want off and 03:00-05:00", u.AutoMode(), u.UpdateWindow())
+	}
+}
+
+func TestValidateChecksUpdatesAutoAndWindow(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		edit func(*Config)
+		want error
+	}{
+		{"off", func(c *Config) { c.Updates.Auto = "off" }, nil},
+		{"patch", func(c *Config) { c.Updates.Auto, c.Updates.Check = "patch", true }, nil},
+		{"minor", func(c *Config) { c.Updates.Auto, c.Updates.Check = "minor", true }, nil},
+		{"auto without the check", func(c *Config) { c.Updates.Auto = "minor"; c.Updates.Check = false }, errAutoNeedsCheck},
+		{"major is not a mode", func(c *Config) { c.Updates.Auto = "major" }, errAutoMode},
+		{"always is not a mode", func(c *Config) { c.Updates.Auto = "always" }, errAutoMode},
+		{"a window", func(c *Config) { c.Updates.Window = "01:30-04:45" }, nil},
+		{"a window across midnight", func(c *Config) { c.Updates.Window = "23:00-02:00" }, nil},
+		{"an empty window", func(c *Config) { c.Updates.Window = "03:00-03:00" }, errWindow},
+		{"no dash", func(c *Config) { c.Updates.Window = "03:00" }, errWindow},
+		{"hour 24", func(c *Config) { c.Updates.Window = "24:00-02:00" }, errWindow},
+		{"minute 60", func(c *Config) { c.Updates.Window = "03:60-05:00" }, errWindow},
+		{"no zero", func(c *Config) { c.Updates.Window = "3:00-5:00" }, errWindow},
+		{"words", func(c *Config) { c.Updates.Window = "night" }, errWindow},
+	} {
+		c := valid()
+		tc.edit(&c)
+		err := c.Validate()
+		if tc.want == nil && err != nil {
+			t.Errorf("%s: %v, want valid", tc.name, err)
+		}
+		if tc.want != nil && !errors.Is(err, tc.want) {
+			t.Errorf("%s: %v, want %v", tc.name, err, tc.want)
+		}
+	}
+}
+
+func TestParseWindow(t *testing.T) {
+	from, to, err := ParseWindow(" 03:00-05:30 ")
+	if err != nil || from != 180 || to != 330 {
+		t.Errorf("ParseWindow = %d, %d, %v, want 180, 330", from, to, err)
+	}
+	from, to, err = ParseWindow("22:00-01:00")
+	if err != nil || from != 1320 || to != 60 {
+		t.Errorf("ParseWindow across midnight = %d, %d, %v, want 1320, 60", from, to, err)
+	}
+}

@@ -52,10 +52,23 @@ type versionAnswer struct {
 	Version string        `json:"version"`
 	Update  update.Status `json:"update"`
 	Helper  HelperState   `json:"helper"`
+	// Auto is the state of the automatic updates, null when the service has none.
+	Auto *update.AutoStatus `json:"auto"`
+}
+
+// AutoUpdates is what the API needs of the automatic updates. *update.Auto implements it.
+type AutoUpdates interface {
+	Snapshot() update.AutoStatus
+	Resume() error
 }
 
 func (s *server) versionAnswer() versionAnswer {
-	return versionAnswer{Version: s.version, Update: s.updateStatus(), Helper: s.helperState()}
+	a := versionAnswer{Version: s.version, Update: s.updateStatus(), Helper: s.helperState()}
+	if s.auto != nil {
+		snap := s.auto.Snapshot()
+		a.Auto = &snap
+	}
+	return a
 }
 
 func (s *server) updatesOn() bool {
@@ -208,4 +221,15 @@ func changeKeys(changes map[string]json.RawMessage) string {
 	}
 	sort.Strings(keys)
 	return strings.Join(keys, ", ")
+}
+
+// resumeAutoUpdates answers POST /api/update/auto/resume: a person looked at the rollback and
+// lets automatic updates go on.
+func (s *server) resumeAutoUpdates(w http.ResponseWriter, r *http.Request) {
+	if err := s.auto.Resume(); err != nil {
+		s.internalError(w, "resume automatic updates", err)
+		return
+	}
+	s.record(r, "auto_update_resume", "ok", "")
+	writeJSON(w, http.StatusOK, s.versionAnswer())
 }

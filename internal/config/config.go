@@ -176,6 +176,73 @@ type ExportConfig struct {
 // address and sends nothing about this installation.
 type UpdatesConfig struct {
 	Check bool `yaml:"check"`
+	// Auto lets the service install a newer release by itself: off, patch (same major and
+	// minor number) or minor (same major number). A new major version is never installed
+	// by itself. A missing value means off.
+	Auto string `yaml:"auto"`
+	// Window is the local time range in which an automatic update may start, such as
+	// 03:00-05:00. It may cross midnight. A missing value means 03:00-05:00.
+	Window string `yaml:"window"`
+}
+
+// The values of updates.auto.
+const (
+	AutoOff   = "off"
+	AutoPatch = "patch"
+	AutoMinor = "minor"
+)
+
+// DefaultUpdateWindow is the quiet hours of a home network.
+const DefaultUpdateWindow = "03:00-05:00"
+
+// AutoMode is updates.auto with the default filled in.
+func (u UpdatesConfig) AutoMode() string {
+	if u.Auto == "" {
+		return AutoOff
+	}
+	return u.Auto
+}
+
+// UpdateWindow is updates.window with the default filled in.
+func (u UpdatesConfig) UpdateWindow() string {
+	if strings.TrimSpace(u.Window) == "" {
+		return DefaultUpdateWindow
+	}
+	return strings.TrimSpace(u.Window)
+}
+
+// ParseWindow reads "HH:MM-HH:MM" as the minutes after midnight of the start and the end.
+// The two times must differ; an end before the start means the window crosses midnight.
+func ParseWindow(s string) (from, to int, err error) {
+	a, b, ok := strings.Cut(strings.TrimSpace(s), "-")
+	if !ok {
+		return 0, 0, errWindow
+	}
+	from, err = parseClock(a)
+	if err != nil {
+		return 0, 0, err
+	}
+	to, err = parseClock(b)
+	if err != nil {
+		return 0, 0, err
+	}
+	if from == to {
+		return 0, 0, errWindow
+	}
+	return from, to, nil
+}
+
+func parseClock(s string) (int, error) {
+	h, m, ok := strings.Cut(strings.TrimSpace(s), ":")
+	if !ok || len(h) != 2 || len(m) != 2 {
+		return 0, errWindow
+	}
+	hh, err1 := strconv.Atoi(h)
+	mm, err2 := strconv.Atoi(m)
+	if err1 != nil || err2 != nil || hh < 0 || hh > 23 || mm < 0 || mm > 59 {
+		return 0, errWindow
+	}
+	return hh*60 + mm, nil
 }
 
 // MetricsConfig switches the Prometheus route on. It is off until somebody wants it.
@@ -365,19 +432,22 @@ var quotedValue = regexp.MustCompile("`[^`]*`")
 func redact(msg string) string { return quotedValue.ReplaceAllString(msg, "value") }
 
 var (
-	errTargetCIDR   = errors.New("target is not a valid CIDR")
-	errTargetV6Wide = errors.New("IPv6 target is wider than /112: use discovery.ipv6 to find IPv6 devices instead of sweeping")
-	errTargetWide   = errors.New("target is wider than /16")
-	errTargetPublic = errors.New("target is outside private ranges")
-	errInterval     = errors.New("scan interval is below 1m")
-	errSNMPTimeout  = errors.New("snmp timeout is out of range")
-	errPortTimeout  = errors.New("scan.portTimeout must be between 100ms and 10s")
-	errConcurrency  = errors.New("scan.concurrency must be between 1 and 512")
-	errRetryAfter   = errors.New("scan.retryAfter must be 0 or between 1m and 24h")
-	errSSHKey       = errors.New("ssh host has no key file")
-	errSession      = errors.New("session timeout is out of range")
-	errArgon2       = errors.New("argon2 parameters are below the minimum")
-	errTLS          = errors.New("tls needs both certFile and keyFile")
+	errWindow         = errors.New("updates.window must look like 03:00-05:00")
+	errAutoMode       = errors.New("updates.auto must be off, patch or minor")
+	errAutoNeedsCheck = errors.New("updates.auto needs updates.check: true, the service cannot install what it does not look for")
+	errTargetCIDR     = errors.New("target is not a valid CIDR")
+	errTargetV6Wide   = errors.New("IPv6 target is wider than /112: use discovery.ipv6 to find IPv6 devices instead of sweeping")
+	errTargetWide     = errors.New("target is wider than /16")
+	errTargetPublic   = errors.New("target is outside private ranges")
+	errInterval       = errors.New("scan interval is below 1m")
+	errSNMPTimeout    = errors.New("snmp timeout is out of range")
+	errPortTimeout    = errors.New("scan.portTimeout must be between 100ms and 10s")
+	errConcurrency    = errors.New("scan.concurrency must be between 1 and 512")
+	errRetryAfter     = errors.New("scan.retryAfter must be 0 or between 1m and 24h")
+	errSSHKey         = errors.New("ssh host has no key file")
+	errSession        = errors.New("session timeout is out of range")
+	errArgon2         = errors.New("argon2 parameters are below the minimum")
+	errTLS            = errors.New("tls needs both certFile and keyFile")
 
 	errMinPassword = errors.New("min password length is below 12")
 	errMaxFailed   = errors.New("max failed logins is out of range")
@@ -407,6 +477,18 @@ func (c Config) Validate() error {
 
 	if err := ValidateListen(c.Listen); err != nil {
 		fail("listen", err)
+	}
+
+	switch c.Updates.AutoMode() {
+	case AutoOff, AutoPatch, AutoMinor:
+	default:
+		fail("updates.auto", errAutoMode)
+	}
+	if _, _, err := ParseWindow(c.Updates.UpdateWindow()); err != nil {
+		fail("updates.window", err)
+	}
+	if c.Updates.AutoMode() != AutoOff && !c.Updates.Check {
+		fail("updates.auto", errAutoNeedsCheck)
 	}
 
 	for i, t := range c.Scan.Targets {

@@ -111,6 +111,9 @@ type Env struct {
 	CanListen func(addr string) error
 	// Health asks the panel at url whether it is up.
 	Health func(ctx context.Context, url string) error
+	// HealthVersion is Health that also returns the version the panel says it runs, empty
+	// when it says none. Nil means the version cannot be asked.
+	HealthVersion func(ctx context.Context, url string) (string, error)
 	// Run runs a command and returns what it printed. An interactive command returns nothing.
 	Run func(ctx context.Context, c Command) ([]byte, error)
 	// WriteFile replaces a file atomically. A nil owner leaves the file to the current user.
@@ -152,6 +155,7 @@ func NewEnv(in io.Reader, out io.Writer, interactive, color bool) Env {
 		StatSocket:     statSocket,
 		CanListen:      canListen,
 		Health:         health,
+		HealthVersion:  healthVersion,
 		Run:            run,
 		WriteFile:      writeFileAtomic,
 		MkdirAll:       mkdirAll,
@@ -355,4 +359,26 @@ func copyExecutable(src, dst string) error {
 		return err
 	}
 	return writeFileAtomic(dst, data, 0o755, nil) //nolint:gosec // a program must be executable
+}
+
+// healthVersion is health that returns the version header of /healthz.
+func healthVersion(ctx context.Context, url string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, //nolint:gosec // asks the local server only, sends no credentials
+	}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := client.Do(req) //nolint:gosec // the URL is built from the listen address of the config
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }() // a health probe: nothing to recover from a failed close
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return resp.Header.Get(update.VersionHeader), nil
 }
