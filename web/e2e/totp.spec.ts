@@ -29,10 +29,10 @@ test("the second factor can be turned on, asked at sign in and turned off", asyn
   await signIn(page)
   await page.getByLabel("Authentication code").fill(recovery[0]!.trim())
   await page.getByRole("button", { name: "Verify" }).click()
-  await expect(page.getByText("gateway").first()).toBeVisible()
+  // the panel sends the visitor back to the page that asked for the session: the account
+  await expect(page.getByText("Signed in as dev")).toBeVisible()
 
   // turn it off with the password and the second recovery code
-  await page.goto("/account")
   await page.locator("#totp-off-password").fill(devPassword)
   await page.locator("#totp-off-code").fill(recovery[1]!.trim())
   await page.getByRole("button", { name: "Turn off the second factor" }).click()
