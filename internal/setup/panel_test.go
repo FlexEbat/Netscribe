@@ -72,6 +72,21 @@ func TestPanelSettingsListsTheValuesInUseAndNeverASecret(t *testing.T) {
 	}
 }
 
+func TestApplyPanelSettingsAnswersEmptyListsAsArrays(t *testing.T) {
+	f, o := installed(t)
+	res, err := ApplyPanelSettings(f.env(""), o, map[string]json.RawMessage{"scan.interval": raw("45m")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(res)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != `{"saved":["scan.interval"],"needRestart":[]}` {
+		t.Errorf("answer = %s, want needRestart as an empty array (the panel reads its length)", body)
+	}
+}
+
 func TestApplyPanelSettingsChangesSeveralKeysInOneSave(t *testing.T) {
 	f, o := installed(t)
 	res, err := ApplyPanelSettings(f.env(""), o, map[string]json.RawMessage{
