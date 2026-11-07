@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/model"
@@ -44,19 +45,7 @@ func networkOf(t *testing.T, n int) (*Store, *countingDB) {
 	t.Helper()
 	s := newTestStore(t)
 	ctx := context.Background()
-	key := func(i int) model.DeviceKey {
-		return model.DeviceKey{MAC: fmt.Sprintf("02:00:00:00:%02x:%02x", i>>8&0xff, i&0xff), IP: fmt.Sprintf("10.0.%d.%d", i/250, i%250+1)}
-	}
-	var res collector.Result
-	for i := 1; i <= n; i++ {
-		res.Devices = append(res.Devices, model.DeviceInput{Key: key(i), Hostname: fmt.Sprintf("dev-%d", i), Kind: model.KindHost, Source: "arp"})
-		for _, p := range []int{22, 80, 443, 3306} {
-			res.Services = append(res.Services, model.ServiceInput{Device: key(i), Port: p, Proto: "tcp", Name: fmt.Sprint(p)})
-		}
-		if i > 1 {
-			res.Links = append(res.Links, model.LinkInput{A: key((i-2)/4 + 1), B: key(i), APort: fmt.Sprintf("p%d", i), BPort: "up", Source: "lldp"})
-		}
-	}
+	res := largeResult(n)
 	sc, err := s.StartScan(ctx, "10.0.0.0/16")
 	if err != nil {
 		t.Fatal(err)
@@ -104,4 +93,53 @@ func TestReadQueriesDoNotGrowWithTheNumberOfDevices(t *testing.T) {
 			t.Errorf("%s: %d queries at 50 devices, %d at 500; the count must not grow", name, n, large[name])
 		}
 	}
+}
+
+// Applying a scan is the write that grows with the network. The budget is a wide multiple of
+// what a laptop needs, and it holds the first scan (every row is new) and a second one that
+// finds the same network (every row is updated), at 500 and at 2000 devices.
+func TestApplyingAScanOfLargeNetworksStaysInBudget(t *testing.T) {
+	for _, n := range []int{500, 2000} {
+		s := newTestStore(t)
+		ctx := context.Background()
+		res := largeResult(n)
+		for round := 1; round <= 2; round++ {
+			start := time.Now()
+			sc, err := s.StartScan(ctx, "10.0.0.0/16")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.ApplyResult(ctx, sc.ID, res); err != nil {
+				t.Fatalf("%d devices, scan %d: %v", n, round, err)
+			}
+			if err := s.FinishScan(ctx, sc.ID, "done", ""); err != nil {
+				t.Fatal(err)
+			}
+			if took := time.Since(start); took > 60*time.Second {
+				t.Errorf("%d devices, scan %d took %v, budget 60s", n, round, took)
+			}
+		}
+		devs, err := s.ListDevices(ctx, DeviceFilter{})
+		if err != nil || len(devs) != n {
+			t.Errorf("%d devices stored after two scans: %d, %v", n, len(devs), err)
+		}
+	}
+}
+
+// largeResult is n devices in a tree, four to a parent, with four services each.
+func largeResult(n int) collector.Result {
+	key := func(i int) model.DeviceKey {
+		return model.DeviceKey{MAC: fmt.Sprintf("02:00:00:00:%02x:%02x", i>>8&0xff, i&0xff), IP: fmt.Sprintf("10.0.%d.%d", i/250, i%250+1)}
+	}
+	var res collector.Result
+	for i := 1; i <= n; i++ {
+		res.Devices = append(res.Devices, model.DeviceInput{Key: key(i), Hostname: fmt.Sprintf("dev-%d", i), Kind: model.KindHost, Source: "arp"})
+		for _, p := range []int{22, 80, 443, 3306} {
+			res.Services = append(res.Services, model.ServiceInput{Device: key(i), Port: p, Proto: "tcp", Name: fmt.Sprint(p)})
+		}
+		if i > 1 {
+			res.Links = append(res.Links, model.LinkInput{A: key((i-2)/4 + 1), B: key(i), APort: fmt.Sprintf("p%d", i), BPort: "up", Source: "lldp"})
+		}
+	}
+	return res
 }
