@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test"
 import { devPassword, openUserMenu, signIn, signInAndWait, totpCode } from "./helpers"
 
+// The file name sorts last on purpose: with one worker the files run in name order, and if this
+// test fails halfway the account keeps its second factor, which must not break the other specs.
 // The whole life of a second factor on the account "dev": turn it on, sign in with a
 // recovery code, turn it off. The account ends the way it began, so the other specs do not
 // notice it.
