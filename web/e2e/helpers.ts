@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto"
 import { expect, type Page } from "@playwright/test"
 
 // The account that cmd/seed creates with --dev-user. scripts/e2e.sh sets the password.
@@ -20,4 +21,20 @@ export async function signInAndWait(page: Page) {
 
 export async function openUserMenu(page: Page) {
   await page.getByRole("button", { name: new RegExp(`^${devUser}`) }).click()
+}
+
+/** The 6 digit code of RFC 6238 (SHA-1, 30 second steps) for a base32 key, as an authenticator app computes it. */
+export function totpCode(secret: string, at = Date.now()): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+  let bits = ""
+  for (const ch of secret.replace(/[\s=]/g, "").toUpperCase()) {
+    bits += alphabet.indexOf(ch).toString(2).padStart(5, "0")
+  }
+  const key = Buffer.from(bits.match(/.{8}/g)?.map((b) => parseInt(b, 2)) ?? [])
+  const counter = Buffer.alloc(8)
+  counter.writeBigUInt64BE(BigInt(Math.floor(at / 1000 / 30)))
+  const mac = createHmac("sha1", key).update(counter).digest()
+  const offset = mac[mac.length - 1]! & 0x0f
+  const value = mac.readUInt32BE(offset) & 0x7fffffff
+  return String(value % 1_000_000).padStart(6, "0")
 }
