@@ -33,8 +33,15 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) er
 	configPath := fs.String("config", "netscribe.yaml", "path to the config file")
 	allowLoose := fs.Bool("allow-loose-permissions", false, "accept a config file readable by others")
 	devUser := fs.Bool("dev-user", false, "create the admin account \"dev\" with the password from "+devPasswordEnv)
+	devices := fs.Int("devices", 0, "make a generated network of this many devices instead of the demo one")
+	links := fs.Int("links", 0, "links of the generated network (default: 1.6 per device)")
+	services := fs.Int("services", 0, "services of the generated network (default: 6 per device)")
+	scans := fs.Int("scans", 1, "scans of history for the generated network")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *devices < 0 || *links < 0 || *services < 0 || *scans < 1 {
+		return errors.New("--devices, --links and --services must not be negative and --scans must be at least 1")
 	}
 	cfg, err := config.Load(*configPath, *allowLoose)
 	if err != nil {
@@ -47,7 +54,19 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) er
 	defer func() { _ = st.Close() }()
 
 	ctx := context.Background()
-	n, err := seedNetwork(ctx, st)
+	var n int
+	if *devices > 0 {
+		spec := largeSpec{Devices: *devices, Links: *links, Services: *services, Scans: *scans}
+		if *links == 0 {
+			spec.Links = *devices * 8 / 5
+		}
+		if *services == 0 {
+			spec.Services = *devices * 6
+		}
+		n, err = seedLarge(ctx, st, spec)
+	} else {
+		n, err = seedNetwork(ctx, st)
+	}
 	if err != nil {
 		return err
 	}
