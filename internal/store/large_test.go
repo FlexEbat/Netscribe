@@ -77,11 +77,11 @@ func networkOf(t *testing.T, n int) (*Store, *countingDB) {
 func TestReadQueriesDoNotGrowWithTheNumberOfDevices(t *testing.T) {
 	ctx := context.Background()
 	reads := map[string]func(*Store) error{
-		"ListDevices": func(s *Store) error { _, err := s.ListDevices(ctx, DeviceFilter{}); return err },
-		"ListLinks":   func(s *Store) error { _, err := s.ListLinks(ctx); return err },
+		"ListDevices":  func(s *Store) error { _, err := s.ListDevices(ctx, DeviceFilter{}); return err },
+		"ListLinks":    func(s *Store) error { _, err := s.ListLinks(ctx); return err },
 		"ListServices": func(s *Store) error { _, err := s.ListServices(ctx, 0); return err },
-		"Topology":    func(s *Store) error { _, err := s.Topology(ctx); return err },
-		"Overview":    func(s *Store) error { _, err := s.Overview(ctx); return err },
+		"Topology":     func(s *Store) error { _, err := s.Topology(ctx); return err },
+		"Overview":     func(s *Store) error { _, err := s.Overview(ctx); return err },
 	}
 	counts := func(n int) map[string]int64 {
 		s, c := networkOf(t, n)
