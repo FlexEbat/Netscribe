@@ -13,7 +13,9 @@ export async function signIn(page: Page, username = devUser, password = devPassw
 
 export async function signInAndWait(page: Page) {
   await signIn(page)
-  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible()
+  // The panel opens on the topology, which shows the seeded network. The name of a seeded
+  // device does not depend on the language.
+  await expect(page.getByText("gateway").first()).toBeVisible()
 }
 
 export async function openUserMenu(page: Page) {

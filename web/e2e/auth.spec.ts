@@ -7,7 +7,7 @@ test("a wrong password is refused and the form stays", async ({ page }) => {
   await expect(page).toHaveURL(/\/login$/)
 })
 
-test("the right password opens the overview, sign out returns to the form", async ({ page }) => {
+test("the right password opens the panel, sign out returns to the form", async ({ page }) => {
   await signInAndWait(page)
   await openUserMenu(page)
   await page.getByRole("menuitem", { name: "Sign out" }).click()
