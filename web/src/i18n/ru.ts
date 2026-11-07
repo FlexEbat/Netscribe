@@ -415,6 +415,7 @@ export const ru: Record<Key, Entry> = {
   "inventory.allDevices": "Все устройства",
   "inventory.allGroups": "Все группы",
   "inventory.caption": "Устройства ({n})",
+  "inventory.showMore": "Показать ещё {n} (скрыто: {left})",
   "inventory.filterByGroup": "Фильтр по группе",
   "inventory.filterByStatus": "Фильтр по статусу",
   "inventory.filterByTrust": "Фильтр по доверию",

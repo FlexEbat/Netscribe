@@ -303,6 +303,10 @@ export function Inventory() {
   )
 }
 
+// The table draws this many rows at first and this many more at each click, so a network of
+// thousands of devices does not put thousands of rows into the page at once.
+const ROW_STEP = 200
+
 function Results({
   state,
   filtering,
@@ -320,6 +324,13 @@ function Results({
   onTrusted: () => void
   firstScan?: () => void
 }) {
+  // The count belongs to the list it was raised for: a new list (another filter, a reload)
+  // starts from the first rows again.
+  const [raised, setRaised] = useState<{ list: State; rows: number }>({
+    list: state,
+    rows: ROW_STEP,
+  })
+  const shown = raised.list === state ? raised.rows : ROW_STEP
   if (state.status === "loading") {
     return (
       <div role="status" aria-label={t("inventory.loadingDevices")} className="flex flex-col gap-2">
@@ -345,87 +356,103 @@ function Results({
       />
     )
   }
+  const rows = state.devices.slice(0, shown)
+  const left = state.devices.length - rows.length
   return (
-    <Table>
-      <TableCaption>{t("inventory.caption", { n: state.devices.length })}</TableCaption>
-      <TableHeader>
-        <TableRow>
-          {canWrite ? (
-            <TableHead className="w-8">
-              <input
-                type="checkbox"
-                aria-label={t("inventory.selectAllDevices")}
-                checked={state.devices.length > 0 && state.devices.every((d) => selected.has(d.id))}
-                onChange={(e) =>
-                  onSelect(e.target.checked ? new Set(state.devices.map((d) => d.id)) : new Set())
-                }
-              />
-            </TableHead>
-          ) : null}
-          <TableHead>{t("inventory.ip")}</TableHead>
-          <TableHead>{t("inventory.ipv6")}</TableHead>
-          <TableHead>{t("inventory.mac")}</TableHead>
-          <TableHead>{t("inventory.hostname")}</TableHead>
-          <TableHead>{t("inventory.kind")}</TableHead>
-          <TableHead>{t("inventory.group")}</TableHead>
-          <TableHead>{t("inventory.status")}</TableHead>
-          <TableHead>{t("inventory.trust")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {state.devices.map((d) => (
-          <TableRow key={d.id}>
+    <>
+      <Table>
+        <TableCaption>{t("inventory.caption", { n: state.devices.length })}</TableCaption>
+        <TableHeader>
+          <TableRow>
             {canWrite ? (
-              <TableCell>
+              <TableHead className="w-8">
                 <input
                   type="checkbox"
-                  aria-label={t("inventory.selectName", {
-                    name: d.label || d.hostname || d.ip || d.ip6 || d.mac,
-                  })}
-                  checked={selected.has(d.id)}
-                  onChange={(e) => {
-                    const next = new Set(selected)
-                    if (e.target.checked) next.add(d.id)
-                    else next.delete(d.id)
-                    onSelect(next)
-                  }}
+                  aria-label={t("inventory.selectAllDevices")}
+                  checked={
+                    state.devices.length > 0 && state.devices.every((d) => selected.has(d.id))
+                  }
+                  onChange={(e) =>
+                    onSelect(e.target.checked ? new Set(state.devices.map((d) => d.id)) : new Set())
+                  }
                 />
-              </TableCell>
+              </TableHead>
             ) : null}
-            <TableCell className="font-mono">{d.ip || "–"}</TableCell>
-            <TableCell className="font-mono break-all">{d.ip6 || "–"}</TableCell>
-            <TableCell className="font-mono">{d.mac || "–"}</TableCell>
-            <TableCell>{d.label || d.hostname || "–"}</TableCell>
-            <TableCell className="capitalize">{d.kind}</TableCell>
-            <TableCell>
-              {d.group ? (
-                <span>
-                  {d.group.name}
-                  {d.groupAuto ? (
-                    <span className="text-xs text-muted-foreground"> {t("inventory.range")}</span>
-                  ) : null}
-                </span>
-              ) : (
-                "–"
-              )}
-            </TableCell>
-            <TableCell>
-              <StatusBadge online={d.online} />
-            </TableCell>
-            <TableCell>
-              {d.trusted ? (
-                <span className="text-muted-foreground">{t("inventory.trusted")}</span>
-              ) : (
-                <span className="flex flex-wrap items-center gap-2">
-                  <UnknownBadge />
-                  {canWrite ? <TrustButton device={d} onDone={onTrusted} /> : null}
-                </span>
-              )}
-            </TableCell>
+            <TableHead>{t("inventory.ip")}</TableHead>
+            <TableHead>{t("inventory.ipv6")}</TableHead>
+            <TableHead>{t("inventory.mac")}</TableHead>
+            <TableHead>{t("inventory.hostname")}</TableHead>
+            <TableHead>{t("inventory.kind")}</TableHead>
+            <TableHead>{t("inventory.group")}</TableHead>
+            <TableHead>{t("inventory.status")}</TableHead>
+            <TableHead>{t("inventory.trust")}</TableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.map((d) => (
+            <TableRow key={d.id}>
+              {canWrite ? (
+                <TableCell>
+                  <input
+                    type="checkbox"
+                    aria-label={t("inventory.selectName", {
+                      name: d.label || d.hostname || d.ip || d.ip6 || d.mac,
+                    })}
+                    checked={selected.has(d.id)}
+                    onChange={(e) => {
+                      const next = new Set(selected)
+                      if (e.target.checked) next.add(d.id)
+                      else next.delete(d.id)
+                      onSelect(next)
+                    }}
+                  />
+                </TableCell>
+              ) : null}
+              <TableCell className="font-mono">{d.ip || "–"}</TableCell>
+              <TableCell className="font-mono break-all">{d.ip6 || "–"}</TableCell>
+              <TableCell className="font-mono">{d.mac || "–"}</TableCell>
+              <TableCell>{d.label || d.hostname || "–"}</TableCell>
+              <TableCell className="capitalize">{d.kind}</TableCell>
+              <TableCell>
+                {d.group ? (
+                  <span>
+                    {d.group.name}
+                    {d.groupAuto ? (
+                      <span className="text-xs text-muted-foreground"> {t("inventory.range")}</span>
+                    ) : null}
+                  </span>
+                ) : (
+                  "–"
+                )}
+              </TableCell>
+              <TableCell>
+                <StatusBadge online={d.online} />
+              </TableCell>
+              <TableCell>
+                {d.trusted ? (
+                  <span className="text-muted-foreground">{t("inventory.trusted")}</span>
+                ) : (
+                  <span className="flex flex-wrap items-center gap-2">
+                    <UnknownBadge />
+                    {canWrite ? <TrustButton device={d} onDone={onTrusted} /> : null}
+                  </span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {left > 0 ? (
+        <div className="flex justify-center py-3">
+          <Button
+            variant="outline"
+            onClick={() => setRaised({ list: state, rows: shown + ROW_STEP })}
+          >
+            {t("inventory.showMore", { n: Math.min(ROW_STEP, left), left })}
+          </Button>
+        </div>
+      ) : null}
+    </>
   )
 }
 
