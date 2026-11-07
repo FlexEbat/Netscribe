@@ -197,7 +197,8 @@ func ApplyPanelSettings(env Env, o Options, changes map[string]json.RawMessage) 
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	var res PanelResult
+	// Empty lists, not nil ones: nil marshals to null and the panel reads .length of it.
+	res := PanelResult{Saved: []string{}, NeedRestart: []string{}}
 	for _, key := range keys {
 		st, ok := findSetting(key)
 		if !ok {

@@ -6,7 +6,7 @@ import globals from "globals"
 import tseslint from "typescript-eslint"
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules"] },
+  { ignores: ["dist", "node_modules", "e2e-results", "playwright-report"] },
   { settings: { react: { version: "detect" } } },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -20,6 +20,17 @@ export default tseslint.config(
     rules: {
       // Data from the network is untrusted: output goes through React escaping only.
       "react/no-danger": "error",
+    },
+  },
+  {
+    // A fixed sleep hides a race: wait on a locator or a response instead (tech.md slice 42).
+    files: ["e2e/**/*.ts"],
+    languageOptions: { globals: globals.node },
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        { property: "waitForTimeout", message: "Wait on a locator or a response, not on a timer." },
+      ],
     },
   },
   {

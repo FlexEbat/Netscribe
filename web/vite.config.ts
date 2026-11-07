@@ -55,6 +55,8 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
     restoreMocks: true,
+    // Playwright specs run in a browser through `npm run e2e`, not in jsdom.
+    exclude: ["e2e/**", "node_modules/**", "dist/**"],
   },
   build: {
     outDir: "dist",
