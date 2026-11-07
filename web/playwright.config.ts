@@ -10,6 +10,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   forbidOnly: true,
+  // Password hashing is slow on a shared runner; a longer wait is not a sleep, it ends as soon as the page is ready.
+  expect: { timeout: 15_000 },
   reporter: process.env.CI ? [["github"], ["list"]] : "list",
   outputDir: "./e2e-results",
   use: {
