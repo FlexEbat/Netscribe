@@ -76,6 +76,8 @@ jobs:
           npx --prefix web playwright install --with-deps chromium
       - name: End to end tests
         run: make e2e
+      - name: End to end tests on a large network
+        run: make e2e-large
       - name: Upload traces and screenshots of failed tests
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

@@ -6,6 +6,9 @@ const baseURL = process.env.E2E_BASE_URL ?? "http://127.0.0.1:18080"
 
 export default defineConfig({
   testDir: "./e2e",
+  // The large network checks need a seeded network of hundreds of devices: scripts/e2e.sh
+  // sets E2E_LARGE for them, and the other specs expect the small demo network.
+  ...(process.env.E2E_LARGE ? { testMatch: /large\.spec\.ts/ } : { testIgnore: /large\.spec\.ts/ }),
   fullyParallel: false,
   workers: 1,
   retries: 0,

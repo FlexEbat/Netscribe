@@ -39,7 +39,13 @@ updates:
 YAML
 chmod 600 "$dir/netscribe.yaml"
 
-go run ./cmd/seed --config "$dir/netscribe.yaml" --dev-user
+# E2E_DEVICES=600 seeds a generated network and runs only the large network specs.
+if [ -n "${E2E_DEVICES:-}" ]; then
+	go run ./cmd/seed --config "$dir/netscribe.yaml" --dev-user --devices "$E2E_DEVICES"
+	export E2E_LARGE=1
+else
+	go run ./cmd/seed --config "$dir/netscribe.yaml" --dev-user
+fi
 ./netscribe serve --config "$dir/netscribe.yaml" >"$dir/server.log" 2>&1 &
 pid=$!
 
