@@ -383,6 +383,7 @@ export const en = {
   "inventory.allDevices": "All devices",
   "inventory.allGroups": "All groups",
   "inventory.caption": "Devices ({n})",
+  "inventory.showMore": "Show {n} more ({left} not shown)",
   "inventory.filterByGroup": "Filter by group",
   "inventory.filterByStatus": "Filter by status",
   "inventory.filterByTrust": "Filter by trust",

@@ -127,6 +127,27 @@ function stream(): FakeEventSource {
 }
 
 describe("Inventory", () => {
+  it("draws 200 rows of a long list and the next 200 at each click", async () => {
+    const many = Array.from({ length: 450 }, (_, i) =>
+      device({
+        id: i + 1,
+        mac: `aa:bb:cc:00:${String(i >> 8).padStart(2, "0")}:${String(i & 255).padStart(2, "0")}`,
+        ip: `10.0.${Math.floor(i / 250)}.${(i % 250) + 1}`,
+        hostname: `host-${i + 1}`,
+      }),
+    )
+    open(() => json(200, { devices: many }))
+    const table = await screen.findByRole("table")
+    expect(within(table).getAllByRole("row")).toHaveLength(201)
+
+    await userEvent.click(screen.getByRole("button", { name: "Show 200 more (250 not shown)" }))
+    expect(within(table).getAllByRole("row")).toHaveLength(401)
+
+    await userEvent.click(screen.getByRole("button", { name: "Show 50 more (50 not shown)" }))
+    expect(within(table).getAllByRole("row")).toHaveLength(451)
+    expect(screen.queryByRole("button", { name: /Show \d+ more/ })).toBeNull()
+  })
+
   it("lists devices in numeric IP order with their status", async () => {
     open(() =>
       json(200, {
