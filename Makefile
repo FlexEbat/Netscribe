@@ -3,7 +3,7 @@ GO_DIRS := cmd internal web/embed.go
 GO_PKGS := ./cmd/... ./internal/... ./web
 SQLC_QUERIES := $(wildcard internal/store/queries/*.sql)
 
-.PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build
+.PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build e2e
 
 # go:embed needs a file under web/dist before the frontend is built.
 web/dist:
@@ -61,3 +61,8 @@ dev-web:
 build: web/node_modules
 	cd web && npm run build
 	go build -o netscribe ./cmd/netscribe
+
+# Browser tests: a real server with a temporary config, the demo network and the account
+# "dev". Not part of gate. Needs Chromium: cd web && npx playwright install --with-deps chromium
+e2e: build
+	sh scripts/e2e.sh

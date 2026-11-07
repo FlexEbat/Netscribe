@@ -53,6 +53,37 @@ jobs:
           make build
           ./netscribe help
 
+  e2e:
+    # real browser tests of the panel on a temporary server; no secret, no network but loopback
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install Chromium for Playwright
+        run: |
+          npm --prefix web ci
+          npx --prefix web playwright install --with-deps chromium
+      - name: End to end tests
+        run: make e2e
+      - name: Upload traces and screenshots of failed tests
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-results
+          path: web/e2e-results
+          if-no-files-found: ignore
+
   docker:
     # the images are built here and nowhere else, so a broken Dockerfile would show only
     # when somebody tries to run it
