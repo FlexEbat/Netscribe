@@ -2,6 +2,7 @@
 package render
 
 import (
+	"math"
 	"net/netip"
 	"slices"
 	"strings"
@@ -13,8 +14,11 @@ const (
 	// ColumnStep and RowStep are the distances between nodes on the canvas.
 	ColumnStep = 220.0
 	RowStep    = 140.0
-	// RowCapacity is how many nodes one row takes before it wraps to the next.
+	// RowCapacity is how many nodes one row takes before it wraps to the next. A layer with
+	// many devices gets more columns (see columnsFor), so it stays about as wide as a screen.
 	RowCapacity = 8
+	// wideRatio is the width over the height a large layer is laid out in.
+	wideRatio = 1.6
 
 	// ContainersPerRow is how many containers stand in one row under their host. The
 	// steps and the offset are the ones the web canvas uses (web/src/lib/topology.ts).
@@ -32,7 +36,8 @@ var kindOrder = []model.DeviceKind{
 
 // Layout returns the devices with a canvas position on every one of them. A position
 // that was saved is kept exactly. The rest are placed in layers by kind, in IP order
-// inside a layer, ColumnStep by RowStep apart, wrapping after RowCapacity nodes. The
+// inside a layer, ColumnStep by RowStep apart, wrapping after columnsFor nodes (RowCapacity
+// for a small layer). The
 // result depends only on the input, never on map order or time.
 func Layout(devices []model.Device) []model.Device {
 	out := slices.Clone(devices)
@@ -55,12 +60,13 @@ func Layout(devices []model.Device) []model.Device {
 			continue
 		}
 		slices.SortFunc(idx, func(a, b int) int { return compareDevices(out[a], out[b]) })
+		cols := columnsFor(len(idx))
 		for n, i := range idx {
-			x := float64(n%RowCapacity) * ColumnStep
-			y := float64(row+n/RowCapacity) * RowStep
+			x := float64(n%cols) * ColumnStep
+			y := float64(row+n/cols) * RowStep
 			out[i].X, out[i].Y = &x, &y
 		}
-		row += (len(idx) + RowCapacity - 1) / RowCapacity
+		row += (len(idx) + cols - 1) / cols
 	}
 	return out
 }
@@ -90,6 +96,15 @@ func compareDevices(a, b model.Device) int {
 		return 1
 	}
 	return 0
+}
+
+// columnsFor is how many nodes a layer of n devices has in a row: RowCapacity, or more when
+// that would make the layer much taller than wide. At 600 hosts eight columns are 75 rows,
+// a strip too narrow for the canvas to fit at a readable zoom; this gives a block of about
+// 25 columns and 24 rows. It depends on n only, so the layout stays deterministic.
+func columnsFor(n int) int {
+	wide := int(math.Ceil(math.Sqrt(float64(n) * wideRatio * RowStep / ColumnStep)))
+	return max(RowCapacity, wide)
 }
 
 // ContainerPosition is a container's place on the canvas.

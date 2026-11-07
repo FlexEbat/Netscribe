@@ -164,3 +164,21 @@ func TestLayoutContainersKeepsHostsApartAndSkipsOrphans(t *testing.T) {
 		t.Error("the layout changed between two runs")
 	}
 }
+
+func TestLargeLayersGetMoreColumnsAndStayAboutAsWideAsTall(t *testing.T) {
+	// a small layer keeps the old width, so nobody's drawing moves
+	if got := columnsFor(20); got != RowCapacity {
+		t.Errorf("columnsFor(20) = %d, want %d", got, RowCapacity)
+	}
+	var hosts []model.Device
+	for i := 1; i <= 600; i++ {
+		hosts = append(hosts, dev(int64(i), fmt.Sprintf("10.0.%d.%d", i/250, i%250+1), model.KindHost))
+	}
+	var maxX, maxY float64
+	for _, d := range Layout(hosts) {
+		maxX, maxY = max(maxX, *d.X), max(maxY, *d.Y)
+	}
+	if ratio := maxX / maxY; ratio < 1 || ratio > 3 {
+		t.Errorf("600 hosts span %v by %v, width over height %.2f, want between 1 and 3", maxX, maxY, ratio)
+	}
+}
