@@ -3,7 +3,7 @@ GO_DIRS := cmd internal web/embed.go
 GO_PKGS := ./cmd/... ./internal/... ./web
 SQLC_QUERIES := $(wildcard internal/store/queries/*.sql)
 
-.PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build e2e
+.PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build e2e e2e-large
 
 # go:embed needs a file under web/dist before the frontend is built.
 web/dist:
@@ -66,3 +66,7 @@ build: web/node_modules
 # "dev". Not part of gate. Needs Chromium: cd web && npx playwright install --with-deps chromium
 e2e: build
 	sh scripts/e2e.sh
+
+# The same with a generated network of 600 devices: paging, topology drag, bulk limit.
+e2e-large: build
+	E2E_DEVICES=600 sh scripts/e2e.sh
