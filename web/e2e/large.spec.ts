@@ -71,10 +71,10 @@ test("at the zoom that fits the network a node is an icon, and the text returns 
 }) => {
   await open(page)
   await page.goto("/")
-  const first = page.locator(".react-flow__node").first()
-  await expect(first).toBeVisible()
-  await expect(first).toHaveAttribute("data-lod", "far")
-  expect(await first.innerText()).toBe("")
+  // the marker is on the block inside the node
+  const far = page.locator('[data-lod="far"]').first()
+  await expect(far).toBeVisible()
+  expect(await far.innerText()).toBe("")
 
   const pane = page.locator(".react-flow__pane")
   const box = await pane.boundingBox()
