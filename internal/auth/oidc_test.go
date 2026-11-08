@@ -2,22 +2,16 @@ package auth
 
 import (
 	"context"
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
-	"math/big"
-	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/FlexEbat/Netscribe/internal/auth/authtest"
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/model"
 )
@@ -59,116 +53,17 @@ func (r *idpRepo) CreateIdentityUser(ctx context.Context, u model.UserRecord, is
 	return created, nil
 }
 
-// testIDP is an identity provider that runs in the test process: the discovery document, the
-// keys, and a token endpoint that hands out the ID tokens the test prepared.
-type testIDP struct {
-	t   *testing.T
-	srv *httptest.Server
-	key *rsa.PrivateKey
-
-	mu    sync.Mutex
-	codes map[string]idpCode
-}
-
-type idpCode struct {
-	challenge string
-	claims    map[string]any
-	key       *rsa.PrivateKey
-}
-
-func newTestIDP(t *testing.T) *testIDP {
-	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := &testIDP{t: t, key: key, codes: map[string]idpCode{}}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"issuer":                                p.srv.URL,
-			"authorization_endpoint":                p.srv.URL + "/authorize",
-			"token_endpoint":                        p.srv.URL + "/token",
-			"jwks_uri":                              p.srv.URL + "/keys",
-			"id_token_signing_alg_values_supported": []string{"RS256"},
-		})
-	})
-	mux.HandleFunc("/keys", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]string{{
-			"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "k1",
-			"n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
-			"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
-		}}})
-	})
-	mux.HandleFunc("/token", p.token)
-	p.srv = httptest.NewServer(mux)
-	t.Cleanup(p.srv.Close)
-	return p
-}
-
-func (p *testIDP) token(w http.ResponseWriter, r *http.Request) {
-	// Without this the library reads a JSON answer as a form and finds no token.
-	w.Header().Set("Content-Type", "application/json")
-	if r.ParseForm() != nil {
-		http.Error(w, "bad form", http.StatusBadRequest)
-		return
-	}
-	p.mu.Lock()
-	c, ok := p.codes[r.Form.Get("code")]
-	delete(p.codes, r.Form.Get("code")) // a code works once
-	p.mu.Unlock()
-	sum := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
-	if !ok || base64.RawURLEncoding.EncodeToString(sum[:]) != c.challenge {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid_grant"})
-		return
-	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"access_token": "at", "token_type": "Bearer", "expires_in": 3600,
-		"id_token": signJWT(p.t, c.key, c.claims),
-	})
-}
-
-func signJWT(t *testing.T, key *rsa.PrivateKey, claims map[string]any) string {
-	t.Helper()
-	enc := func(v any) string {
-		b, err := json.Marshal(v)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return base64.RawURLEncoding.EncodeToString(b)
-	}
-	signing := enc(map[string]string{"alg": "RS256", "kid": "k1", "typ": "JWT"}) + "." + enc(claims)
-	sum := sha256.Sum256([]byte(signing))
-	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
-	if err != nil {
-		t.Fatal(err)
-	}
-	return signing + "." + base64.RawURLEncoding.EncodeToString(sig)
-}
-
-func idpConfig(p *testIDP) config.OIDCConfig {
+func idpConfig(p *authtest.IDP) config.OIDCConfig {
 	return config.OIDCConfig{
-		Name: "Acme", Issuer: p.srv.URL, ClientID: idpClient, ClientSecret: config.Secret(idpSecret),
+		Name: "Acme", Issuer: p.URL, ClientID: idpClient, ClientSecret: config.Secret(idpSecret),
 		RedirectURL: "http://127.0.0.1/api/auth/oidc/callback", Scopes: []string{"openid", "profile", "email"},
 		AllowedEmailDomains: []string{"example.com"}, AutoCreate: true, DefaultRole: "viewer",
 		RoleClaim: "groups", RoleMap: map[string]string{"ns-admins": "admin", "ns-ops": "operator"},
 	}
 }
 
-// claimsFor are the claims of a good ID token for this provider.
-func (p *testIDP) claimsFor(nonce, subject, email string) map[string]any {
-	return map[string]any{
-		"iss": p.srv.URL, "sub": subject, "aud": idpClient,
-		"exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(),
-		"nonce": nonce, "email": email, "email_verified": true, "name": "Test Person",
-	}
-}
-
 type idpFixture struct {
-	idp  *testIDP
+	idp  *authtest.IDP
 	oidc *OIDC
 	svc  *Service
 	repo *idpRepo
@@ -178,7 +73,7 @@ func newIDPFixture(t *testing.T, edit func(*config.OIDCConfig)) *idpFixture {
 	t.Helper()
 	svc, base, clk := newTestService(t)
 	repo := newIDPRepo(base)
-	idp := newTestIDP(t)
+	idp := authtest.New(t)
 	cfg := idpConfig(idp)
 	if edit != nil {
 		edit(&cfg)
@@ -194,7 +89,7 @@ func (f *idpFixture) begin(t *testing.T) (Flow, url.Values) {
 		t.Fatalf("Begin: %v", err)
 	}
 	u, err := url.Parse(target)
-	if err != nil || !strings.HasPrefix(target, f.idp.srv.URL+"/authorize") {
+	if err != nil || !strings.HasPrefix(target, f.idp.URL+"/authorize") {
 		t.Fatalf("Begin sent the browser to %q", target)
 	}
 	return flow, u.Query()
@@ -204,14 +99,12 @@ func (f *idpFixture) begin(t *testing.T) (Flow, url.Values) {
 func (f *idpFixture) signIn(t *testing.T, subject, email string, edit func(map[string]any)) (OIDCResult, error) {
 	t.Helper()
 	flow, q := f.begin(t)
-	claims := f.idp.claimsFor(q.Get("nonce"), subject, email)
+	claims := f.idp.Claims(q.Get("nonce"), subject, email, idpClient)
 	if edit != nil {
 		edit(claims)
 	}
 	code := "code-" + subject + "-" + flow.State[:6]
-	f.idp.mu.Lock()
-	f.idp.codes[code] = idpCode{challenge: q.Get("code_challenge"), claims: claims, key: f.idp.key}
-	f.idp.mu.Unlock()
+	f.idp.Register(code, q.Get("code_challenge"), claims, nil)
 	return f.oidc.Complete(context.Background(), flow, flow.State, code, "10.0.0.9", "agent")
 }
 
@@ -277,9 +170,7 @@ func TestOIDCRefusesATokenSignedWithAnotherKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	flow, q := f.begin(t)
-	f.idp.mu.Lock()
-	f.idp.codes["c1"] = idpCode{challenge: q.Get("code_challenge"), claims: f.idp.claimsFor(q.Get("nonce"), "s", "s@example.com"), key: other}
-	f.idp.mu.Unlock()
+	f.idp.Register("c1", q.Get("code_challenge"), f.idp.Claims(q.Get("nonce"), "s", "s@example.com", idpClient), other)
 	if _, err := f.oidc.Complete(context.Background(), flow, flow.State, "c1", "ip", "ua"); !errors.Is(err, ErrOIDCDenied) {
 		t.Fatalf("got %v, want ErrOIDCDenied", err)
 	}
@@ -288,9 +179,7 @@ func TestOIDCRefusesATokenSignedWithAnotherKey(t *testing.T) {
 func TestOIDCRefusesAWrongStateAndAReplayedCode(t *testing.T) {
 	f := newIDPFixture(t, nil)
 	flow, q := f.begin(t)
-	f.idp.mu.Lock()
-	f.idp.codes["c1"] = idpCode{challenge: q.Get("code_challenge"), claims: f.idp.claimsFor(q.Get("nonce"), "s", "s@example.com"), key: f.idp.key}
-	f.idp.mu.Unlock()
+	f.idp.Register("c1", q.Get("code_challenge"), f.idp.Claims(q.Get("nonce"), "s", "s@example.com", idpClient), nil)
 
 	if _, err := f.oidc.Complete(context.Background(), flow, "not-the-state", "c1", "ip", "ua"); !errors.Is(err, ErrOIDCDenied) {
 		t.Fatalf("wrong state: got %v", err)
@@ -423,7 +312,7 @@ func TestParseFlowRejectsWhatIsNotOurs(t *testing.T) {
 
 func TestOIDCBeginFailsCleanlyWhenTheProviderIsDown(t *testing.T) {
 	f := newIDPFixture(t, nil)
-	f.idp.srv.Close()
+	f.idp.Close()
 	if _, _, err := f.oidc.Begin(context.Background()); err == nil {
 		t.Fatal("Begin succeeded with no provider")
 	} else if errors.Is(err, ErrOIDCDenied) || strings.Contains(err.Error(), idpSecret) {
