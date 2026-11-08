@@ -10,6 +10,8 @@ cd "$(dirname "$0")/.."
 dir="$(mktemp -d)"
 pid=""
 cleanup() {
+	# The timings of the second factor spec, as one CI notice: the file is deleted below.
+	[ -s "$dir/timings.log" ] && echo "::notice title=second factor spec::$(paste -sd'|' "$dir/timings.log")" || true
 	[ -n "$pid" ] && kill "$pid" 2>/dev/null || true
 	rm -rf "$dir"
 }
@@ -18,6 +20,8 @@ trap cleanup EXIT INT TERM
 port="${E2E_PORT:-18080}"
 NETSCRIBE_DEV_PASSWORD="${NETSCRIBE_DEV_PASSWORD:-e2e-dev-password-12}"
 export NETSCRIBE_DEV_PASSWORD
+E2E_TIMINGS="$dir/timings.log"
+export E2E_TIMINGS
 
 cat >"$dir/netscribe.yaml" <<YAML
 listen: 127.0.0.1:$port
