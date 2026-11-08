@@ -10,6 +10,8 @@ cd "$(dirname "$0")/.."
 dir="$(mktemp -d)"
 pid=""
 cleanup() {
+	# The timings of the recovery code checks, as CI annotations: the log is deleted below.
+	grep "second factor check" "$dir/server.log" 2>/dev/null | sed 's/^/::notice::/' || true
 	[ -n "$pid" ] && kill "$pid" 2>/dev/null || true
 	rm -rf "$dir"
 }

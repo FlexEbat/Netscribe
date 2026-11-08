@@ -126,7 +126,15 @@ func (s *server) checkSecondFactor(ctx context.Context, userID int64, input stri
 	if err != nil {
 		return false, err
 	}
+	// Every hash is as slow as a password hash, so the count and the time are logged: they
+	// show whether a slow recovery sign in comes from here (amendment 53, open item 4).
+	began := time.Now()
+	checked := 0
+	defer func() {
+		s.log.Info("second factor check of a recovery code", "hashes", checked, "unused", len(codes), "ms", time.Since(began).Milliseconds())
+	}()
 	for _, c := range codes {
+		checked++
 		match, err := s.auth.VerifyRecovery(code, c.Hash)
 		if err != nil || !match {
 			continue
