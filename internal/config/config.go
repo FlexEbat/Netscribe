@@ -129,6 +129,105 @@ type AuthConfig struct {
 	MaxFailedLogins    int          `yaml:"maxFailedLogins"`
 	LockoutDuration    Duration     `yaml:"lockoutDuration"`
 	Argon2             Argon2Config `yaml:"argon2"`
+	// OIDC switches single sign-on on. A zero block means off. Local sign-in always stays.
+	OIDC OIDCConfig `yaml:"oidc"`
+}
+
+// OIDCConfig is the identity provider a team signs in with (slice 36). It is read when the
+// service starts: a change needs a restart.
+type OIDCConfig struct {
+	// Name is the label of the sign-in button. Empty means "SSO".
+	Name         string   `yaml:"name"`
+	Issuer       string   `yaml:"issuer"`
+	ClientID     string   `yaml:"clientId"`
+	ClientSecret Secret   `yaml:"clientSecret"`
+	RedirectURL  string   `yaml:"redirectUrl"`
+	Scopes       []string `yaml:"scopes"`
+	// AllowedEmailDomains limits who may be created by AutoCreate. Empty means nobody.
+	AllowedEmailDomains []string `yaml:"allowedEmailDomains"`
+	AutoCreate          bool     `yaml:"autoCreate"`
+	// DefaultRole is the role of a new user and of a user whose claim maps to nothing.
+	// It is never admin.
+	DefaultRole string `yaml:"defaultRole"`
+	// RoleClaim names the claim of the ID token that holds the roles (a string or a list).
+	RoleClaim string `yaml:"roleClaim"`
+	// RoleMap maps a value of that claim to a role (viewer, operator or admin).
+	RoleMap map[string]string `yaml:"roleMap"`
+}
+
+// Enabled reports whether single sign-on is configured.
+func (o OIDCConfig) Enabled() bool { return o.Issuer != "" }
+
+// ButtonName is the label of the sign-in button.
+func (o OIDCConfig) ButtonName() string {
+	if o.Name == "" {
+		return "SSO"
+	}
+	return o.Name
+}
+
+// validate checks a block that is switched on. A block with no issuer is off and not checked.
+func (o OIDCConfig) validate() []error {
+	if !o.Enabled() {
+		return nil
+	}
+	var errs []error
+	fail := func(key string, msg string) {
+		errs = append(errs, fmt.Errorf("auth.oidc.%s: %s", key, msg))
+	}
+	if err := checkHTTPS(o.Issuer); err != nil {
+		fail("issuer", err.Error())
+	}
+	if err := checkHTTPS(o.RedirectURL); err != nil {
+		fail("redirectUrl", err.Error())
+	}
+	if o.ClientID == "" {
+		fail("clientId", "is required")
+	}
+	if o.ClientSecret == "" {
+		fail("clientSecret", "is required")
+	}
+	switch o.DefaultRole {
+	case "viewer", "operator":
+	case "admin":
+		fail("defaultRole", "must not be admin")
+	default:
+		fail("defaultRole", "must be viewer or operator")
+	}
+	for claim, role := range o.RoleMap {
+		switch role {
+		case "viewer", "operator", "admin":
+		default:
+			fail("roleMap", fmt.Sprintf("%q maps to %q, which is not viewer, operator or admin", claim, role))
+		}
+	}
+	if len(o.RoleMap) > 0 && o.RoleClaim == "" {
+		fail("roleClaim", "is required when roleMap is set")
+	}
+	for _, d := range o.AllowedEmailDomains {
+		if d == "" || strings.ContainsAny(d, "@ \t") {
+			fail("allowedEmailDomains", fmt.Sprintf("%q is not a domain", d))
+		}
+	}
+	return errs
+}
+
+// checkHTTPS accepts an https address, and http only for a loopback host.
+func checkHTTPS(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.Fragment != "" {
+		return errors.New("must be an absolute address")
+	}
+	switch u.Scheme {
+	case "https":
+		return nil
+	case "http":
+		host := u.Hostname()
+		if ip, err := netip.ParseAddr(host); err == nil && ip.IsLoopback() || host == "localhost" {
+			return nil
+		}
+	}
+	return errors.New("must be https (http only for localhost)")
 }
 
 type Argon2Config struct {
@@ -377,6 +476,7 @@ func defaults() Config {
 			MaxFailedLogins:    5,
 			LockoutDuration:    Duration(15 * time.Minute),
 			Argon2:             Argon2Config{MemoryKiB: 65536, Iterations: 3, Parallelism: 2},
+			OIDC:               OIDCConfig{Scopes: []string{"openid", "profile", "email"}, DefaultRole: "viewer"},
 		},
 		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true, NmapScope: "untyped"},
 		Updates:   UpdatesConfig{Check: true},
@@ -530,6 +630,7 @@ func (c Config) Validate() error {
 	if c.Auth.MinPasswordLength < 12 {
 		fail("auth.minPasswordLength", errMinPassword)
 	}
+	errs = append(errs, c.Auth.OIDC.validate()...)
 	if c.Auth.MaxFailedLogins < 3 || c.Auth.MaxFailedLogins > 20 {
 		fail("auth.maxFailedLogins", errMaxFailed)
 	}

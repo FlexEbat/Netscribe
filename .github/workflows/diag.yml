@@ -1,0 +1,47 @@
+name: diag
+# Temporary, on this branch only: adds the two OIDC modules (the sandbox has no module
+# downloads), then prints compile and test failures as annotations. Deleted before merging.
+on:
+  push:
+    branches: [feat/oidc]
+permissions:
+  contents: write
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/oidc
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Add the modules and commit go.mod and go.sum
+        run: |
+          mkdir -p web/dist && touch web/dist/.gitkeep
+          go get github.com/coreos/go-oidc/v3@latest golang.org/x/oauth2@latest
+          go mod tidy
+          git config user.name FlexEbat
+          git config user.email 52438328+FlexEbat@users.noreply.github.com
+          if ! git diff --quiet -- go.mod go.sum; then
+            git add go.mod go.sum
+            git commit -m "build: add go-oidc and oauth2 for single sign-on"
+            git push origin HEAD:feat/oidc
+          fi
+          grep -E "go-oidc|oauth2|^go |^toolchain" go.mod | sed 's/^/::notice::/'
+      - name: Build
+        run: |
+          go build ./cmd/... ./internal/... 2>&1 | head -10 | sed 's/%/%25/g; s/^/::error::/' || true
+      - name: Vet
+        run: |
+          go vet ./cmd/... ./internal/... 2>&1 | grep -v '^#' | head -10 | sed 's/%/%25/g; s/^/::error::/' || true
+      - name: Tests of auth
+        run: |
+          go test -race ./internal/auth/ 2>&1 | grep -E "FAIL|---|_test.go|panic|Error" | head -10 | sed 's/%/%25/g; s/^/::error::/' || true
+      - name: Tests of config and store
+        run: |
+          go test -race ./internal/config/ ./internal/store/ 2>&1 | grep -E "FAIL|---|_test.go|panic|Error" | head -10 | sed 's/%/%25/g; s/^/::error::/' || true
+      - name: Tests of api
+        run: |
+          go test -race ./internal/api/ 2>&1 | grep -E "FAIL|---|_test.go|panic|Error" | head -10 | sed 's/%/%25/g; s/^/::error::/' || true

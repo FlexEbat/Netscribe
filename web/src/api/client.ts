@@ -313,6 +313,15 @@ export interface Change {
 }
 
 /** The newest changes first. */
+/** The single sign-on buttons the sign in page shows. An empty object means none. */
+export interface Providers {
+  oidc?: { name: string }
+}
+
+export function getProviders(): Promise<Providers> {
+  return api<Providers>("GET", "/api/auth/providers", { expectUnauthorized: true })
+}
+
 export async function listChanges(limit = 200): Promise<Change[]> {
   const body = await api<{ changes: Change[] }>("GET", `/api/changes?limit=${limit}`)
   return body.changes

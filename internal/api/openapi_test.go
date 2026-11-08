@@ -24,6 +24,7 @@ func fullServer() *server {
 		health:     struct{ HealthRunner }{},
 		sessions:   struct{ SessionStore }{},
 		mfa:        struct{ MFAStore }{},
+		oidc:       struct{ OIDCService }{},
 		sealer:     &totp.Sealer{},
 		backup:     struct{ BackupService }{},
 		settings:   struct{ SettingsEditor }{},

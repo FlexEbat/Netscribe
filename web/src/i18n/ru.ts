@@ -481,6 +481,9 @@ export const ru: Record<Key, Entry> = {
   "login.signIn": "Войти",
   "login.signInToContinue": "Войдите, чтобы продолжить.",
   "login.signingIn": "Вход…",
+  "login.ssoFailed":
+    "Не удалось войти через провайдера. Повторите попытку или обратитесь к администратору.",
+  "login.ssoSignIn": "Войти через {name}",
   "login.theCodeFromYourAuthenticator":
     "Код из приложения-аутентификатора или один из ваших кодов восстановления.",
   "login.tooManyIn": {

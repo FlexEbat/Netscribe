@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Navigate, useLocation } from "react-router-dom"
-import { ApiError } from "@/api/client"
+import { ApiError, getProviders } from "@/api/client"
 import { useSession } from "@/api/session"
 import { BrandMark } from "@/components/Brand"
 import { Alert } from "@/components/ui/alert"
@@ -35,9 +35,24 @@ export function Login() {
   const [code, setCode] = useState("")
   const usernameRef = useRef<HTMLInputElement>(null)
   const codeRef = useRef<HTMLInputElement>(null)
+  const [ssoName, setSsoName] = useState<string | null>(null)
+  const ssoFailed = new URLSearchParams(location.search).get("sso") === "failed"
 
   useEffect(() => {
     usernameRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    // A server that has no single sign-on, or one that does not answer, shows no button.
+    let alive = true
+    getProviders()
+      .then((p) => {
+        if (alive && p.oidc) setSsoName(p.oidc.name)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
   }, [])
 
   useEffect(() => {
@@ -93,6 +108,9 @@ export function Login() {
             <CardContent>
               {notice ? <Alert>{notice}</Alert> : null}
               {error ? <Alert variant="destructive">{error}</Alert> : null}
+              {ssoFailed && !error ? (
+                <Alert variant="destructive">{t("login.ssoFailed")}</Alert>
+              ) : null}
               <form onSubmit={onSubmit} className="flex flex-col gap-4">
                 {challenge ? (
                   <div className="flex flex-col gap-2">
@@ -139,6 +157,12 @@ export function Login() {
                   {t(busy ? "login.signingIn" : challenge ? "login.verify" : "login.signIn")}
                 </Button>
               </form>
+              {ssoName && !challenge ? (
+                <Button asChild variant="outline" className="h-10">
+                  {/* A plain link: the provider needs a full page navigation, not a fetch. */}
+                  <a href="/api/auth/oidc/login">{t("login.ssoSignIn", { name: ssoName })}</a>
+                </Button>
+              ) : null}
             </CardContent>
           </Card>
         </div>

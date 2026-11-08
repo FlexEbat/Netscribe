@@ -145,4 +145,36 @@ describe("Login", () => {
     expect(await screen.findByText(/That code is not right, or it has expired/)).toBeInTheDocument()
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeInTheDocument()
   })
+
+  describe("single sign-on", () => {
+    async function openWith(providers: unknown, entry = "/login") {
+      mockFetch({
+        "GET /api/auth/me": () => json(401, { error: "authentication required" }),
+        "GET /api/auth/providers": () => json(200, providers),
+      })
+      const router = createMemoryRouter(routes, { initialEntries: [entry] })
+      render(
+        <SessionProvider>
+          <RouterProvider router={router} />
+        </SessionProvider>,
+      )
+      await screen.findByRole("button", { name: "Sign in" })
+    }
+
+    it("shows a link to the provider when the server has one", async () => {
+      await openWith({ oidc: { name: "Acme" } })
+      const link = await screen.findByRole("link", { name: "Sign in with Acme" })
+      expect(link).toHaveAttribute("href", "/api/auth/oidc/login")
+    })
+
+    it("shows no link when the server has none", async () => {
+      await openWith({})
+      expect(screen.queryByRole("link", { name: /Sign in with/ })).not.toBeInTheDocument()
+    })
+
+    it("says so when a single sign-on ended in a refusal", async () => {
+      await openWith({}, "/login?sso=failed")
+      expect(await screen.findByText(/identity provider did not work/)).toBeInTheDocument()
+    })
+  })
 })

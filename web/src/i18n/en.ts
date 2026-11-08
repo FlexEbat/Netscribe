@@ -449,6 +449,9 @@ export const en = {
   "login.signIn": "Sign in",
   "login.signInToContinue": "Sign in to continue.",
   "login.signingIn": "Signing in…",
+  "login.ssoFailed":
+    "Signing in with your identity provider did not work. Try again, or ask an administrator.",
+  "login.ssoSignIn": "Sign in with {name}",
   "login.theCodeFromYourAuthenticator":
     "The code from your authenticator app, or one of your recovery codes.",
   "login.tooManyIn": {
