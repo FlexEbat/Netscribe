@@ -7,6 +7,9 @@ import { devPassword, openUserMenu, signIn, signInAndWait, totpCode } from "./he
 // recovery code, turn it off. The account ends the way it began, so the other specs do not
 // notice it.
 test("the second factor can be turned on, asked at sign in and turned off", async ({ page }) => {
+  // A wrong code and a recovery code are each checked against up to ten slow password hashes
+  // (all of the unused recovery codes), which a shared CI runner can take many seconds for.
+  test.setTimeout(120_000)
   await signInAndWait(page)
   await page.goto("/account")
   await page.locator("#totp-password").fill(devPassword)
@@ -26,13 +29,15 @@ test("the second factor can be turned on, asked at sign in and turned off", asyn
   await expect(page.getByLabel("Authentication code")).toBeVisible()
   await page.getByLabel("Authentication code").fill("000000")
   await page.getByRole("button", { name: "Verify" }).click()
-  await expect(page.getByText("That code is not right, or it has expired.")).toBeVisible()
+  await expect(page.getByText("That code is not right, or it has expired.")).toBeVisible({
+    timeout: 45_000,
+  })
 
   await signIn(page)
   await page.getByLabel("Authentication code").fill(recovery[0]!.trim())
   await page.getByRole("button", { name: "Verify" }).click()
   // the panel sends the visitor back to the page that asked for the session: the account
-  await expect(page.getByText("Signed in as dev")).toBeVisible()
+  await expect(page.getByText("Signed in as dev")).toBeVisible({ timeout: 45_000 })
 
   // turn it off with the password and the second recovery code
   await page.locator("#totp-off-password").fill(devPassword)
