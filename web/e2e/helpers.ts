@@ -14,9 +14,9 @@ export async function signIn(page: Page, username = devUser, password = devPassw
 
 export async function signInAndWait(page: Page) {
   await signIn(page)
-  // The panel opens on the topology, which shows the seeded network. The name of a seeded
-  // device does not depend on the language.
-  await expect(page.getByText("gateway").first()).toBeVisible()
+  // The panel opens on the topology. A node is drawn whatever the language and the zoom: at
+  // a small width the zoom is far and a node shows its icon only, without the name.
+  await expect(page.locator(".react-flow__node").first()).toBeVisible()
 }
 
 export async function openUserMenu(page: Page) {
