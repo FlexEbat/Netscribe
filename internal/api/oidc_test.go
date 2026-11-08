@@ -53,7 +53,7 @@ func flowCookie(v string) func(*http.Request) {
 	return func(r *http.Request) { r.AddCookie(&http.Cookie{Name: oidcCookie, Value: v}) }
 }
 
-func auditActions(t *testing.T, e *env) []string {
+func oidcAudit(t *testing.T, e *env) []string {
 	t.Helper()
 	entries, err := e.store.ListAudit(context.Background(), store.AuditFilter{Limit: 50})
 	if err != nil {
@@ -154,7 +154,7 @@ func TestOIDCCallbackSuccessOpensASessionAndGoesHome(t *testing.T) {
 	if f.gotFlow != (auth.Flow{State: "st", Nonce: "no", Verifier: "ve"}) || f.gotState != "st" || f.gotCode != "abc" {
 		t.Errorf("the service got %+v %q %q", f.gotFlow, f.gotState, f.gotCode)
 	}
-	got := strings.Join(auditActions(t, e), " | ")
+	got := strings.Join(oidcAudit(t, e), " | ")
 	if !strings.Contains(got, "oidc_login:ok") || !strings.Contains(got, "oidc_user_create:ok") {
 		t.Errorf("audit = %s", got)
 	}
@@ -163,7 +163,7 @@ func TestOIDCCallbackSuccessOpensASessionAndGoesHome(t *testing.T) {
 func TestOIDCCallbackOfAKnownUserWritesNoCreateEntry(t *testing.T) {
 	e := newEnv(t, func(o *envOptions) { o.oidc = &fakeOIDC{result: goodResult(false)} })
 	e.do(http.MethodGet, "/api/auth/oidc/callback?state=st&code=abc", nil, flowCookie("st.no.ve"))
-	got := strings.Join(auditActions(t, e), " | ")
+	got := strings.Join(oidcAudit(t, e), " | ")
 	if !strings.Contains(got, "oidc_login:ok") || strings.Contains(got, "oidc_user_create") {
 		t.Errorf("audit = %s", got)
 	}
@@ -199,7 +199,7 @@ func TestOIDCCallbackRefusalsAllEndAtTheSamePage(t *testing.T) {
 			if strings.Contains(rec.Body.String(), "database") {
 				t.Errorf("the page shows the error: %s", rec.Body)
 			}
-			if got := strings.Join(auditActions(t, e), " | "); !strings.Contains(got, "oidc_login_failed:denied") {
+			if got := strings.Join(oidcAudit(t, e), " | "); !strings.Contains(got, "oidc_login_failed:denied") {
 				t.Errorf("audit = %s", got)
 			}
 		})

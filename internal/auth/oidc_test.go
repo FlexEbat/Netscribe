@@ -85,6 +85,7 @@ func newTestIDP(t *testing.T) *testIDP {
 	p := &testIDP{t: t, key: key, codes: map[string]idpCode{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"issuer":                                p.srv.URL,
 			"authorization_endpoint":                p.srv.URL + "/authorize",
@@ -94,6 +95,7 @@ func newTestIDP(t *testing.T) *testIDP {
 		})
 	})
 	mux.HandleFunc("/keys", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]string{{
 			"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "k1",
 			"n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
@@ -107,6 +109,8 @@ func newTestIDP(t *testing.T) *testIDP {
 }
 
 func (p *testIDP) token(w http.ResponseWriter, r *http.Request) {
+	// Without this the library reads a JSON answer as a form and finds no token.
+	w.Header().Set("Content-Type", "application/json")
 	if r.ParseForm() != nil {
 		http.Error(w, "bad form", http.StatusBadRequest)
 		return
