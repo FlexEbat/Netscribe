@@ -45,11 +45,11 @@ func (r *idpRepo) FindIdentityUser(ctx context.Context, issuer, subject string) 
 	if !ok {
 		return model.User{}, model.ErrNotFound
 	}
-	return r.fakeRepo.GetUser(ctx, id)
+	return r.GetUser(ctx, id)
 }
 
 func (r *idpRepo) CreateIdentityUser(ctx context.Context, u model.UserRecord, issuer, subject, _ string) (model.User, error) {
-	created, err := r.fakeRepo.CreateUser(ctx, u)
+	created, err := r.CreateUser(ctx, u)
 	if err != nil {
 		return model.User{}, err
 	}
