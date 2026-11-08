@@ -78,7 +78,9 @@ type env struct {
 }
 
 type envOptions struct {
-	oidc    OIDCService
+	oidc OIDCService
+	// oidcFor builds a single sign-on over the service and the store of the environment.
+	oidcFor func(*auth.Service, *store.Store) OIDCService
 	noUsers bool
 	trusted []string
 	extra   []Route
@@ -146,8 +148,12 @@ func newEnv(t *testing.T, mods ...func(*envOptions)) *env {
 	if o.wrapRepo != nil {
 		repo = o.wrapRepo(st)
 	}
+	sso := o.oidc
+	if o.oidcFor != nil {
+		sso = o.oidcFor(svc, st)
+	}
 	s := newServer(Options{
-		OIDC: o.oidc, Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Waker: o.waker, Version: o.version, Updates: o.updates, Helper: o.helper, Auto: o.auto, Backup: o.backup, MetricsEnabled: o.metrics, Health: o.health, Sessions: sessionsOr(o.sessions, st), MFA: st, Sealer: sealer, Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
+		OIDC: sso, Static: o.static, Auth: svc, Audit: aud, AuditLog: st, Repo: repo, Containers: st, Docker: o.docker, Nmap: o.nmap, Identifier: o.ident, Waker: o.waker, Version: o.version, Updates: o.updates, Helper: o.helper, Auto: o.auto, Backup: o.backup, MetricsEnabled: o.metrics, Health: o.health, Sessions: sessionsOr(o.sessions, st), MFA: st, Sealer: sealer, Settings: o.settings, Notifications: o.notifier, ExportOptions: func() render.Options { return o.export }, Scanner: o.scanner, Events: o.hub, TrustedProxies: trusted, Now: clk.now, heartbeat: o.heartbeat,
 		Logger: slog.New(slog.NewTextHandler(logs, nil)),
 	})
 	e := &env{t: t, store: st, svc: svc, clk: clk, logs: logs, handler: s.handler(o.static, append(s.routes(), o.extra...))}
