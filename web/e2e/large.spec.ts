@@ -65,3 +65,25 @@ test("a bulk edit of 201 devices is refused with the usual text", async ({ page 
   expect(res.status()).toBe(400)
   expect(await res.text()).toContain("ids must hold 1 to 200 devices")
 })
+
+test("at the zoom that fits the network a node is an icon, and the text returns on zoom in", async ({
+  page,
+}) => {
+  await open(page)
+  await page.goto("/")
+  // the marker is on the block inside the node
+  const far = page.locator('[data-lod="far"]').first()
+  await expect(far).toBeVisible()
+  expect(await far.innerText()).toBe("")
+
+  const pane = page.locator(".react-flow__pane")
+  const box = await pane.boundingBox()
+  if (!box) throw new Error("the topology pane has no box")
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(0, -400)
+      return page.locator(".react-flow__node").filter({ hasText: "dev-" }).count()
+    })
+    .toBeGreaterThan(0)
+})

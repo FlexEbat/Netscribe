@@ -13,7 +13,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react"
 import { memo } from "react"
-import { Handle, Position, type NodeProps } from "@xyflow/react"
+import { Handle, Position, useStore, type NodeProps } from "@xyflow/react"
 import type { DeviceKind } from "@/api/client"
 import { StatusBadge } from "@/components/StatusBadge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -34,10 +34,31 @@ const icons: Record<DeviceKind, Icon> = {
   unknown: Question,
 }
 
+/** Below this zoom a node is a block with its icon: the text could not be read anyway. */
+const FAR_ZOOM = 0.35
+
 /** One device on the canvas: icon by kind, name, address and state. */
 function DeviceNodeView({ data, selected }: NodeProps) {
   const { device, containerCount } = data as DeviceNodeData
   const Icon = icons[device.kind] ?? Question
+  const far = useStore((s) => s.transform[2] < FAR_ZOOM)
+  if (far) {
+    // About the size of the full card, so the layout, the edges and the measured
+    // size do not change while the visitor zooms. It has no tooltip and no text: a network
+    // of hundreds of devices draws as a map of icons, and the text returns on zoom in.
+    return (
+      <div
+        data-lod="far"
+        className={`flex h-[92px] w-48 items-center justify-center rounded-xl ${
+          device.online ? "bg-primary/25" : "bg-muted"
+        } ${selected ? "ring-4 ring-ring" : ""}`}
+      >
+        <Handle type="target" position={Position.Top} className="!size-2.5" />
+        <Handle type="source" position={Position.Bottom} className="!size-2.5" />
+        <Icon className="size-14 text-foreground" aria-label={kindLabels[device.kind]} />
+      </div>
+    )
+  }
   return (
     <Tooltip>
       <TooltipTrigger asChild>
