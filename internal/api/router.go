@@ -151,6 +151,9 @@ type Options struct {
 	// Sessions lists and ends the sessions of the caller. Without it the routes under
 	// /api/auth/sessions are not registered.
 	Sessions SessionStore
+	// OIDC is the single sign-on of the config. Without it the two routes under
+	// /api/auth/oidc are not registered and /api/auth/providers answers an empty object.
+	OIDC OIDCService
 	// Health runs the health checks. Without it the health routes are not registered.
 	Health HealthRunner
 	// MetricsEnabled tells whether GET /metrics answers. Nil means it does not.
@@ -207,6 +210,7 @@ type server struct {
 	health         HealthRunner
 	sessions       SessionStore
 	mfa            MFAStore
+	oidc           OIDCService
 	sealer         *totp.Sealer
 	challenges     challenges
 	healthMu       sync.Mutex
@@ -233,6 +237,7 @@ func (s *server) routes() []Route {
 		route(http.MethodPost, "/api/auth/logout", permSession, s.logout),
 		route(http.MethodGet, "/api/auth/me", permSession, s.me),
 		route(http.MethodPut, "/api/auth/password", permSession, s.changePassword),
+		route(http.MethodGet, "/api/auth/providers", permPublic, s.providers),
 		route(http.MethodGet, "/api/version", permSession, s.getVersion),
 		route(http.MethodGet, "/api/openapi.json", model.PermTopologyRead, s.getOpenAPI),
 	}
@@ -244,6 +249,12 @@ func (s *server) routes() []Route {
 			route(http.MethodPost, "/api/auth/totp/enable", permSession, s.totpEnable),
 			route(http.MethodDelete, "/api/auth/totp", permSession, s.totpDisable),
 			route(http.MethodPost, "/api/users/{id}/totp/reset", model.PermUsersManage, s.totpReset),
+		)
+	}
+	if s.oidc != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/auth/oidc/login", permPublic, s.oidcLogin),
+			route(http.MethodGet, "/api/auth/oidc/callback", permPublic, s.oidcCallback),
 		)
 	}
 	if s.sessions != nil {
@@ -407,6 +418,7 @@ func newServer(opts Options) *server {
 		health:         opts.Health,
 		sessions:       opts.Sessions,
 		mfa:            opts.MFA,
+		oidc:           opts.OIDC,
 		sealer:         opts.Sealer,
 		settings:       opts.Settings,
 		notifier:       opts.Notifications,

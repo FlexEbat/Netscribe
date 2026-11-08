@@ -228,7 +228,8 @@ func (s *Service) Login(ctx context.Context, username, password, ip, userAgent s
 	if err != nil {
 		return Session{}, model.User{}, fmt.Errorf("find user: %w", err)
 	}
-	if rec.Disabled || (rec.LockedUntil != nil && now.Before(*rec.LockedUntil)) {
+	// An account made by single sign-on has no password and answers like a wrong one.
+	if rec.Disabled || rec.PasswordHash == "" || (rec.LockedUntil != nil && now.Before(*rec.LockedUntil)) {
 		s.spendTime(password)
 		return Session{}, model.User{}, ErrInvalidCredentials
 	}
@@ -355,6 +356,10 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 		s.spendTime(current)
 		return ErrWrongPassword
 	}
+	if rec.PasswordHash == "" { // an account of single sign-on has no password
+		s.spendTime(current)
+		return ErrWrongPassword
+	}
 	ok, err := Verify(current, rec.PasswordHash)
 	if err != nil {
 		return fmt.Errorf("verify password: %w", err)
@@ -389,6 +394,10 @@ func (s *Service) ConfirmPassword(ctx context.Context, p Principal, password str
 		return fmt.Errorf("find user: %w", err)
 	}
 	if rec.LockedUntil != nil && s.now().Before(*rec.LockedUntil) {
+		s.spendTime(password)
+		return ErrWrongPassword
+	}
+	if rec.PasswordHash == "" { // an account of single sign-on has no password
 		s.spendTime(password)
 		return ErrWrongPassword
 	}

@@ -29,6 +29,9 @@ var routeDocs = map[string]RouteDoc{
 	"GET /api/auth/sessions":          {Summary: "Lists your own sessions, with the one of this request marked.", Answer: "A list with id, times, address, browser and current."},
 	"DELETE /api/auth/sessions/{id}":  {Summary: "Ends one of your sessions. The session of another person is not found."},
 	"DELETE /api/auth/sessions":       {Summary: "Ends all your sessions but the one of this request.", Answer: `{"ended": how many}`},
+	"GET /api/auth/providers":         {Summary: "Which single sign-on buttons the sign in page shows. No sign-in.", Answer: `{"oidc":{"name"}} when single sign-on is set up, else {}.`},
+	"GET /api/auth/oidc/login":        {Summary: "Starts a single sign-on: sends the browser to the identity provider. No sign-in.", Answer: "A redirect to the provider, and a short cookie that holds the state."},
+	"GET /api/auth/oidc/callback":     {Summary: "Where the provider sends the browser back. Checks the answer, opens a session and redirects to /. No sign-in.", Query: []string{"state: must match the cookie", "code: the authorization code"}, Answer: "A redirect to / with the session cookie, or to /?sso=failed."},
 	"GET /api/version":                {Summary: "The running version and whether a newer release exists.", Answer: "Version, and the update state."},
 
 	"GET /api/users":                  {Summary: "Lists the accounts.", Answer: "A list of users."},

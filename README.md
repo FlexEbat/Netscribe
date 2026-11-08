@@ -198,6 +198,36 @@ The password needs at least 12 characters and must not be a common password. Rol
 | `operator` | Read, start scans, edit devices and links |
 | `admin` | Everything, including accounts, tokens and the audit log |
 
+## Single sign-on
+
+Netscribe can sign people in through an identity provider that speaks OpenID Connect
+(Keycloak, Authentik, Google, Entra ID and the like). The provider's own second factor applies.
+Local accounts keep working, so a broken provider cannot lock you out.
+
+1. In the provider, create a client with the redirect address
+   `https://your-host/api/auth/oidc/callback`.
+2. Add the block to the config and restart the service (`auth.oidc` is read at start):
+
+```yaml
+auth:
+  oidc:
+    name: Acme # the label of the button
+    issuer: https://idp.example.com/realms/main
+    clientId: netscribe
+    clientSecret: "..."
+    redirectUrl: https://your-host/api/auth/oidc/callback
+    autoCreate: true # make an account at the first sign-in
+    allowedEmailDomains: [example.com] # who may be made; empty means nobody
+    defaultRole: viewer # never admin
+    roleClaim: groups # optional: a claim that holds the roles
+    roleMap: { netscribe-admins: admin, netscribe-ops: operator }
+```
+
+A person is known by the issuer and the subject, never by the e-mail address. The e-mail must be
+verified. The role is read at every sign-in. An account made this way has no password; an
+administrator can set one in the Users page if the person also needs the backup or the
+second-factor actions, which ask for a password.
+
 ## Configuration
 
 `netscribe.example.yaml` lists every key with its default and a comment. Change keys with

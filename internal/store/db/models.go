@@ -191,6 +191,14 @@ type User struct {
 	LastLoginAt        sql.NullString
 }
 
+type UserIdentity struct {
+	Issuer    string
+	Subject   string
+	UserID    int64
+	Email     string
+	CreatedAt string
+}
+
 type UserTotp struct {
 	UserID       int64
 	SecretSealed []byte

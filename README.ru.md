@@ -198,6 +198,35 @@ docker compose -f deploy/compose.yaml exec netscribe netscribe user add alice --
 | `operator` | Читать, запускать сканы, править устройства и связи |
 | `admin` | Всё, включая учётки, токены и журнал аудита |
 
+## Единый вход
+
+Netscribe может пускать людей через провайдера OpenID Connect (Keycloak, Authentik, Google,
+Entra ID и подобные). Действует второй фактор самого провайдера. Локальные учётные записи
+продолжают работать, поэтому сбой провайдера не закроет вам доступ.
+
+1. В провайдере создайте клиента с адресом возврата `https://ваш-хост/api/auth/oidc/callback`.
+2. Добавьте блок в конфиг и перезапустите службу (`auth.oidc` читается при старте):
+
+```yaml
+auth:
+  oidc:
+    name: Acme # подпись кнопки
+    issuer: https://idp.example.com/realms/main
+    clientId: netscribe
+    clientSecret: "..."
+    redirectUrl: https://ваш-хост/api/auth/oidc/callback
+    autoCreate: true # создавать учётную запись при первом входе
+    allowedEmailDomains: [example.com] # кому можно; пусто значит никому
+    defaultRole: viewer # никогда не admin
+    roleClaim: groups # необязательно: claim с ролями
+    roleMap: { netscribe-admins: admin, netscribe-ops: operator }
+```
+
+Человека определяют по паре «издатель и subject», не по e-mail. Адрес должен быть подтверждён.
+Роль читается при каждом входе. У такой учётной записи нет пароля; администратор может задать
+его на странице пользователей, если человеку нужны резервная копия или действия со вторым
+фактором, которые спрашивают пароль.
+
 ## Конфигурация
 
 В `netscribe.example.yaml` перечислены все ключи с значениями по умолчанию и комментариями.

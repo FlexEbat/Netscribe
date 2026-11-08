@@ -47,6 +47,19 @@ auth:
     memoryKiB: 65536 # at least 19456
     iterations: 3 # at least 2
     parallelism: 2 # at least 1
+  # Single sign-on with OpenID Connect. Off while issuer is empty. Read at start.
+  oidc:
+    name: "" # label of the sign in button, empty means SSO
+    issuer: "" # https address of the provider
+    clientId: ""
+    clientSecret: ""
+    redirectUrl: "" # https://HOST/api/auth/oidc/callback
+    scopes: [openid, profile, email]
+    autoCreate: false # make an account at the first sign in
+    allowedEmailDomains: [] # who autoCreate may make; empty means nobody
+    defaultRole: viewer # viewer or operator, never admin
+    roleClaim: "" # claim of the ID token that holds roles
+    roleMap: {} # claim value to role, for example {netscribe-admins: admin}
 
 tls:
   certFile: "" # certFile and keyFile are set together or not at all

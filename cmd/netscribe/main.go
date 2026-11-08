@@ -251,8 +251,15 @@ func serve(args []string, e streams) error {
 	go auto.Run(ctx, func(err error) { logger.Warn("automatic update", "err", err) })
 	notifier := notify.New(notifySource{db}, func() config.NotifyConfig { return live.Current().Notify }, logger)
 	go notifyOnScans(ctx, hub, notifier)
+	// Single sign-on is read once here: a change of auth.oidc needs a restart. The provider
+	// is asked at the first sign-in, so one that is down now does not stop the service.
+	var sso api.OIDCService
+	if cfg.Auth.OIDC.Enabled() {
+		sso = auth.NewOIDC(cfg.Auth.OIDC, db, svc, nil, nil)
+		logger.Info("single sign-on is on", "issuer", cfg.Auth.OIDC.Issuer)
+	}
 	router := api.NewRouter(api.Options{
-		Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
+		OIDC: sso, Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
 		Helper: newHelperClient(cfg.Database), Auto: auto, Sessions: db, MFA: db, Sealer: sealer, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
