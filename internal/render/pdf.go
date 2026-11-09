@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/chromedp/chromedp"
@@ -92,13 +93,28 @@ func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
 	// with unprivileged user namespaces switched off) the browser says so at start, and the
 	// print is tried once more without it: the document is made by this program, every
 	// value in it is escaped, and the browser runs without script or network.
-	noSandbox := os.Geteuid() == 0
-	pdf, err := printOnce(ctx, exe, dir, file, noSandbox)
+	noSandbox := os.Geteuid() == 0 || noSandboxFromNowOn.Load()
+	tried := time.Now()
+	pdf, err := printOnceFn(ctx, exe, dir, file, noSandbox)
 	if err != nil && !noSandbox && ctx.Err() == nil && strings.Contains(err.Error(), "sandbox") {
-		pdf, err = printOnce(ctx, exe, dir, file, true)
+		// The failed try is the slow, uneven part of a first print on such a system (in CI it
+		// took from 8 s to more than 40 s), so its time and its error are logged, and a print
+		// that then works without the sandbox makes the next prints skip the failing try.
+		slog.Info("pdf sandbox is not usable, printing without it", "failed_after_ms", time.Since(tried).Milliseconds(), "error", err.Error())
+		pdf, err = printOnceFn(ctx, exe, dir, file, true)
+		if err == nil {
+			noSandboxFromNowOn.Store(true)
+		}
 	}
 	return pdf, err
 }
+
+// noSandboxFromNowOn is set once a print has failed for the sandbox and worked without it:
+// the system does not change while the program runs.
+var noSandboxFromNowOn atomic.Bool
+
+// printOnceFn is printOnce; tests replace it, a real Chrome is not always there.
+var printOnceFn = printOnce
 
 func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]byte, error) {
 	profile, err := os.MkdirTemp(dir, "profile-")
