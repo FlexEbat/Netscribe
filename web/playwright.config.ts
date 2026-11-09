@@ -8,7 +8,11 @@ export default defineConfig({
   testDir: "./e2e",
   // The large network checks need a seeded network of hundreds of devices: scripts/e2e.sh
   // sets E2E_LARGE for them, and the other specs expect the small demo network.
-  ...(process.env.E2E_LARGE ? { testMatch: /large\.spec\.ts/ } : { testIgnore: /large\.spec\.ts/ }),
+  ...(process.env.E2E_LAB
+    ? { testMatch: /lab\.spec\.ts/ }
+    : process.env.E2E_LARGE
+      ? { testMatch: /large\.spec\.ts/, testIgnore: /lab\.spec\.ts/ }
+      : { testIgnore: /(large|lab)\.spec\.ts/ }),
   fullyParallel: false,
   workers: 1,
   retries: 0,
