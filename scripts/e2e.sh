@@ -12,6 +12,8 @@ pid=""
 cleanup() {
 	# The timings of the specs (see note() in web/e2e/helpers.ts), as one CI notice: the file is deleted below.
 	[ -s "$dir/timings.log" ] && echo "::notice title=e2e timings::$(paste -sd'|' "$dir/timings.log")" || true
+	# The phases of every PDF the server printed (internal/render/pdf.go), as one notice.
+	grep -E "pdf |export built" "$dir/server.log" 2>/dev/null | sed 's/^time=[^ ]* //' | paste -sd'|' | sed 's/^\(.\)/::notice title=pdf phases::\1/' | grep . || true
 	[ -n "$pid" ] && kill "$pid" 2>/dev/null || true
 	rm -rf "$dir"
 }

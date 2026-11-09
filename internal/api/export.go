@@ -37,7 +37,13 @@ func (s *server) export(w http.ResponseWriter, r *http.Request) {
 	if s.exportOpts != nil {
 		opts = s.exportOpts()
 	}
+	began := time.Now()
 	f, err := render.Export(r.Context(), s.repo, format, s.now(), opts)
+	if format == render.FormatPDF {
+		// The whole export, the loading of the data and the layout included: compared with the
+		// lines of internal/render/pdf.go it shows what is spent before Chrome is asked.
+		s.log.Info("export built", "format", format, "ms", time.Since(began).Milliseconds())
+	}
 	switch {
 	case errors.Is(err, render.ErrUnknownFormat):
 		writeError(w, http.StatusNotFound, "not found")
