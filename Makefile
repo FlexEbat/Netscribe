@@ -3,7 +3,7 @@ GO_DIRS := cmd internal web/embed.go
 GO_PKGS := ./cmd/... ./internal/... ./web
 SQLC_QUERIES := $(wildcard internal/store/queries/*.sql)
 
-.PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build e2e e2e-large oidc-dex
+.PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build e2e e2e-large e2e-lab oidc-dex
 
 # go:embed needs a file under web/dist before the frontend is built.
 web/dist:
@@ -74,3 +74,8 @@ oidc-dex: build
 # The same with a generated network of 600 devices: paging, topology drag, bulk limit.
 e2e-large: build
 	E2E_DEVICES=600 sh scripts/e2e.sh
+
+# A scan of the lab network (docker compose -f deploy/compose.lab.yaml up --build -d) from the
+# browser: the containers reach the inventory and the change feed.
+e2e-lab: build
+	E2E_LAB=1 sh scripts/e2e.sh
