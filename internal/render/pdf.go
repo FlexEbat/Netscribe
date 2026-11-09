@@ -83,7 +83,11 @@ func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("make temp dir: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(dir) }() // best effort, the directory is private
+	defer func() {
+		removing := time.Now()
+		_ = os.RemoveAll(dir) // best effort, the directory is private
+		slog.Info("pdf temp files removed", "ms", time.Since(removing).Milliseconds())
+	}()
 	file := filepath.Join(dir, "report.html")
 	if err := os.WriteFile(file, html, 0o600); err != nil {
 		return nil, fmt.Errorf("write report: %w", err)
@@ -133,9 +137,15 @@ func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]by
 		opts = append(opts, chromedp.Flag("no-sandbox", true))
 	}
 	alloc, cancelAlloc := chromedp.NewExecAllocator(ctx, opts...)
-	defer cancelAlloc()
 	tab, cancelTab := chromedp.NewContext(alloc)
-	defer cancelTab()
+	defer func() {
+		// Closing the browser waits for the process to end: its time is logged because it
+		// may be the part of a print that no other timer holds.
+		closing := time.Now()
+		cancelTab()
+		cancelAlloc()
+		slog.Info("pdf chrome closed", "ms", time.Since(closing).Milliseconds())
+	}()
 
 	started := time.Now()
 	if err := chromedp.Do(tab, chromedp.Navigate("about:blank")); err != nil { // starts the browser and nothing else
