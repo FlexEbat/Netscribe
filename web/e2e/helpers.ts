@@ -1,3 +1,4 @@
+import { appendFileSync } from "node:fs"
 import { createHmac } from "node:crypto"
 import { expect, type Page } from "@playwright/test"
 
@@ -37,4 +38,12 @@ export function totpCode(secret: string, at = Date.now()): string {
   const offset = mac[mac.length - 1]! & 0x0f
   const value = mac.readUInt32BE(offset) & 0x7fffffff
   return String(value % 1_000_000).padStart(6, "0")
+}
+
+// scripts/e2e.sh sets E2E_TIMINGS and prints the file as one CI notice, so a slow step can be
+// told from a slow request. Without the variable nothing is written.
+const timingsFile = process.env.E2E_TIMINGS
+const began = Date.now()
+export function note(what: string) {
+  if (timingsFile) appendFileSync(timingsFile, `+${Date.now() - began}ms ${what}\n`)
 }
