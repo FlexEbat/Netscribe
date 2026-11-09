@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -116,12 +117,14 @@ func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]by
 	tab, cancelTab := chromedp.NewContext(alloc)
 	defer cancelTab()
 
+	began := time.Now()
 	if err := chromedp.Do(tab, chromedp.Navigate("file://"+filepath.ToSlash(file))); err != nil {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		return nil, fmt.Errorf("open report: %w", err)
 	}
+	opened := time.Since(began)
 	pdf, err := chromedp.Run(tab, chromedp.PrintToPDF(chromedp.PDFPrintBackground(), chromedp.PDFPreferCSSPageSize()))
 	if err != nil {
 		if ctx.Err() != nil {
@@ -129,5 +132,14 @@ func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]by
 		}
 		return nil, fmt.Errorf("print pdf: %w", err)
 	}
+	// One line per print: where the seconds go (starting Chrome and loading the page, or the
+	// print itself) and how big the document was. Amendment 60: the PDF of 600 devices took
+	// 7.5 s, 18.7 s and 45.9 s in CI and nothing explained the spread.
+	var size int64
+	if st, err := os.Stat(file); err == nil {
+		size = st.Size()
+	}
+	slog.Info("pdf printed", "html_kb", size/1024, "open_ms", opened.Milliseconds(),
+		"print_ms", (time.Since(began) - opened).Milliseconds(), "pdf_kb", len(pdf)/1024, "no_sandbox", noSandbox)
 	return pdf, nil
 }
