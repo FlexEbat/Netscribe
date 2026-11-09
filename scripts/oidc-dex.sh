@@ -25,6 +25,7 @@ cleanup() {
 	if [ "$status" -ne 0 ]; then
 		echo "::notice title=dex log::$(docker logs "$name" 2>&1 | tail -15 | paste -sd'|' || true)"
 		echo "::notice title=server log::$(tail -15 "$dir/server.log" 2>/dev/null | paste -sd'|' || true)"
+		echo "::notice title=second server log::$(tail -15 "$dir/server2.log" 2>/dev/null | paste -sd'|' || true)"
 	fi
 	[ -n "$pid" ] && kill "$pid" 2>/dev/null || true
 	docker rm -f "$name" >/dev/null 2>&1 || true
@@ -150,5 +151,64 @@ esac
 code=$(curl -sS -b "$jar3" -o /dev/null -w '%{http_code}' "$base/api/auth/me")
 [ "$code" = "401" ] || fail "a wrong password opened a session ($code)"
 
-echo "::notice title=oidc-dex::signed in through Dex as $u1; a second sign in found the same user; a wrong password was refused"
+# Phase two: roles from a real "groups" claim. The mock connector of Dex signs a person in with
+# the group "authors" and no form. The service is started again with a role map for it.
+kill "$pid" 2>/dev/null || true
+wait "$pid" 2>/dev/null || true
+docker rm -f "$name" >/dev/null 2>&1 || true
+name="netscribe-dex2-$$"
+dexport2=$((dexport + 1))
+issuer2="http://127.0.0.1:$dexport2/dex"
+cat >"$dir/dex2.yaml" <<YAML
+issuer: $issuer2
+storage:
+  type: memory
+web:
+  http: 0.0.0.0:5556
+oauth2:
+  skipApprovalScreen: true
+connectors:
+  - type: mockCallback
+    id: mock
+    name: Example
+staticClients:
+  - id: netscribe
+    name: Netscribe
+    secret: dex-test-client-secret
+    redirectURIs:
+      - $redirect
+YAML
+docker run -d --name "$name" -p "127.0.0.1:$dexport2:5556" -v "$dir/dex2.yaml:/etc/dex/config.yaml:ro" \
+	"$DEX_IMAGE" dex serve /etc/dex/config.yaml >/dev/null
+i=0
+until curl -fsS "$issuer2/.well-known/openid-configuration" >/dev/null 2>&1; do
+	i=$((i + 1))
+	[ "$i" -gt 100 ] && fail "the second Dex did not start"
+	sleep 0.3
+done
+sed -e "s#issuer: $issuer\$#issuer: $issuer2#" \
+	-e "s#allowedEmailDomains: \[example.com\]#allowedEmailDomains: [kilgore.trout]\n    scopes: [openid, profile, email, groups]\n    roleClaim: groups\n    roleMap: {authors: operator}#" \
+	-e "s#^database: .*#database: $dir/netscribe2.db#" \
+	"$dir/netscribe.yaml" >"$dir/netscribe2.yaml"
+chmod 600 "$dir/netscribe2.yaml"
+NETSCRIBE_DEV_PASSWORD=oidc-dex-dev-password-1 go run ./cmd/seed --config "$dir/netscribe2.yaml" --dev-user
+./netscribe serve --config "$dir/netscribe2.yaml" >"$dir/server2.log" 2>&1 &
+pid=$!
+i=0
+until curl -fsS "$base/healthz" >/dev/null 2>&1; do
+	i=$((i + 1))
+	if [ "$i" -gt 100 ] || ! kill -0 "$pid" 2>/dev/null; then fail "the server did not start the second time"; fi
+	sleep 0.2
+done
+jar4="$dir/jar4"
+final4=$(curl -sS -L -c "$jar4" -b "$jar4" -o /dev/null -w '%{url_effective}' "$base/api/auth/oidc/login")
+[ "$final4" = "$base/" ] || fail "the sign in with the mock connector ended at $final4"
+me4=$(curl -sS -b "$jar4" -w ' HTTP=%{http_code}' "$base/api/auth/me")
+case "$me4" in
+*HTTP=200) ;;
+*) fail "no session after the sign in with groups: $me4" ;;
+esac
+echo "$me4" | grep -q '"operator"' || fail "the group authors should give the role operator: $me4"
+
+echo "::notice title=oidc-dex::signed in through Dex as $u1; a second sign in found the same user; a wrong password was refused; the group authors gave the role operator"
 echo "oidc-dex: ok ($u1)"
