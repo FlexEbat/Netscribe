@@ -78,6 +78,13 @@ jobs:
         run: make e2e
       - name: End to end tests on a large network
         run: make e2e-large
+      - name: Start the lab network
+        run: docker compose -f deploy/compose.lab.yaml up --build -d
+      - name: End to end scan of the lab network
+        run: make e2e-lab
+      - name: Stop the lab network
+        if: always()
+        run: docker compose -f deploy/compose.lab.yaml down
       - name: Upload traces and screenshots of failed tests
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

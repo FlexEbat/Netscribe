@@ -23,12 +23,23 @@ export NETSCRIBE_DEV_PASSWORD
 E2E_TIMINGS="$dir/timings.log"
 export E2E_TIMINGS
 
+# E2E_LAB=1 scans the network of deploy/compose.lab.yaml, which must be running, and runs only
+# lab.spec.ts. Every other mode scans nothing: the schedule is off.
+targets="192.168.1.0/24"
+if [ -n "${E2E_LAB:-}" ]; then
+	targets="172.30.0.0/24"
+	export E2E_LAB
+fi
+
 cat >"$dir/netscribe.yaml" <<YAML
 listen: 127.0.0.1:$port
 database: $dir/netscribe.db
 scan:
-  targets: [192.168.1.0/24]
+  targets: [$targets]
   interval: 0
+snmp:
+  communities: [public]
+  timeout: 2s
 docker:
   enabled: false
 discovery:
