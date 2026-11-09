@@ -35,6 +35,11 @@ test("the second factor can be turned on, asked at sign in and turned off", asyn
   note("second factor is on")
   await openUserMenu(page)
   await page.getByRole("menuitem", { name: "Sign out" }).click()
+  // The panel sends a signed out visitor to /login and remembers the page, so that the next
+  // sign in returns to it. Going to /login before that redirect has run loses the memory and
+  // lands on / instead: the flake of amendment 54 (the server had answered 200 at once and
+  // the page stood on the topology).
+  await page.waitForURL(/\/login$/)
   await signIn(page)
   await expect(page.getByLabel("Authentication code")).toBeVisible()
   note("the code box is shown")
