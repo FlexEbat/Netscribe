@@ -76,6 +76,9 @@ jobs:
           npx --prefix web playwright install --with-deps chromium
       - name: End to end tests
         run: make e2e
+      - name: PDF of 2000 devices (measurement)
+        run: E2E_GREP="PDF export" E2E_DEVICES=2000 sh scripts/e2e.sh
+        continue-on-error: true
       - name: End to end tests on a large network
         run: make e2e-large
       - name: Upload traces and screenshots of failed tests

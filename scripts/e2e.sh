@@ -64,4 +64,9 @@ until curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1; do
 	sleep 0.2
 done
 
-E2E_BASE_URL="http://127.0.0.1:$port" npm --prefix web run e2e
+# E2E_GREP runs only the specs whose title matches.
+if [ -n "${E2E_GREP:-}" ]; then
+	E2E_BASE_URL="http://127.0.0.1:$port" npm --prefix web run e2e -- --grep "$E2E_GREP"
+else
+	E2E_BASE_URL="http://127.0.0.1:$port" npm --prefix web run e2e
+fi
