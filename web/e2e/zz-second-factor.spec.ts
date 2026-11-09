@@ -12,6 +12,10 @@ test("the second factor can be turned on, asked at sign in and turned off", asyn
     if (path.startsWith("/api/auth")) note(`${r.request().method()} ${path} ${r.status()}`)
   })
   page.on("requestfailed", (r) => note(`request failed ${r.url()}`))
+  page.on("pageerror", (e) => note(`page error: ${e.message}`))
+  page.on("console", (m) => {
+    if (m.type() === "error") note(`console error: ${m.text().slice(0, 300)}`)
+  })
   // A wrong code and a recovery code are each checked against up to ten slow password hashes
   // (all of the unused recovery codes), which a shared CI runner can take many seconds for.
   test.setTimeout(120_000)
@@ -46,7 +50,18 @@ test("the second factor can be turned on, asked at sign in and turned off", asyn
   note("the recovery code is typed")
   await page.getByRole("button", { name: "Verify" }).click()
   // the panel sends the visitor back to the page that asked for the session: the account
-  await expect(page.getByText("Signed in as dev")).toBeVisible({ timeout: 45_000 })
+  try {
+    await expect(page.getByText("Signed in as dev")).toBeVisible({ timeout: 45_000 })
+  } catch (error) {
+    // The flake of amendment 54: the server answered 200 at once and the page then did
+    // nothing. Where the page stands tells which part of the page did not move on.
+    const text = await page
+      .locator("body")
+      .innerText()
+      .catch(() => "no body")
+    note(`stuck at ${page.url()}: ${text.replace(/\s+/g, " ").slice(0, 400)}`)
+    throw error
+  }
   note("signed in with the recovery code")
 
   // turn it off with the password and the second recovery code
