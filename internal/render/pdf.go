@@ -104,7 +104,7 @@ func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
 		// The failed try is the slow, uneven part of a first print on such a system (in CI it
 		// took from 8 s to more than 40 s), so its time and its error are logged, and a print
 		// that then works without the sandbox makes the next prints skip the failing try.
-		slog.Info("pdf sandbox is not usable, printing without it", "failed_after_ms", time.Since(tried).Milliseconds(), "error", err.Error())
+		slog.Info("pdf sandbox is not usable, printing without it", "failed_after_ms", time.Since(tried).Milliseconds(), "error", firstLine(err.Error()))
 		pdf, err = printOnceFn(ctx, exe, dir, file, true)
 		if err == nil {
 			noSandboxFromNowOn.Store(true)
@@ -180,4 +180,14 @@ func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]by
 	slog.Info("pdf printed", "html_kb", size/1024, "launch_ms", launched.Milliseconds(), "open_ms", opened.Milliseconds(),
 		"print_ms", (time.Since(began) - opened).Milliseconds(), "pdf_kb", len(pdf)/1024, "no_sandbox", noSandbox)
 	return pdf, nil
+}
+
+// firstLine is the first line of a message, for a log: Chrome follows its one line of cause
+// with a page of stack.
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+	if len(line) > 300 {
+		line = line[:300]
+	}
+	return line
 }
