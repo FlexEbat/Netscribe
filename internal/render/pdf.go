@@ -58,13 +58,17 @@ func ChromePDF(path string) PDFFunc {
 		}
 		ctx, cancel := context.WithTimeout(ctx, PDFTimeout)
 		defer cancel()
+		asked := time.Now()
 		select {
 		case pdfSlot <- struct{}{}:
 			defer func() { <-pdfSlot }()
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
-		return printer(ctx, exe, html)
+		waited := time.Since(asked)
+		pdf, err := printer(ctx, exe, html)
+		slog.Info("pdf done", "wait_ms", waited.Milliseconds(), "total_ms", time.Since(asked).Milliseconds(), "ok", err == nil)
+		return pdf, err
 	}
 }
 
@@ -117,6 +121,14 @@ func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]by
 	tab, cancelTab := chromedp.NewContext(alloc)
 	defer cancelTab()
 
+	started := time.Now()
+	if err := chromedp.Run(tab); err != nil { // starts the browser and nothing else
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("start chrome: %w", err)
+	}
+	launched := time.Since(started)
 	began := time.Now()
 	if err := chromedp.Do(tab, chromedp.Navigate("file://"+filepath.ToSlash(file))); err != nil {
 		if ctx.Err() != nil {
@@ -139,7 +151,7 @@ func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]by
 	if st, err := os.Stat(file); err == nil {
 		size = st.Size()
 	}
-	slog.Info("pdf printed", "html_kb", size/1024, "open_ms", opened.Milliseconds(),
+	slog.Info("pdf printed", "html_kb", size/1024, "launch_ms", launched.Milliseconds(), "open_ms", opened.Milliseconds(),
 		"print_ms", (time.Since(began) - opened).Milliseconds(), "pdf_kb", len(pdf)/1024, "no_sandbox", noSandbox)
 	return pdf, nil
 }
