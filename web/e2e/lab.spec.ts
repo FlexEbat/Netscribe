@@ -23,6 +23,8 @@ test("a scan of the lab network ends with its devices in the inventory and in th
   }
   const before = await count()
 
+  // the scan bar is on the inventory page
+  await page.goto("/inventory")
   await page.getByRole("button", { name: "Run scan" }).click()
 
   // the scan runs in the background: look at the inventory until its devices are there
