@@ -122,7 +122,7 @@ func printOnce(ctx context.Context, exe, dir, file string, noSandbox bool) ([]by
 	defer cancelTab()
 
 	started := time.Now()
-	if err := chromedp.Run(tab); err != nil { // starts the browser and nothing else
+	if err := chromedp.Do(tab, chromedp.Navigate("about:blank")); err != nil { // starts the browser and nothing else
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
