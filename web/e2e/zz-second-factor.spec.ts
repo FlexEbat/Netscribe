@@ -1,21 +1,11 @@
-import { appendFileSync } from "node:fs"
 import { expect, test } from "@playwright/test"
-import { devPassword, openUserMenu, signIn, signInAndWait, totpCode } from "./helpers"
+import { devPassword, openUserMenu, signIn, signInAndWait, totpCode, note } from "./helpers"
 
 // The file name sorts last on purpose: with one worker the files run in name order, and if this
 // test fails halfway the account keeps its second factor, which must not break the other specs.
 // The whole life of a second factor on the account "dev": turn it on, sign in with a
 // recovery code, turn it off. The account ends the way it began, so the other specs do not
 // notice it.
-// scripts/e2e.sh sets E2E_TIMINGS and prints this file as a CI notice, so a slow step of this
-// spec can be told from a slow request (amendment 54, open item 4). Without the variable
-// nothing is written.
-const timingsFile = process.env.E2E_TIMINGS
-const began = Date.now()
-function note(what: string) {
-  if (timingsFile) appendFileSync(timingsFile, `+${Date.now() - began}ms ${what}\n`)
-}
-
 test("the second factor can be turned on, asked at sign in and turned off", async ({ page }) => {
   page.on("response", (r) => {
     const path = new URL(r.url()).pathname

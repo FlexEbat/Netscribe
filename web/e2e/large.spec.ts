@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
-import { devPassword, devUser } from "./helpers"
+import { devPassword, devUser, note } from "./helpers"
 
 // These run against a generated network of hundreds of devices (make e2e-large). They check
 // the rules of slice 43: the inventory does not draw every row, the topology answers a drag
@@ -86,4 +86,23 @@ test("at the zoom that fits the network a node is an icon, and the text returns 
       return page.locator(".react-flow__node").filter({ hasText: "dev-" }).count()
     })
     .toBeGreaterThan(0)
+})
+
+test("the PDF export of the large network is a PDF and ends inside its budget", async ({
+  page,
+}) => {
+  test.setTimeout(120_000)
+  await open(page)
+  const began = Date.now()
+  const res = await page.request.get("/api/export/pdf", { timeout: 100_000 })
+  const took = Date.now() - began
+  note(`GET /api/export/pdf ${res.status()} in ${took}ms`)
+  if (res.status() === 503 && !process.env.CI) {
+    test.skip(true, "this machine has no Chrome or Chromium to print with")
+  }
+  expect(res.status()).toBe(200)
+  expect(res.headers()["content-type"]).toContain("application/pdf")
+  expect((await res.body()).subarray(0, 5).toString()).toBe("%PDF-")
+  // The server gives up at 60 s; a render that needs most of that is a regression.
+  expect(took).toBeLessThan(45_000)
 })
