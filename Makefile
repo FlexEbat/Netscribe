@@ -75,6 +75,10 @@ oidc-dex: build
 oidc-keycloak: build
 	sh scripts/oidc-keycloak.sh
 
+# Single sign-on against a real Authentik (PostgreSQL, server, worker). Needs Docker. Not part of gate.
+oidc-authentik: build
+	sh scripts/oidc-authentik.sh
+
 # The same with a generated network of 600 devices: paging, topology drag, bulk limit.
 e2e-large: build
 	E2E_DEVICES=600 sh scripts/e2e.sh
