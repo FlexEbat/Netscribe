@@ -20,7 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { displayName, kindLabels, type DeviceNodeData } from "@/lib/topology"
 import { t } from "@/i18n"
 
-const icons: Record<DeviceKind, Icon> = {
+export const deviceIcons: Record<DeviceKind, Icon> = {
   router: Network,
   switch: ShareNetwork,
   ap: WifiHigh,
@@ -40,7 +40,7 @@ const FAR_ZOOM = 0.35
 /** One device on the canvas: icon by kind, name, address and state. */
 function DeviceNodeView({ data, selected }: NodeProps) {
   const { device, containerCount } = data as DeviceNodeData
-  const Icon = icons[device.kind] ?? Question
+  const Icon = deviceIcons[device.kind] ?? Question
   const far = useStore((s) => s.transform[2] < FAR_ZOOM)
   if (far) {
     // About the size of the full card, so the layout, the edges and the measured
