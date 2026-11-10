@@ -337,7 +337,10 @@ netscribe export --format pdf --out network.pdf   # needs Chromium or Chrome
 ```
 
 The panel and the console offer the same formats. PDF export looks for `chromium` and
-`google-chrome` in `PATH`; set `export.chromePath` to use another program. In Docker, write
+`google-chrome` in `PATH`; set `export.chromePath` to use another program. Chrome runs with its
+sandbox, and where the system forbids it (root, a container, no unprivileged user namespaces)
+the print is repeated without it, which costs about ten seconds once after each start of the
+service. `export.noSandbox: true` skips that first try. In Docker, write
 the file into the volume and copy it out:
 
 ```sh

@@ -26,7 +26,7 @@ func TestAPrintThatNeededNoSandboxMakesTheNextOnesSkipTheFailingTry(t *testing.T
 		return []byte("%PDF-1.4"), nil
 	}
 	for i := 0; i < 2; i++ {
-		if _, err := printPDF(context.Background(), "chrome", []byte("<html></html>")); err != nil {
+		if _, err := printPDF(context.Background(), "chrome", []byte("<html></html>"), false); err != nil {
 			t.Fatalf("print %d: %v", i+1, err)
 		}
 	}
@@ -55,10 +55,32 @@ func TestAFailureThatIsNotTheSandboxKeepsTheSandbox(t *testing.T) {
 		calls++
 		return nil, errors.New("print pdf: the page crashed")
 	}
-	if _, err := printPDF(context.Background(), "chrome", []byte("<html></html>")); err == nil {
+	if _, err := printPDF(context.Background(), "chrome", []byte("<html></html>"), false); err == nil {
 		t.Fatal("the error was swallowed")
 	}
 	if calls != 1 || noSandboxFromNowOn.Load() {
 		t.Fatalf("calls = %d, sticky = %v; a failure that is not the sandbox must not retry or switch it off", calls, noSandboxFromNowOn.Load())
+	}
+}
+
+// export.noSandbox: no failed try at all, not even the first time.
+func TestExportNoSandboxGoesStraightToTheWayThatWorks(t *testing.T) {
+	old, oldFlag := printOnceFn, noSandboxFromNowOn.Load()
+	noSandboxFromNowOn.Store(false)
+	defer func() { printOnceFn = old; noSandboxFromNowOn.Store(oldFlag) }()
+
+	var tries []bool
+	printOnceFn = func(_ context.Context, _, _, _ string, noSandbox bool) ([]byte, error) {
+		tries = append(tries, noSandbox)
+		return []byte("%PDF-1.4"), nil
+	}
+	if _, err := printPDF(context.Background(), "chrome", []byte("<html></html>"), true); err != nil {
+		t.Fatal(err)
+	}
+	if len(tries) != 1 || !tries[0] {
+		t.Fatalf("tries = %v, want one try without the sandbox", tries)
+	}
+	if noSandboxFromNowOn.Load() {
+		t.Fatal("a chosen setting must not be recorded as a finding about the system")
 	}
 }

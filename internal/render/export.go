@@ -118,6 +118,8 @@ func Load(ctx context.Context, src Source) (Data, error) {
 type Options struct {
 	// ChromePath is the browser that prints PDFs, empty to look in PATH.
 	ChromePath string
+	// NoSandbox prints PDFs without Chrome's sandbox from the first try (export.noSandbox).
+	NoSandbox bool
 	// PDF replaces the PDF printer, for tests. Nil means Chrome.
 	PDF PDFFunc
 }
@@ -136,7 +138,7 @@ func Export(ctx context.Context, src Source, format string, now time.Time, opts 
 		if _, err := FindChrome(opts.ChromePath); err != nil {
 			return File{}, err
 		}
-		opts.PDF = ChromePDF(opts.ChromePath)
+		opts.PDF = ChromePDFWith(opts.ChromePath, opts.NoSandbox)
 	}
 	d, err := Load(ctx, src)
 	if err != nil {

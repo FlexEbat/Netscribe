@@ -329,6 +329,11 @@ func (d DiscoveryConfig) IPv6Enabled() bool { return d.IPv6 == nil || *d.IPv6 }
 
 type ExportConfig struct {
 	ChromePath string `yaml:"chromePath"`
+	// NoSandbox prints PDFs with Chrome's own sandbox off from the start. Without it the sandbox
+	// is tried first and, where the system forbids it (root, a container, unprivileged user
+	// namespaces switched off), the print is repeated without it: the failed try costs
+	// about ten seconds once after every start of the service. Say true to skip it.
+	NoSandbox bool `yaml:"noSandbox"`
 }
 
 // UpdatesConfig controls the check for a newer release. The check asks one fixed GitHub

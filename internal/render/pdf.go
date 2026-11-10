@@ -51,7 +51,11 @@ var pdfSlot = make(chan struct{}, 1)
 
 // ChromePDF returns a PDFFunc that prints with the Chrome found at path (or in PATH).
 // It waits for its turn, then renders, and gives up when ctx ends or PDFTimeout passes.
-func ChromePDF(path string) PDFFunc {
+func ChromePDF(path string) PDFFunc { return ChromePDFWith(path, false) }
+
+// ChromePDFWith is ChromePDF with the choice of the sandbox: noSandbox true prints without
+// Chrome's sandbox from the first try (export.noSandbox).
+func ChromePDFWith(path string, noSandbox bool) PDFFunc {
 	return func(ctx context.Context, html []byte) ([]byte, error) {
 		exe, err := FindChrome(path)
 		if err != nil {
@@ -67,18 +71,18 @@ func ChromePDF(path string) PDFFunc {
 			return nil, ctx.Err()
 		}
 		waited := time.Since(asked)
-		pdf, err := printer(ctx, exe, html)
+		pdf, err := printer(ctx, exe, html, noSandbox)
 		slog.Info("pdf done", "wait_ms", waited.Milliseconds(), "total_ms", time.Since(asked).Milliseconds(), "ok", err == nil)
 		return pdf, err
 	}
 }
 
 // printer prints one document. Tests replace it, a real Chrome is not always there.
-var printer = printPDF
+var printer = printPDF // func(ctx, exe, html, noSandbox)
 
 // printPDF opens the document from a private temporary file and prints it. The browser
 // gets no network and no script: the document needs neither.
-func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
+func printPDF(ctx context.Context, exe string, html []byte, forceNoSandbox bool) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "netscribe-pdf-")
 	if err != nil {
 		return nil, fmt.Errorf("make temp dir: %w", err)
@@ -97,7 +101,7 @@ func printPDF(ctx context.Context, exe string, html []byte) ([]byte, error) {
 	// with unprivileged user namespaces switched off) the browser says so at start, and the
 	// print is tried once more without it: the document is made by this program, every
 	// value in it is escaped, and the browser runs without script or network.
-	noSandbox := os.Geteuid() == 0 || noSandboxFromNowOn.Load()
+	noSandbox := forceNoSandbox || os.Geteuid() == 0 || noSandboxFromNowOn.Load()
 	tried := time.Now()
 	pdf, err := printOnceFn(ctx, exe, dir, file, noSandbox)
 	if err != nil && !noSandbox && ctx.Err() == nil && strings.Contains(err.Error(), "sandbox") {

@@ -289,7 +289,10 @@ make build
 
 On RHEL and its clones, enable EPEL before you install Chromium.
 PDF export looks for `chromium` and `google-chrome` in `PATH`. Set `export.chromePath` to use
-another program.
+another program. On a system that forbids Chrome's sandbox (root, a container, Ubuntu 23.10 or
+later with unprivileged user namespaces restricted) the first PDF after each start takes
+about ten seconds longer, because the sandbox is tried and then given up; set
+`export.noSandbox: true` to skip that try.
 
 Nmap needs raw sockets for OS detection. Give the service the capabilities in a drop-in
 file, which does not widen access for other users the way `setcap` on the binary does:

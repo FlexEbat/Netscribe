@@ -111,6 +111,8 @@ var settingGroups = []group{
 	{name: "Export", hint: "reports and metrics", items: []setting{
 		{path: p("export.chromePath"), label: "Browser for PDF export", kind: kText, hot: true, def: "found in PATH",
 			help: "The path of chromium or chrome. Empty means look for one in PATH."},
+		{path: p("export.noSandbox"), label: "PDF without Chrome's sandbox", kind: kBool, hot: true, def: "off",
+			help: "Off tries the sandbox first and, where the system forbids it (root, a container, no user namespaces), prints again without it: the failed try costs about ten seconds once after each start. On skips it. The page is made by Netscribe with every value escaped, and the browser has no script and no network, but the sandbox is one more wall: turn this on only where the sandbox cannot work."},
 		{path: p("metrics.enabled"), label: "Serve /metrics", kind: kBool, hot: true, def: "off",
 			help: "Prometheus text format with counts of devices, risky services and scans. Reading it needs a token with the read scope. Names and addresses of devices are never in it."},
 	}},

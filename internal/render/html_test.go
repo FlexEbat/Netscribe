@@ -187,7 +187,7 @@ func TestOnlyOnePDFIsPrintedAtATime(t *testing.T) {
 	old := printer
 	defer func() { printer = old }()
 	var now, peak atomic.Int32
-	printer = func(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+	printer = func(ctx context.Context, _ string, _ []byte, _ bool) ([]byte, error) {
 		n := now.Add(1)
 		defer now.Add(-1)
 		for {
@@ -226,7 +226,7 @@ func TestAPDFWaitingForItsTurnGivesUpWithItsContext(t *testing.T) {
 	defer func() { printer = old }()
 	release := make(chan struct{})
 	entered := make(chan struct{}, 1)
-	printer = func(context.Context, string, []byte) ([]byte, error) {
+	printer = func(context.Context, string, []byte, bool) ([]byte, error) {
 		select {
 		case entered <- struct{}{}:
 		default:

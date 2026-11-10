@@ -51,6 +51,7 @@ sudo ss -ltnp 'sport = :8080'
 | `ICMP probes are off, TCP probes only` | Справочное сообщение. Разрешите группу сервиса в `net.ipv4.ping_group_range`, чтобы получить ICMP. |
 | `dnet: Failed to open device` в журнале | У Nmap нет прав на raw-сокеты. См. [Необязательные пакеты](installation.ru.md#необязательные-пакеты). |
 | PDF-экспорт не работает | Поставьте Chromium или задайте `export.chromePath`. В образе Docker его нет. |
+| Первый PDF после запуска занимает на 10 секунд дольше | В этой системе песочницу Chrome пробуют и бросают (в журнале `pdf sandbox is not usable`). Задайте `export.noSandbox: true`. |
 | Нет контейнеров Docker | Пользователю сервиса нужен доступ к `docker.socket`. Под systemd укажите группу в `SupplementaryGroups=`. |
 | Хост по SSH пропускается | Хоста нет в `ssh.knownHosts` или его ключ изменился. Добавьте ключ через `ssh-keyscan`. |
 | SNMP ничего не показывает | Проверьте сообщество, список доступа на устройстве и `snmp.timeout`. |
