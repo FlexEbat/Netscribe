@@ -51,6 +51,7 @@ older version. Current versions close such scans as failed when the server start
 | `ICMP probes are off, TCP probes only` | Informational. Allow the group of the service in `net.ipv4.ping_group_range` to get ICMP. |
 | `dnet: Failed to open device` in the log | Nmap lacks raw socket rights. See [Optional packages](installation.md#optional-packages). |
 | PDF export fails | Install Chromium or set `export.chromePath`. The Docker image has none. |
+| The first PDF after a start takes 10 seconds more | Chrome's sandbox is tried and given up on this system (the log says `pdf sandbox is not usable`). Set `export.noSandbox: true`. |
 | No Docker containers | The user of the service needs access to `docker.socket`. Under systemd, name the group in `SupplementaryGroups=`. |
 | A host over SSH is skipped | The host is missing from `ssh.knownHosts`, or its key changed. Add the key with `ssh-keyscan`. |
 | SNMP shows nothing | Check the community, the ACL on the device and `snmp.timeout`. |

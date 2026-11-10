@@ -39,7 +39,7 @@ func export(args []string, e streams) error {
 		}
 	}()
 
-	f, err := render.Export(context.Background(), st, *format, time.Now(), render.Options{ChromePath: cfg.Export.ChromePath})
+	f, err := render.Export(context.Background(), st, *format, time.Now(), render.Options{ChromePath: cfg.Export.ChromePath, NoSandbox: cfg.Export.NoSandbox})
 	if err != nil {
 		return err
 	}

@@ -263,9 +263,12 @@ func serve(args []string, e streams) error {
 		Helper: newHelperClient(cfg.Database), Auto: auto, Sessions: db, MFA: db, Sealer: sealer, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
-		Identifier:     deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},
-		Waker:          &collector.Waker{},
-		ExportOptions:  func() render.Options { return render.Options{ChromePath: live.Current().Export.ChromePath} },
+		Identifier: deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},
+		Waker:      &collector.Waker{},
+		ExportOptions: func() render.Options {
+			e := live.Current().Export
+			return render.Options{ChromePath: e.ChromePath, NoSandbox: e.NoSandbox}
+		},
 		Scanner:        scanStarter{scanner: scanner, ctx: ctx, config: live.Current},
 		TrustedProxies: proxies, Logger: logger,
 	})

@@ -86,6 +86,7 @@ var panelGetters = map[string]func(c config.Config) any{
 	"auth.sessionIdleTimeout":      func(c config.Config) any { return shortDuration(c.Auth.SessionIdleTimeout.Std()) },
 	"auth.sessionMaxAge":           func(c config.Config) any { return shortDuration(c.Auth.SessionMaxAge.Std()) },
 	"export.chromePath":            func(c config.Config) any { return c.Export.ChromePath },
+	"export.noSandbox":             func(c config.Config) any { return c.Export.NoSandbox },
 	"ssh.knownHosts":               func(c config.Config) any { return c.SSH.KnownHosts },
 	"updates.check":                func(c config.Config) any { return c.Updates.Check },
 	"updates.auto":                 func(c config.Config) any { return c.Updates.AutoMode() },

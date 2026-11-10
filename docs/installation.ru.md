@@ -289,7 +289,11 @@ make build
 | PDF-экспорт | Chromium | `chromium` (Ubuntu: `chromium-browser`) | `chromium` | `chromium` | `chromium` | `chromium` | `chromium` |
 
 На RHEL и его клонах включите EPEL перед установкой Chromium. Для PDF-экспорта ищутся
-`chromium` и `google-chrome` в `PATH`. Другую программу задаёт `export.chromePath`.
+`chromium` и `google-chrome` в `PATH`. Другую программу задаёт `export.chromePath`. В системе,
+которая запрещает песочницу Chrome (root, контейнер, Ubuntu 23.10 и новее с ограничением
+непривилегированных user namespaces), первый PDF после каждого запуска занимает примерно на
+десять секунд дольше: песочницу пробуют и бросают. `export.noSandbox: true` пропускает эту
+попытку.
 
 Nmap для определения ОС нужны raw-сокеты. Выдайте сервису права в drop-файле: он не расширяет
 доступ остальным пользователям так, как `setcap` на бинарнике:
