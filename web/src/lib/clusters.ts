@@ -1,5 +1,6 @@
-import type { Device, DeviceKind, Link, Topology } from "@/api/client"
-import { kindLabels } from "@/lib/topology"
+import type { Container, Device, DeviceKind, Link, Topology } from "@/api/client"
+import { stateStroke } from "@/lib/containers"
+import { containerNodeId, kindLabels, sortContainers } from "@/lib/topology"
 import { t } from "@/i18n"
 
 /** What the devices are gathered by. */
@@ -14,6 +15,8 @@ export interface Cluster {
   label: string
   vlan: number | null
   devices: Device[]
+  /** How many containers the devices of the cluster run. */
+  containers: number
   online: number
   /** The kinds in the cluster with their counts, the most frequent first. */
   kinds: [DeviceKind, number][]
@@ -31,17 +34,35 @@ function keyOf(d: Device, by: ClusterBy): { key: string; label: string; vlan: nu
 }
 
 /** Gathers the devices, the largest cluster first, equal sizes by name. */
-export function buildClusters(devices: readonly Device[], by: ClusterBy): Cluster[] {
+export function buildClusters(
+  devices: readonly Device[],
+  by: ClusterBy,
+  containers: readonly Container[] = [],
+): Cluster[] {
   const byKey = new Map<string, Cluster>()
   for (const d of devices) {
     const k = keyOf(d, by)
     let c = byKey.get(k.key)
     if (!c) {
-      c = { key: k.key, label: k.label, vlan: k.vlan, devices: [], online: 0, kinds: [] }
+      c = {
+        key: k.key,
+        label: k.label,
+        vlan: k.vlan,
+        devices: [],
+        containers: 0,
+        online: 0,
+        kinds: [],
+      }
       byKey.set(k.key, c)
     }
     c.devices.push(d)
     if (d.online) c.online++
+  }
+  const clusterOfDevice = new Map<number, Cluster>()
+  for (const c of byKey.values()) for (const d of c.devices) clusterOfDevice.set(d.id, c)
+  for (const ct of containers) {
+    const c = clusterOfDevice.get(ct.deviceId)
+    if (c) c.containers++
   }
   for (const c of byKey.values()) {
     const counts = new Map<DeviceKind, number>()
@@ -79,7 +100,7 @@ export interface ClusterNodeData extends Record<string, unknown> {
 
 export interface ClusterFlowNode {
   id: string
-  type: "cluster" | "clusterBox" | "device"
+  type: "cluster" | "clusterBox" | "device" | "container"
   position: { x: number; y: number }
   data: Record<string, unknown>
   parentId?: string
@@ -97,10 +118,15 @@ export interface ClusterFlowEdge {
   source: string
   target: string
   label: string
-  data: { linkId?: number; count?: number }
+  style?: { stroke: string }
+  data: { linkId?: number; count?: number; containerId?: string }
 }
 
-/** How many columns an expanded cluster of n devices uses: about square. */
+/** What stands in an open cluster: its devices and their containers, one cell each. */
+export const cellCount = (c: Pick<Cluster, "devices" | "containers">) =>
+  c.devices.length + c.containers
+
+/** How many columns an expanded cluster of n cells uses: about square. */
 export function boxColumns(n: number): number {
   return Math.max(1, Math.ceil(Math.sqrt(n)))
 }
@@ -121,9 +147,7 @@ export function layoutClusters(
   let y = 0
   let rowH = 0
   for (const c of clusters) {
-    const size = expanded.has(c.key)
-      ? boxSize(c.devices.length)
-      : { w: COLLAPSED_W, h: COLLAPSED_H }
+    const size = expanded.has(c.key) ? boxSize(cellCount(c)) : { w: COLLAPSED_W, h: COLLAPSED_H }
     if (x > 0 && x + size.w > ROW_WIDTH) {
       x = 0
       y += rowH + GAP
@@ -142,14 +166,19 @@ export function layoutClusters(
  * clusters becomes one edge with a count; a link inside a collapsed cluster is not drawn.
  */
 export function buildClusterGraph(
-  topology: Pick<Topology, "devices" | "links">,
+  topology: Pick<Topology, "devices" | "links" | "containers">,
   by: ClusterBy,
   expanded: ReadonlySet<string>,
   onToggle: (key: string) => void,
 ): { nodes: ClusterFlowNode[]; edges: ClusterFlowEdge[]; clusters: Cluster[] } {
-  const clusters = buildClusters(topology.devices, by)
+  const clusters = buildClusters(topology.devices, by, topology.containers)
   const places = layoutClusters(clusters, expanded)
   const clusterOfDevice = new Map<number, string>()
+  const containersByHost = new Map<number, Container[]>()
+  for (const ct of topology.containers) {
+    containersByHost.set(ct.deviceId, [...(containersByHost.get(ct.deviceId) ?? []), ct])
+  }
+  const containerEdges: ClusterFlowEdge[] = []
   const nodes: ClusterFlowNode[] = []
 
   for (const c of clusters) {
@@ -170,22 +199,46 @@ export function buildClusterGraph(
       style: { width: place.w, height: place.h },
     })
     if (!open) continue
-    const cols = boxColumns(c.devices.length)
-    c.devices.forEach((d, i) => {
+    const cols = boxColumns(cellCount(c))
+    const at = (i: number) => ({
+      x: BOX_PAD + (i % cols) * CELL_W,
+      y: BOX_HEADER + BOX_PAD + Math.floor(i / cols) * CELL_H,
+    })
+    let cell = 0
+    for (const d of c.devices) {
+      const mine = sortContainers(containersByHost.get(d.id) ?? [])
       nodes.push({
         id: String(d.id),
         type: "device",
-        position: {
-          x: BOX_PAD + (i % cols) * CELL_W,
-          y: BOX_HEADER + BOX_PAD + Math.floor(i / cols) * CELL_H,
-        },
+        position: at(cell++),
         parentId: clusterNodeId(c.key),
         extent: "parent",
         draggable: false,
         connectable: false,
-        data: { device: d, containerCount: 0 },
+        data: { device: d, containerCount: mine.length },
       })
-    })
+      // The containers of a device stand in the cells after it.
+      mine.forEach((container, index) => {
+        nodes.push({
+          id: containerNodeId(container.id),
+          type: "container",
+          position: at(cell++),
+          parentId: clusterNodeId(c.key),
+          extent: "parent",
+          draggable: false,
+          connectable: false,
+          data: { container, hostId: String(d.id), index },
+        })
+        containerEdges.push({
+          id: `container-edge-${container.id}`,
+          source: String(d.id),
+          target: containerNodeId(container.id),
+          label: "",
+          style: { stroke: stateStroke(container.state) },
+          data: { containerId: container.id },
+        })
+      })
+    }
   }
 
   const endpoint = (deviceId: number): string | null => {
@@ -221,5 +274,6 @@ export function buildClusterGraph(
       edges.push(edge)
     }
   }
+  edges.push(...containerEdges)
   return { nodes, edges, clusters }
 }

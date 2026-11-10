@@ -11,6 +11,7 @@ const cluster: Cluster = {
   label: "Office",
   vlan: 20,
   devices: [{ id: 1 }, { id: 2 }, { id: 3 }] as Device[],
+  containers: 5,
   online: 2,
   kinds: [
     ["host", 2],
@@ -31,7 +32,7 @@ describe("a closed cluster", () => {
     )
     expect(screen.getByText("Office")).toBeInTheDocument()
     expect(screen.getByText("VLAN 20")).toBeInTheDocument()
-    expect(screen.getByText("3 devices, 2 online")).toBeInTheDocument()
+    expect(screen.getByText("3 devices, 2 online, 5 containers")).toBeInTheDocument()
   })
 
   it("opens with a click and says that it is closed", async () => {

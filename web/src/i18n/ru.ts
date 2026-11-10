@@ -210,6 +210,7 @@ export const ru: Record<Key, Entry> = {
   "cluster.clusters": "Кластеры",
   "cluster.collapse": "Закрыть {name}",
   "cluster.collapseAll": "Закрыть все",
+  "cluster.containers": "контейнеров: {n}",
   "cluster.devices": "Устройства",
   "cluster.devicesOnline": "Устройств: {n}, в сети: {online}",
   "cluster.expand": "Открыть {name}, устройств: {n}",
