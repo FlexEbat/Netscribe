@@ -4,6 +4,8 @@ import { getTopology, moveDevice, type Topology as TopologyData } from "@/api/cl
 import { openEvents } from "@/api/events"
 import { useSession } from "@/api/session"
 import { AddDeviceDialog } from "@/components/AddDeviceDialog"
+import { ClusterCanvas } from "@/components/ClusterCanvas"
+import { ClusterControls, type TopologyView } from "@/components/ClusterControls"
 import { ContainerPanel } from "@/components/ContainerPanel"
 import { ExportMenu } from "@/components/ExportMenu"
 import { DevicePanel } from "@/components/DevicePanel"
@@ -13,9 +15,22 @@ import { PortsDialog } from "@/components/PortsDialog"
 import { TopologyCanvas } from "@/components/TopologyCanvas"
 import { Alert } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CLUSTER_AUTO_ABOVE, clusterKeyOf, defaultBy, type ClusterBy } from "@/lib/clusters"
 import { can } from "@/lib/permissions"
 import { displayName } from "@/lib/topology"
 import { t } from "@/i18n"
+
+const VIEW_KEY = "netscribe.topology.view"
+
+/** The view a person chose last time, or null when they never chose. */
+function savedView(): TopologyView | null {
+  try {
+    const v = window.localStorage.getItem(VIEW_KEY)
+    return v === "devices" || v === "clusters" ? v : null
+  } catch {
+    return null
+  }
+}
 
 type State =
   { status: "loading" } | { status: "failed" } | { status: "ready"; topology: TopologyData }
@@ -30,6 +45,12 @@ export function Topology() {
   const [saveFailed, setSaveFailed] = useState(false)
   const [connecting, setConnecting] = useState<{ a: number; b: number } | null>(null)
   const [linkId, setLinkId] = useState<number | null>(null)
+  // null means the page decides: clusters for a big network, devices for a small one.
+  const [chosenView, setChosenView] = useState<TopologyView | null>(savedView)
+  const [chosenBy, setChosenBy] = useState<ClusterBy | null>(null)
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const [focus, setFocus] = useState<string | null>(null)
+  const [seen, setSeen] = useState<number | null>(null)
 
   const load = useCallback(() => {
     getTopology()
@@ -86,6 +107,53 @@ export function Topology() {
   const selected = Number(params.get("device"))
   const deviceId = Number.isInteger(selected) && selected > 0 ? selected : null
 
+  const allDevices = state.status === "ready" ? state.topology.devices : null
+  const view: TopologyView =
+    chosenView ?? (allDevices && allDevices.length > CLUSTER_AUTO_ABOVE ? "clusters" : "devices")
+  const by: ClusterBy = chosenBy ?? defaultBy(allDevices ?? [])
+
+  const toggleCluster = useCallback((key: string) => {
+    setExpanded((cur) => {
+      const next = new Set(cur)
+      if (next.has(key)) next.delete(key)
+      else {
+        next.add(key)
+        setFocus(key)
+      }
+      return next
+    })
+  }, [])
+
+  const chooseView = useCallback((v: TopologyView) => {
+    setChosenView(v)
+    try {
+      window.localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // A browser that keeps nothing still shows the view that was chosen.
+    }
+  }, [])
+
+  const chooseBy = useCallback((b: ClusterBy) => {
+    setChosenBy(b)
+    setExpanded(new Set())
+    setFocus(null)
+  }, [])
+
+  // A device that is selected (from a link, say) must be on the screen: its cluster opens.
+  // This is state adjusted while rendering, the way React asks for a change that follows a
+  // prop, so the open cluster is there in the same frame.
+  if (deviceId === null) {
+    if (seen !== null) setSeen(null)
+  } else if (view === "clusters" && allDevices && seen !== deviceId) {
+    const d = allDevices.find((x) => x.id === deviceId)
+    if (d) {
+      const key = clusterKeyOf(d, by)
+      setSeen(deviceId)
+      setExpanded((cur) => (cur.has(key) ? cur : new Set(cur).add(key)))
+      setFocus(key)
+    }
+  }
+
   if (state.status === "loading") {
     return (
       <Skeleton role="status" aria-label={t("topology.loadingTopology")} className="h-96 w-full" />
@@ -94,13 +162,14 @@ export function Topology() {
   if (state.status === "failed") {
     return <Alert variant="destructive">{t("topology.theTopologyCouldNotBe")}</Alert>
   }
-  const toolbar =
+  const actions =
     canMove || canExport ? (
       <div className="flex justify-end gap-2">
         {canExport ? <ExportMenu formats={["md", "html", "pdf", "drawio"]} /> : null}
         {canMove ? <AddDeviceDialog onCreated={load} /> : null}
       </div>
     ) : null
+  const toolbar = actions
   if (state.topology.devices.length === 0) {
     return (
       <div className="flex flex-col gap-3">
@@ -119,7 +188,17 @@ export function Topology() {
   const container = state.topology.containers.find((c) => c.id === params.get("container"))
   return (
     <div className="flex flex-col gap-3">
-      {toolbar}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ClusterControls
+          view={view}
+          onView={chooseView}
+          by={by}
+          onBy={chooseBy}
+          openCount={expanded.size}
+          onCollapseAll={() => setExpanded(new Set())}
+        />
+        {actions}
+      </div>
       {saveFailed ? (
         <Alert variant="destructive">{t("topology.thePositionCouldNotBe")}</Alert>
       ) : null}
@@ -136,15 +215,28 @@ export function Topology() {
           }}
         />
       ) : null}
-      <TopologyCanvas
-        topology={state.topology}
-        onMove={move}
-        onSelect={select}
-        onSelectContainer={selectContainer}
-        onConnectNodes={(a, b) => setConnecting({ a, b })}
-        onSelectLink={setLinkId}
-        readOnly={!canMove}
-      />
+      {view === "clusters" ? (
+        <ClusterCanvas
+          topology={state.topology}
+          by={by}
+          expanded={expanded}
+          onToggle={toggleCluster}
+          selectedDevice={deviceId}
+          onSelect={select}
+          onSelectLink={setLinkId}
+          focus={focus}
+        />
+      ) : (
+        <TopologyCanvas
+          topology={state.topology}
+          onMove={move}
+          onSelect={select}
+          onSelectContainer={selectContainer}
+          onConnectNodes={(a, b) => setConnecting({ a, b })}
+          onSelectLink={setLinkId}
+          readOnly={!canMove}
+        />
+      )}
       {connecting ? (
         <PortsDialog
           aDeviceId={connecting.a}

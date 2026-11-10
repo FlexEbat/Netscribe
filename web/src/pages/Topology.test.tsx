@@ -34,9 +34,30 @@ vi.mock("@/components/TopologyCanvas", () => ({
   ),
 }))
 
+vi.mock("@/components/ClusterCanvas", async () => {
+  const { buildClusters } = await import("@/lib/clusters")
+  return {
+    ClusterCanvas: (props: {
+      topology: Topology
+      by: "group" | "kind"
+      expanded: ReadonlySet<string>
+      onToggle: (key: string) => void
+    }) => (
+      <div data-testid="clusters" data-by={props.by} data-expanded={[...props.expanded].join(",")}>
+        {buildClusters(props.topology.devices, props.by).map((c) => (
+          <button key={c.key} onClick={() => props.onToggle(c.key)}>
+            cluster {c.key} ({c.devices.length})
+          </button>
+        ))}
+      </div>
+    ),
+  }
+})
+
 afterEach(() => {
   setCsrfToken("")
   vi.unstubAllGlobals()
+  window.localStorage.clear()
 })
 
 function device(id: number, overrides: Partial<Device> = {}): Device {
@@ -266,5 +287,90 @@ describe("Topology page", () => {
     const items = await screen.findAllByRole("menuitem")
     expect(items.map((i) => i.textContent)).toEqual(["Markdown", "HTML", "PDF", "Draw.io"])
     expect(screen.queryByRole("button", { name: /add device/i })).not.toBeInTheDocument()
+  })
+
+  describe("cluster view", () => {
+    const grp = (id: number) => ({ id, name: `Site ${id}`, vlan: null, auto: false, color: "" })
+    const big = (n: number): Topology => ({
+      devices: Array.from({ length: n }, (_, i) =>
+        device(i + 1, { group: grp((i % 2) + 1), groupId: (i % 2) + 1 }),
+      ),
+      links: [],
+      containers: [],
+    })
+
+    it("opens a small network as devices", async () => {
+      open()
+      expect(await screen.findByTestId("canvas")).toBeInTheDocument()
+      expect(screen.queryByTestId("clusters")).not.toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Devices" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      )
+    })
+
+    it("opens a big network as clusters, gathered by group", async () => {
+      open({ topology: () => json(200, big(70)) })
+      const view = await screen.findByTestId("clusters")
+      expect(view).toHaveAttribute("data-by", "group")
+      expect(screen.getByRole("button", { name: "cluster g1 (35)" })).toBeInTheDocument()
+      expect(screen.queryByTestId("canvas")).not.toBeInTheDocument()
+    })
+
+    it("gathers by kind when nothing is in a group", async () => {
+      const t: Topology = {
+        devices: Array.from({ length: 70 }, (_, i) => device(i + 1)),
+        links: [],
+        containers: [],
+      }
+      open({ topology: () => json(200, t) })
+      expect(await screen.findByTestId("clusters")).toHaveAttribute("data-by", "kind")
+    })
+
+    it("remembers the choice of the visitor", async () => {
+      const user = userEvent.setup()
+      open({ topology: () => json(200, big(70)) })
+      await screen.findByTestId("clusters")
+      await user.click(screen.getByRole("button", { name: "Devices" }))
+      expect(await screen.findByTestId("canvas")).toBeInTheDocument()
+      expect(window.localStorage.getItem("netscribe.topology.view")).toBe("devices")
+    })
+
+    it("uses the view that was chosen before, even for a small network", async () => {
+      window.localStorage.setItem("netscribe.topology.view", "clusters")
+      open()
+      expect(await screen.findByTestId("clusters")).toBeInTheDocument()
+    })
+
+    it("opens and closes a cluster, and closes them all with one button", async () => {
+      const user = userEvent.setup()
+      open({ topology: () => json(200, big(70)) })
+      const view = await screen.findByTestId("clusters")
+      expect(screen.queryByRole("button", { name: "Close all" })).not.toBeInTheDocument()
+      await user.click(screen.getByRole("button", { name: "cluster g1 (35)" }))
+      expect(view).toHaveAttribute("data-expanded", "g1")
+      await user.click(screen.getByRole("button", { name: "cluster g2 (35)" }))
+      expect(view).toHaveAttribute("data-expanded", "g1,g2")
+      await user.click(screen.getByRole("button", { name: "cluster g1 (35)" }))
+      expect(view).toHaveAttribute("data-expanded", "g2")
+      await user.click(screen.getByRole("button", { name: "Close all" }))
+      expect(view).toHaveAttribute("data-expanded", "")
+    })
+
+    it("changes what the clusters are gathered by and closes the open ones", async () => {
+      const user = userEvent.setup()
+      open({ topology: () => json(200, big(70)) })
+      const view = await screen.findByTestId("clusters")
+      await user.click(screen.getByRole("button", { name: "cluster g1 (35)" }))
+      await user.click(screen.getByRole("button", { name: "Kinds" }))
+      expect(view).toHaveAttribute("data-by", "kind")
+      expect(view).toHaveAttribute("data-expanded", "")
+    })
+
+    it("opens the cluster of the device that a link points at", async () => {
+      open({ topology: () => json(200, big(70)), entry: "/?device=2" })
+      const view = await screen.findByTestId("clusters")
+      await waitFor(() => expect(view).toHaveAttribute("data-expanded", "g2"))
+    })
   })
 })

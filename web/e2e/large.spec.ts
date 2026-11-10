@@ -5,7 +5,10 @@ import { devPassword, devUser, note } from "./helpers"
 // the rules of slice 43: the inventory does not draw every row, the topology answers a drag
 // without a long task, and a bulk edit keeps its limit of 200 devices.
 
-async function open(page: Page) {
+// A network of this size opens as clusters (slice 44). The tests of the device canvas ask for
+// the device view first; the cluster tests ask for the clusters.
+async function open(page: Page, view: "devices" | "clusters" = "devices") {
+  await page.addInitScript((v) => window.localStorage.setItem("netscribe.topology.view", v), view)
   await page.goto("/login")
   await page.getByLabel("Username").fill(devUser)
   await page.getByLabel("Password").fill(devPassword)
@@ -107,4 +110,25 @@ test("the PDF export of the large network is a PDF and ends inside its budget", 
   // CI (amendment 60) with no cause found yet, so a tighter limit would only make the check
   // flaky; this one still fails when the render sticks and the server answers 504.
   expect(took).toBeLessThan(55_000)
+})
+
+test("the cluster view gathers the network into a few cards and opens one", async ({ page }) => {
+  await open(page, "clusters")
+  await page.goto("/")
+  await expect(page.getByTestId("cluster-canvas")).toBeVisible()
+  const cards = page.getByRole("button", { name: /^Open .*, \d+ devices$/ })
+  await expect(cards.first()).toBeVisible()
+  const count = await cards.count()
+  // 600 devices gathered into a handful of cards, not 600 nodes.
+  expect(count).toBeGreaterThanOrEqual(2)
+  expect(count).toBeLessThan(40)
+  expect(await page.locator(".react-flow__node-device").count()).toBe(0)
+
+  const began = Date.now()
+  await cards.last().click()
+  await expect(page.locator(".react-flow__node-device").first()).toBeAttached()
+  note(`open one cluster of the large network ${Date.now() - began}ms`)
+
+  await page.getByRole("button", { name: "Close all" }).click()
+  await expect(page.locator(".react-flow__node-device")).toHaveCount(0)
 })
