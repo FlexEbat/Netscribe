@@ -1,0 +1,20 @@
+name: diag
+# Temporary, on this branch only: prints the failing Go tests as annotations. Deleted before merging.
+on:
+  push:
+    branches: [feat/export-nosandbox]
+permissions:
+  contents: read
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Failing tests
+        run: |
+          mkdir -p web/dist && touch web/dist/.gitkeep
+          go test ./internal/... ./cmd/... 2>&1 | grep -E "^(--- FAIL|FAIL|panic)|_test.go:[0-9]+" | head -12 | sed 's/%/%25/g; s/^/::error::/' || true
