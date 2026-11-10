@@ -223,6 +223,8 @@ auth:
     roleMap: { netscribe-admins: admin, netscribe-ops: operator }
 ```
 
+Step by step for Keycloak, Authentik and Microsoft Entra ID, what was tested and what a failure means: [docs/sso.md](docs/sso.md).
+
 A person is known by the issuer and the subject, never by the e-mail address. The e-mail must be
 verified. The role is read at every sign-in. An account made this way has no password; an
 administrator can set one in the Users page if the person also needs the backup or the

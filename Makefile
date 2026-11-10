@@ -71,6 +71,10 @@ e2e: build
 oidc-dex: build
 	sh scripts/oidc-dex.sh
 
+# Single sign-on against a real Keycloak. Needs Docker. Not part of gate.
+oidc-keycloak: build
+	sh scripts/oidc-keycloak.sh
+
 # The same with a generated network of 600 devices: paging, topology drag, bulk limit.
 e2e-large: build
 	E2E_DEVICES=600 sh scripts/e2e.sh
