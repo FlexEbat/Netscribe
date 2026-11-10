@@ -50,6 +50,10 @@ auth:
   # Single sign-on with OpenID Connect. Off while issuer is empty. Read at start.
   oidc:
     name: "" # label of the sign in button, empty means SSO
+    provider: "" # keycloak, authentik, entra or empty; checks the issuer (docs/sso.md)
+    emailClaim: "" # the claim with the address; empty: email (entra: email, then preferred_username)
+    # requireVerifiedEmail: true # empty means yes, except for entra; false only for a provider
+    #                           # that owns its addresses
     issuer: "" # https address of the provider
     clientId: ""
     clientSecret: ""
@@ -58,7 +62,7 @@ auth:
     autoCreate: false # make an account at the first sign in
     allowedEmailDomains: [] # who autoCreate may make; empty means nobody
     defaultRole: viewer # viewer or operator, never admin
-    roleClaim: "" # claim of the ID token that holds roles
+    roleClaim: "" # claim of the ID token that holds roles; a path works: realm_access.roles
     roleMap: {} # claim value to role, for example {netscribe-admins: admin}
 
 tls:
