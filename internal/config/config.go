@@ -149,7 +149,19 @@ type OIDCConfig struct {
 	// DefaultRole is the role of a new user and of a user whose claim maps to nothing.
 	// It is never admin.
 	DefaultRole string `yaml:"defaultRole"`
-	// RoleClaim names the claim of the ID token that holds the roles (a string or a list).
+	// Provider names the kind of identity provider, so that its habits are known: keycloak,
+	// authentik, entra, or generic (the same as empty). It sets nothing that is written down
+	// here and checks the address of the issuer, where the mistakes are made.
+	Provider string `yaml:"provider"`
+	// EmailClaim names the claim that holds the e-mail address. Empty means the claim of the
+	// provider: email, and for entra email and then preferred_username.
+	EmailClaim string `yaml:"emailClaim"`
+	// RequireVerifiedEmail asks for email_verified in the ID token. Empty means yes, except for
+	// entra, whose tokens do not carry it. Say false only for a provider that owns its
+	// addresses and cannot be joined by outsiders.
+	RequireVerifiedEmail *bool `yaml:"requireVerifiedEmail"`
+	// RoleClaim names the claim of the ID token that holds the roles (a string or a list). A
+	// path through nested objects works: realm_access.roles.
 	RoleClaim string `yaml:"roleClaim"`
 	// RoleMap maps a value of that claim to a role (viewer, operator or admin).
 	RoleMap map[string]string `yaml:"roleMap"`
@@ -164,6 +176,53 @@ func (o OIDCConfig) ButtonName() string {
 		return "SSO"
 	}
 	return o.Name
+}
+
+// EmailClaims are the claims the e-mail address is looked for in, in this order.
+func (o OIDCConfig) EmailClaims() []string {
+	switch {
+	case o.EmailClaim != "":
+		return []string{o.EmailClaim}
+	case o.Provider == "entra":
+		return []string{"email", "preferred_username"}
+	}
+	return []string{"email"}
+}
+
+// VerifiedEmailRequired reports whether the ID token must say that the address is verified.
+func (o OIDCConfig) VerifiedEmailRequired() bool {
+	if o.RequireVerifiedEmail != nil {
+		return *o.RequireVerifiedEmail
+	}
+	return o.Provider != "entra"
+}
+
+// entraIssuer is the address of the issuer of a single Microsoft Entra tenant, by its ID.
+var entraIssuer = regexp.MustCompile(`^https://(login\.microsoftonline\.(com|us)|login\.partner\.microsoftonline\.cn)/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/v2\.0$`)
+
+// validateProvider checks the address of the issuer against what the named provider looks
+// like: the mistakes that cost an hour are made there.
+func (o OIDCConfig) validateProvider(fail func(key, msg string)) {
+	switch o.Provider {
+	case "", "generic":
+	case "keycloak":
+		if !strings.Contains(o.Issuer, "/realms/") {
+			fail("issuer", "for keycloak it must be the address of a realm, https://HOST/realms/NAME")
+		}
+	case "authentik":
+		if !strings.Contains(o.Issuer, "/application/o/") || !strings.HasSuffix(o.Issuer, "/") {
+			fail("issuer", "for authentik it must be https://HOST/application/o/SLUG/ with the slash at the end")
+		}
+	case "entra":
+		if !entraIssuer.MatchString(o.Issuer) {
+			fail("issuer", "for entra it must be https://login.microsoftonline.com/TENANT-ID/v2.0 with the ID of one tenant (a GUID), not common, organizations, consumers or a domain name")
+		}
+		if o.RequireVerifiedEmail != nil && *o.RequireVerifiedEmail {
+			fail("requireVerifiedEmail", "entra tokens carry no email_verified: leave it empty")
+		}
+	default:
+		fail("provider", fmt.Sprintf("%q is not keycloak, authentik, entra or generic", o.Provider))
+	}
 }
 
 // validate checks a block that is switched on. A block with no issuer is off and not checked.
@@ -181,6 +240,7 @@ func (o OIDCConfig) validate() []error {
 	if err := checkHTTPS(o.RedirectURL); err != nil {
 		fail("redirectUrl", err.Error())
 	}
+	o.validateProvider(fail)
 	if o.ClientID == "" {
 		fail("clientId", "is required")
 	}

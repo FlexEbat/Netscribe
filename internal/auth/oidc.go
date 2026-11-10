@@ -175,9 +175,43 @@ func (o *OIDC) Begin(ctx context.Context) (string, Flow, error) {
 }
 
 type idClaims struct {
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
-	Name          string `json:"name"`
+	Email string
+	Name  string
+}
+
+// identityOf reads the e-mail address and the name out of the claims of an ID token the way
+// the provider of the config puts them there. The second result is the reason of a refusal.
+func identityOf(cfg config.OIDCConfig, all map[string]any) (idClaims, string) {
+	var c idClaims
+	for _, name := range cfg.EmailClaims() {
+		v, _ := all[name].(string)
+		v = strings.TrimSpace(v)
+		// preferred_username is a login name at many providers, and an address at some.
+		if v == "" || (name == "preferred_username" && !strings.Contains(v, "@")) {
+			continue
+		}
+		c.Email = v
+		break
+	}
+	if c.Email == "" {
+		return idClaims{}, "no email"
+	}
+	if cfg.VerifiedEmailRequired() && !truthy(all["email_verified"]) {
+		return idClaims{}, "email not verified"
+	}
+	c.Name, _ = all["name"].(string)
+	return c, ""
+}
+
+// truthy reads a flag that most providers send as a boolean and some as the text "true".
+func truthy(v any) bool {
+	switch x := v.(type) {
+	case bool:
+		return x
+	case string:
+		return strings.EqualFold(x, "true")
+	}
+	return false
 }
 
 // OIDCResult is the outcome of a sign-in that worked.
@@ -221,13 +255,13 @@ func (o *OIDC) Complete(ctx context.Context, f Flow, state, code, ip, userAgent 
 	if idt.Subject == "" {
 		return OIDCResult{}, denied("subject")
 	}
-	var c idClaims
 	var all map[string]any
-	if idt.Claims(&c) != nil || idt.Claims(&all) != nil {
+	if idt.Claims(&all) != nil {
 		return OIDCResult{}, denied("claims")
 	}
-	if c.Email == "" || !c.EmailVerified {
-		return OIDCResult{}, denied("email not verified")
+	c, reason := identityOf(o.cfg, all)
+	if reason != "" {
+		return OIDCResult{}, denied(reason)
 	}
 	role := o.roleFor(all)
 
@@ -323,17 +357,7 @@ func (o *OIDC) roleFor(claims map[string]any) model.Role {
 	if o.cfg.RoleClaim == "" || len(o.cfg.RoleMap) == 0 {
 		return best
 	}
-	var values []string
-	switch v := claims[o.cfg.RoleClaim].(type) {
-	case string:
-		values = []string{v}
-	case []any:
-		for _, x := range v {
-			if s, ok := x.(string); ok {
-				values = append(values, s)
-			}
-		}
-	}
+	values := claimStrings(claims, o.cfg.RoleClaim)
 	found := false
 	for _, v := range values {
 		r, ok := o.cfg.RoleMap[v]
@@ -346,6 +370,39 @@ func (o *OIDC) roleFor(claims map[string]any) model.Role {
 		}
 	}
 	return best
+}
+
+// claimStrings reads a claim that is a text or a list of texts. The name is tried as a whole
+// first (a claim such as "https://example.com/roles" has dots), then as a path through nested
+// objects: "realm_access.roles" is what Keycloak calls its realm roles.
+func claimStrings(claims map[string]any, name string) []string {
+	v, ok := claims[name]
+	if !ok {
+		var cur any = claims
+		for _, part := range strings.Split(name, ".") {
+			m, isMap := cur.(map[string]any)
+			if !isMap {
+				return nil
+			}
+			if cur, ok = m[part]; !ok {
+				return nil
+			}
+		}
+		v = cur
+	}
+	switch x := v.(type) {
+	case string:
+		return []string{x}
+	case []any:
+		var out []string
+		for _, e := range x {
+			if s, ok := e.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 // identityUsername builds a name of the form the accounts use from the e-mail address, with

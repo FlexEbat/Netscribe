@@ -319,3 +319,154 @@ func TestOIDCBeginFailsCleanlyWhenTheProviderIsDown(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+// The claims of the three providers of slice 45, as their documents describe them.
+
+func TestOIDCKeycloakRolesInANestedClaim(t *testing.T) {
+	f := newIDPFixture(t, func(c *config.OIDCConfig) {
+		c.Provider = "keycloak"
+		c.RoleClaim = "realm_access.roles"
+		c.RoleMap = map[string]string{"netscribe-admin": "admin", "netscribe-ops": "operator"}
+	})
+	res, err := f.signIn(t, "kc-1", "kc@example.com", func(c map[string]any) {
+		c["realm_access"] = map[string]any{"roles": []string{"offline_access", "netscribe-ops"}}
+		c["resource_access"] = map[string]any{"account": map[string]any{"roles": []string{"view-profile"}}}
+	})
+	if err != nil || res.User.Role != model.RoleOperator {
+		t.Fatalf("a role in realm_access.roles must map: %+v, %v", res.User, err)
+	}
+	// A path that leads nowhere is no role, not an error.
+	res, err = f.signIn(t, "kc-2", "kc2@example.com", nil)
+	if err != nil || res.User.Role != model.RoleViewer {
+		t.Fatalf("a missing claim must give the default role: %+v, %v", res.User, err)
+	}
+}
+
+func TestOIDCAClaimNameWithDotsIsTriedWhole(t *testing.T) {
+	f := newIDPFixture(t, func(c *config.OIDCConfig) {
+		c.RoleClaim = "https://example.com/roles"
+		c.RoleMap = map[string]string{"admin": "admin"}
+	})
+	res, err := f.signIn(t, "s", "d@example.com", func(c map[string]any) {
+		c["https://example.com/roles"] = []string{"admin"}
+	})
+	if err != nil || res.User.Role != model.RoleAdmin {
+		t.Fatalf("a claim named with dots must work whole: %+v, %v", res.User, err)
+	}
+}
+
+func TestOIDCEntraSignsInWithNoVerifiedFlagAndTheAddressInPreferredUsername(t *testing.T) {
+	f := newIDPFixture(t, func(c *config.OIDCConfig) {
+		c.Provider = "entra"
+		c.RoleClaim = "roles" // app roles: a top level list of values
+		c.RoleMap = map[string]string{"Netscribe.Admin": "admin"}
+	})
+	res, err := f.signIn(t, "entra-oid-1", "", func(c map[string]any) {
+		delete(c, "email")
+		delete(c, "email_verified")
+		c["preferred_username"] = "Jane.Doe@example.com"
+		c["roles"] = []string{"Netscribe.Admin"}
+	})
+	if err != nil || res.User.Role != model.RoleAdmin || !res.Created {
+		t.Fatalf("entra claims must sign in: %+v, %v", res, err)
+	}
+}
+
+func TestOIDCEntraPrefersTheEmailClaimAndSkipsALoginNameThatIsNoAddress(t *testing.T) {
+	f := newIDPFixture(t, func(c *config.OIDCConfig) { c.Provider = "entra" })
+	// preferred_username that is not an address, no email claim: nothing to use.
+	_, err := f.signIn(t, "e1", "", func(c map[string]any) {
+		delete(c, "email")
+		delete(c, "email_verified")
+		c["preferred_username"] = "jdoe"
+	})
+	if !errors.Is(err, ErrOIDCDenied) || Reason(err) != "no email" {
+		t.Fatalf("got %v (%q), want a refusal for no email", err, Reason(err))
+	}
+	// Both given: email wins.
+	res, err := f.signIn(t, "e2", "real@example.com", func(c map[string]any) {
+		delete(c, "email_verified")
+		c["preferred_username"] = "other@example.com"
+	})
+	if err != nil || !strings.HasPrefix(res.User.Username, "real-") {
+		t.Fatalf("the email claim must win: %+v, %v", res.User, err)
+	}
+}
+
+func TestOIDCAGenericProviderStillWantsAVerifiedAddress(t *testing.T) {
+	f := newIDPFixture(t, nil)
+	_, err := f.signIn(t, "g1", "g@example.com", func(c map[string]any) { delete(c, "email_verified") })
+	if !errors.Is(err, ErrOIDCDenied) || Reason(err) != "email not verified" {
+		t.Fatalf("got %v (%q)", err, Reason(err))
+	}
+}
+
+func TestOIDCReadsAVerifiedFlagSentAsText(t *testing.T) {
+	f := newIDPFixture(t, nil)
+	if _, err := f.signIn(t, "t1", "t@example.com", func(c map[string]any) { c["email_verified"] = "true" }); err != nil {
+		t.Fatalf(`"true" as text must count: %v`, err)
+	}
+	if _, err := f.signIn(t, "t2", "t2@example.com", func(c map[string]any) { c["email_verified"] = "false" }); !errors.Is(err, ErrOIDCDenied) {
+		t.Fatalf(`"false" as text must refuse: %v`, err)
+	}
+}
+
+func TestOIDCAnotherEmailClaimAndNoVerifiedFlagOnRequest(t *testing.T) {
+	no := false
+	f := newIDPFixture(t, func(c *config.OIDCConfig) {
+		c.EmailClaim = "mail"
+		c.RequireVerifiedEmail = &no
+	})
+	res, err := f.signIn(t, "m1", "", func(c map[string]any) {
+		delete(c, "email")
+		delete(c, "email_verified")
+		c["mail"] = "ldap@example.com"
+	})
+	if err != nil || !res.Created {
+		t.Fatalf("emailClaim and requireVerifiedEmail: %+v, %v", res, err)
+	}
+}
+
+func TestOIDCAuthentikGroupsAsNames(t *testing.T) {
+	f := newIDPFixture(t, func(c *config.OIDCConfig) {
+		c.Provider = "authentik"
+		c.RoleClaim = "groups"
+		c.RoleMap = map[string]string{"authentik Admins": "admin", "netscribe operators": "operator"}
+	})
+	res, err := f.signIn(t, "a1", "a@example.com", func(c map[string]any) {
+		c["groups"] = []string{"authentik Admins", "everyone"}
+		c["preferred_username"] = "akadmin"
+	})
+	if err != nil || res.User.Role != model.RoleAdmin {
+		t.Fatalf("authentik groups must map: %+v, %v", res.User, err)
+	}
+}
+
+func TestClaimStrings(t *testing.T) {
+	claims := map[string]any{
+		"a":      "x",
+		"b":      []any{"y", 3, "z"},
+		"c":      map[string]any{"d": map[string]any{"e": []any{"deep"}}},
+		"f.g":    []any{"whole"},
+		"number": 7,
+	}
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{"a", []string{"x"}},
+		{"b", []string{"y", "z"}},
+		{"c.d.e", []string{"deep"}},
+		{"f.g", []string{"whole"}},
+		{"c.d.missing", nil},
+		{"a.b", nil},
+		{"number", nil},
+		{"nothing", nil},
+	}
+	for _, tt := range tests {
+		got := claimStrings(claims, tt.name)
+		if strings.Join(got, "|") != strings.Join(tt.want, "|") {
+			t.Errorf("claimStrings(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

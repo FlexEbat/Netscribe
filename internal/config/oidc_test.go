@@ -100,3 +100,76 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+func TestOIDCProviderIssuers(t *testing.T) {
+	const guid = "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	yes := true
+	tests := []struct {
+		name string
+		edit func(*OIDCConfig)
+		want string
+	}{
+		{"keycloak realm", func(o *OIDCConfig) { o.Provider, o.Issuer = "keycloak", "https://kc.example.com/realms/main" }, ""},
+		{"keycloak without a realm", func(o *OIDCConfig) { o.Provider, o.Issuer = "keycloak", "https://kc.example.com" }, "realm"},
+		{"authentik with the slash", func(o *OIDCConfig) {
+			o.Provider, o.Issuer = "authentik", "https://auth.example.com/application/o/netscribe/"
+		}, ""},
+		{"authentik without the slash", func(o *OIDCConfig) {
+			o.Provider, o.Issuer = "authentik", "https://auth.example.com/application/o/netscribe"
+		}, "slash"},
+		{"authentik not an application address", func(o *OIDCConfig) { o.Provider, o.Issuer = "authentik", "https://auth.example.com/" }, "application/o"},
+		{"entra one tenant", func(o *OIDCConfig) {
+			o.Provider, o.Issuer = "entra", "https://login.microsoftonline.com/"+guid+"/v2.0"
+		}, ""},
+		{"entra us government cloud", func(o *OIDCConfig) {
+			o.Provider, o.Issuer = "entra", "https://login.microsoftonline.us/"+guid+"/v2.0"
+		}, ""},
+		{"entra common", func(o *OIDCConfig) {
+			o.Provider, o.Issuer = "entra", "https://login.microsoftonline.com/common/v2.0"
+		}, "TENANT-ID"},
+		{"entra organizations", func(o *OIDCConfig) {
+			o.Provider, o.Issuer = "entra", "https://login.microsoftonline.com/organizations/v2.0"
+		}, "TENANT-ID"},
+		{"entra a domain name", func(o *OIDCConfig) {
+			o.Provider, o.Issuer = "entra", "https://login.microsoftonline.com/contoso.onmicrosoft.com/v2.0"
+		}, "TENANT-ID"},
+		{"entra v1", func(o *OIDCConfig) { o.Provider, o.Issuer = "entra", "https://sts.windows.net/"+guid+"/" }, "TENANT-ID"},
+		{"entra asked for a flag it does not send", func(o *OIDCConfig) {
+			o.Provider, o.Issuer, o.RequireVerifiedEmail = "entra", "https://login.microsoftonline.com/"+guid+"/v2.0", &yes
+		}, "email_verified"},
+		{"an unknown provider", func(o *OIDCConfig) { o.Provider = "okta" }, "auth.oidc.provider"},
+		{"generic", func(o *OIDCConfig) { o.Provider = "generic" }, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := oidcValid()
+			tt.edit(&c.Auth.OIDC)
+			err := c.Validate()
+			switch {
+			case tt.want == "" && err != nil:
+				t.Fatalf("Validate() = %v, want nil", err)
+			case tt.want != "" && (err == nil || !strings.Contains(err.Error(), tt.want)):
+				t.Fatalf("Validate() = %v, want a message with %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestOIDCProviderDefaultsForTheEmail(t *testing.T) {
+	no, yes := false, true
+	if got := (OIDCConfig{}).EmailClaims(); len(got) != 1 || got[0] != "email" {
+		t.Errorf("generic claims = %v", got)
+	}
+	if got := (OIDCConfig{Provider: "entra"}).EmailClaims(); len(got) != 2 || got[1] != "preferred_username" {
+		t.Errorf("entra claims = %v", got)
+	}
+	if got := (OIDCConfig{Provider: "entra", EmailClaim: "mail"}).EmailClaims(); len(got) != 1 || got[0] != "mail" {
+		t.Errorf("a named claim must win: %v", got)
+	}
+	if !(OIDCConfig{}).VerifiedEmailRequired() || (OIDCConfig{Provider: "entra"}).VerifiedEmailRequired() {
+		t.Error("verified is required except for entra")
+	}
+	if (OIDCConfig{RequireVerifiedEmail: &no}).VerifiedEmailRequired() || !(OIDCConfig{Provider: "entra", RequireVerifiedEmail: &yes}).VerifiedEmailRequired() {
+		t.Error("an explicit value must win")
+	}
+}
