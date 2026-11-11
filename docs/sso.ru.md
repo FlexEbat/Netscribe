@@ -19,7 +19,7 @@ README, тут то, чем они отличаются.
 | --- | --- |
 | Keycloak | Настоящий Keycloak в контейнере, в каждом прогоне CI (`make oidc-keycloak`): вход, роль из `realm_access.roles`, роль из `groups`, неверный пароль. |
 | Dex | Настоящий Dex в контейнере, в каждом прогоне CI (`make oidc-dex`). |
-| Authentik | Против настоящего Authentik не запускалось. Claims, которые он шлёт (`groups` списком имён, `email_verified`), покрыты тестами с такими claims. |
+| Authentik | Настоящий Authentik 2026.8 в контейнерах, в каждом прогоне CI (`make oidc-authentik`): поток входа, вход и роль `operator` из группы `netscribe operators`. |
 | Entra ID | Против настоящего тенанта не запускалось. Claims, которые он шлёт (нет `email_verified`, адрес в `preferred_username`, `roles`), покрыты тестами с такими claims. |
 
 Если вы попробуете Authentik или Entra и что-то не так, причина есть в журнале аудита (см. конец
