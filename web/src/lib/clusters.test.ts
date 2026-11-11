@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { Device, Link } from "@/api/client"
+import type { Container, Device, Link } from "@/api/client"
 import {
   boxColumns,
   boxSize,
@@ -60,6 +60,21 @@ function link(id: number, a: number, b: number): Link {
     bDeviceId: b,
     bPort: `p${b}`,
     source: "lldp",
+    lastSeenAt: "",
+  }
+}
+
+function container(id: string, deviceId: number, name = id, state = "running"): Container {
+  return {
+    id,
+    deviceId,
+    name,
+    image: "img",
+    state,
+    composeProject: "",
+    ports: [],
+    networks: [],
+    firstSeenAt: "",
     lastSeenAt: "",
   }
 }
@@ -161,7 +176,12 @@ describe("buildClusterGraph", () => {
   const links = [link(1, 1, 2), link(2, 1, 3), link(3, 2, 4), link(4, 3, 4)]
 
   it("makes a card for every closed cluster and no device nodes", () => {
-    const { nodes } = buildClusterGraph({ devices, links }, "group", new Set(), noop)
+    const { nodes } = buildClusterGraph(
+      { devices, links, containers: [] },
+      "group",
+      new Set(),
+      noop,
+    )
     expect(nodes.map((n) => [n.id, n.type])).toEqual([
       ["cluster-g2", "cluster"], // equal sizes: Cameras before Office
       ["cluster-g1", "cluster"],
@@ -169,7 +189,12 @@ describe("buildClusterGraph", () => {
   })
 
   it("counts the links between two closed clusters as one edge and drops the inner ones", () => {
-    const { edges } = buildClusterGraph({ devices, links }, "group", new Set(), noop)
+    const { edges } = buildClusterGraph(
+      { devices, links, containers: [] },
+      "group",
+      new Set(),
+      noop,
+    )
     expect(edges).toHaveLength(1)
     expect(edges[0]).toMatchObject({
       source: "cluster-g1",
@@ -180,7 +205,12 @@ describe("buildClusterGraph", () => {
   })
 
   it("opens a cluster into a frame with its devices inside it", () => {
-    const { nodes } = buildClusterGraph({ devices, links }, "group", new Set(["g1"]), noop)
+    const { nodes } = buildClusterGraph(
+      { devices, links, containers: [] },
+      "group",
+      new Set(["g1"]),
+      noop,
+    )
     const box = nodes.find((n) => n.id === "cluster-g1")!
     expect(box.type).toBe("clusterBox")
     const inside = nodes.filter((n) => n.parentId === "cluster-g1")
@@ -193,7 +223,12 @@ describe("buildClusterGraph", () => {
   })
 
   it("draws a real link between two devices that are both on the screen", () => {
-    const { edges } = buildClusterGraph({ devices, links }, "group", new Set(["g1"]), noop)
+    const { edges } = buildClusterGraph(
+      { devices, links, containers: [] },
+      "group",
+      new Set(["g1"]),
+      noop,
+    )
     expect(edges.find((e) => e.id === "link-1")).toMatchObject({
       source: "1",
       target: "2",
@@ -202,7 +237,12 @@ describe("buildClusterGraph", () => {
   })
 
   it("joins an open device to a closed cluster, one edge per pair", () => {
-    const { edges } = buildClusterGraph({ devices, links }, "group", new Set(["g1"]), noop)
+    const { edges } = buildClusterGraph(
+      { devices, links, containers: [] },
+      "group",
+      new Set(["g1"]),
+      noop,
+    )
     const toCluster = edges.filter((e) => e.target === "cluster-g2" || e.source === "cluster-g2")
     expect(toCluster.map((e) => [e.source, e.target, e.label].join(" "))).toEqual([
       "1 cluster-g2 1",
@@ -212,7 +252,7 @@ describe("buildClusterGraph", () => {
 
   it("leaves out a link whose device is not in the list", () => {
     const { edges } = buildClusterGraph(
-      { devices, links: [link(9, 1, 99)] },
+      { devices, links: [link(9, 1, 99)], containers: [] },
       "group",
       new Set(),
       noop,
@@ -222,8 +262,11 @@ describe("buildClusterGraph", () => {
 
   it("gives the toggle to every node", () => {
     const calls: string[] = []
-    const { nodes } = buildClusterGraph({ devices, links }, "group", new Set(), (k) =>
-      calls.push(k),
+    const { nodes } = buildClusterGraph(
+      { devices, links, containers: [] },
+      "group",
+      new Set(),
+      (k) => calls.push(k),
     )
     ;(nodes[0]!.data as { onToggle: (k: string) => void }).onToggle("g1")
     expect(calls).toEqual(["g1"])
@@ -244,5 +287,89 @@ describe("sizes and keys", () => {
     expect(clusterKeyOf(device(1, { group: group(3, "X"), groupId: 3 }), "group")).toBe("g3")
     expect(clusterKeyOf(device(1), "group")).toBe("none")
     expect(clusterKeyOf(device(1, { kind: "router" }), "kind")).toBe("krouter")
+  })
+})
+
+describe("containers in the cluster view", () => {
+  const g1 = group(1, "Office")
+  const devices = [
+    device(1, { group: g1, groupId: 1 }),
+    device(2, { group: g1, groupId: 1 }),
+    device(3),
+  ]
+  const containers = [container("c1", 1, "web"), container("c2", 1, "db"), container("c3", 3)]
+
+  it("counts the containers of each cluster, on the card of a closed one", () => {
+    const clusters = buildClusters(devices, "group", containers)
+    expect(clusters.map((c) => [c.key, c.devices.length, c.containers])).toEqual([
+      ["g1", 2, 2],
+      ["none", 1, 1],
+    ])
+  })
+
+  it("leaves a container out whose device is not in the list", () => {
+    const clusters = buildClusters(devices, "group", [container("x", 99)])
+    expect(clusters.every((c) => c.containers === 0)).toBe(true)
+  })
+
+  it("draws no container while a cluster is closed", () => {
+    const { nodes, edges } = buildClusterGraph(
+      { devices, links: [], containers },
+      "group",
+      new Set(),
+      noop,
+    )
+    expect(nodes.every((n) => n.type === "cluster")).toBe(true)
+    expect(edges).toEqual([])
+  })
+
+  it("puts the containers of a device in the cells after it, with an edge to the host", () => {
+    const { nodes, edges } = buildClusterGraph(
+      { devices, links: [], containers },
+      "group",
+      new Set(["g1"]),
+      noop,
+    )
+    const inside = nodes.filter((n) => n.parentId === "cluster-g1")
+    // device 1, its two containers (by name: db, web), then device 2
+    expect(inside.map((n) => n.id)).toEqual(["1", "container-c2", "container-c1", "2"])
+    expect(edges.map((e) => [e.source, e.target])).toEqual([
+      ["1", "container-c2"],
+      ["1", "container-c1"],
+    ])
+    expect(inside[0]!.data).toMatchObject({ containerCount: 2 })
+    expect(inside[1]!.type).toBe("container")
+  })
+
+  it("makes room for the containers in the frame", () => {
+    const withBoxes = buildClusterGraph(
+      { devices, links: [], containers },
+      "group",
+      new Set(["g1"]),
+      noop,
+    )
+    const without = buildClusterGraph(
+      { devices, links: [], containers: [] },
+      "group",
+      new Set(["g1"]),
+      noop,
+    )
+    const area = (n: { width?: number; height?: number }) => n.width! * n.height!
+    expect(area(withBoxes.nodes[0]!)).toBeGreaterThan(area(without.nodes[0]!))
+    const box = withBoxes.nodes[0]!
+    for (const n of withBoxes.nodes.filter((x) => x.parentId)) {
+      expect(n.position.x + 192).toBeLessThanOrEqual(box.width!)
+      expect(n.position.y + 92).toBeLessThanOrEqual(box.height!)
+    }
+  })
+
+  it("does not show the containers of a closed cluster that is linked to an open one", () => {
+    const { nodes } = buildClusterGraph(
+      { devices, links: [link(1, 1, 3)], containers },
+      "group",
+      new Set(["g1"]),
+      noop,
+    )
+    expect(nodes.some((n) => n.id === "container-c3")).toBe(false)
   })
 })
