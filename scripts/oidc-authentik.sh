@@ -29,7 +29,7 @@ fail() {
 cleanup() {
 	status=$?
 	if [ "$status" -ne 0 ]; then
-		echo "::notice title=authentik trace::$(tail -40 "$trace" | cut -c1-300 | paste -sd'|' || true)"
+		echo "::notice title=authentik trace::$(grep -v '^{' "$trace" | tail -40 | cut -c1-300 | paste -sd'|' || true)"
 		echo "::notice title=authentik server log::$(docker logs "$tag-server" 2>&1 | tail -12 | cut -c1-300 | paste -sd'|' || true)"
 		echo "::notice title=authentik worker log::$(docker logs "$tag-worker" 2>&1 | tail -12 | cut -c1-300 | paste -sd'|' || true)"
 		echo "::notice title=netscribe sso log::$(tail -6 "$dir/server.log" 2>/dev/null | cut -c1-600 | paste -sd'|' || true)"
@@ -210,7 +210,10 @@ case "$landing" in
 esac
 slug=$(printf '%s' "$landing" | sed -n 's#.*/if/flow/\([^/]*\)/.*#\1#p')
 query=$(printf '%s' "$landing" | sed -n 's#.*[?]\(.*\)$#\1#p')
-exec="$ak/api/v3/flows/executor/$slug/?query=$query"
+# The flow page passes its own query string to the executor as one value, the way the
+# interface of Authentik does; without the encoding the "&" splits it and the flow loses its "next".
+encoded=$(printf '%s' "$query" | python3 -c 'import sys,urllib.parse; print(urllib.parse.quote(sys.stdin.read().strip(), safe=""))')
+exec="$ak/api/v3/flows/executor/$slug/?query=$encoded"
 say "executor: $exec"
 csrf() { awk '$6 == "authentik_csrf" {print $7}' "$jar" | tail -1; }
 step() { # step BODY: posts a JSON body to the executor, prints the answer
