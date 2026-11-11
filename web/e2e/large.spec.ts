@@ -96,6 +96,9 @@ test("the PDF export of the large network is a PDF and ends inside its budget", 
 }) => {
   test.setTimeout(120_000)
   await open(page)
+  // The page of the large network keeps a browser busy; the export is measured without it
+  // (the signed in cookies stay with the context).
+  await page.goto("about:blank")
   const began = Date.now()
   const res = await page.request.get("/api/export/pdf", { timeout: 100_000 })
   const took = Date.now() - began

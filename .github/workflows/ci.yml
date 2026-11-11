@@ -137,6 +137,28 @@ jobs:
           npm --prefix web ci
           make oidc-keycloak
 
+  oidc-authentik:
+    # single sign-on against a real identity provider (Authentik in containers); loopback only
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Sign in through Authentik
+        run: |
+          npm --prefix web ci
+          make oidc-authentik
+
   docker:
     # the images are built here and nowhere else, so a broken Dockerfile would show only
     # when somebody tries to run it

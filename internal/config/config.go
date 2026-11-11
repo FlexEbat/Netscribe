@@ -194,7 +194,8 @@ func (o OIDCConfig) VerifiedEmailRequired() bool {
 	if o.RequireVerifiedEmail != nil {
 		return *o.RequireVerifiedEmail
 	}
-	return o.Provider != "entra"
+	// Entra sends no email_verified, and the email scope of Authentik sends a fixed false.
+	return o.Provider != "entra" && o.Provider != "authentik"
 }
 
 // entraIssuer is the address of the issuer of a single Microsoft Entra tenant, by its ID.

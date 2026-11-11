@@ -19,7 +19,7 @@ a change: `auth.oidc` is read at start.
 | --- | --- |
 | Keycloak | A real Keycloak in a container, in every CI run (`make oidc-keycloak`): sign in, a role from `realm_access.roles`, a role from `groups`, a wrong password. |
 | Dex | A real Dex in a container, in every CI run (`make oidc-dex`). |
-| Authentik | Not run against a real Authentik. The claims it sends (`groups` as a list of names, `email_verified`) are covered by tests with those claims. |
+| Authentik | A real Authentik 2026.8 in containers, in every CI run (`make oidc-authentik`): the login flow, the sign in, and the role `operator` from the group `netscribe operators`. |
 | Entra ID | Not run against a real tenant. The claims it sends (no `email_verified`, the address in `preferred_username`, `roles`) are covered by tests with those claims. |
 
 If you try Authentik or Entra and something is wrong, the reason is in the audit log (see the end
@@ -113,6 +113,10 @@ auth:
 Entra sends no `email_verified`, so for `provider: entra` Netscribe does not ask for it. That is safe
 only because the issuer is one tenant: a person of another tenant cannot sign in, and an address
 is used only to name the account and to check `allowedEmailDomains`, never to find an account.
+
+The same holds for `provider: authentik`: its default `email` scope mapping sends a fixed
+`email_verified: false`, so Netscribe does not ask for it either. If you change the mapping to send
+a real value and want it checked, set `requireVerifiedEmail: true`.
 
 ## Other settings
 
