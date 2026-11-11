@@ -81,6 +81,8 @@ func (s *server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 	ip := s.clientIP(r)
 	s.clearOIDCCookie(w, r) // one try per cookie, whatever the outcome
 	fail := func(reason string) {
+		// The page says the same to everyone; the operator reads the reason here and in the audit log.
+		s.log.Warn("single sign-on refused", "reason", reason)
 		s.write(r.Context(), model.AuditEntry{Action: "oidc_login_failed", Result: "denied", IP: ip, Detail: reason})
 		http.Redirect(w, r, ssoFailedPath, http.StatusSeeOther)
 	}
