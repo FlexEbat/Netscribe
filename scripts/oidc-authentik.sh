@@ -217,7 +217,10 @@ exec="$ak/api/v3/flows/executor/$slug/?query=$encoded"
 say "executor: $exec"
 csrf() { awk '$6 == "authentik_csrf" {print $7}' "$jar" | tail -1; }
 step() { # step BODY: posts a JSON body to the executor, prints the answer
-	curl -sS -c "$jar" -b "$jar" -H "X-authentik-CSRF: $(csrf)" -H 'Content-Type: application/json' -d "$1" "$exec"
+	code=$(curl -sS -o "$dir/step.json" -w '%{http_code}' -c "$jar" -b "$jar" \
+		-H "X-authentik-CSRF: $(csrf)" -H 'Content-Type: application/json' -d "$1" "$exec" 2>>"$trace") || say "the post failed"
+	say "post answered $code, csrf cookie of $(csrf | wc -c) bytes"
+	cat "$dir/step.json" 2>/dev/null || true
 }
 answer=$(curl -sS -c "$jar" -b "$jar" "$exec")
 say "first: $(printf '%s' "$answer" | cut -c1-200)"
@@ -234,7 +237,7 @@ while [ "$n" -lt 6 ]; do
 	xak-flow-redirect)
 		to=$(printf '%s' "$answer" | json to)
 		break ;;
-	*) fail "the login flow asked for a stage I do not know: '$comp'" ;;
+	*) fail "the login flow asked for a stage I do not know: '$comp' (the answer was: $(printf '%s' "$answer" | cut -c1-300))" ;;
 	esac
 	say "step $n ($comp): $(printf '%s' "$answer" | cut -c1-200)"
 	comp=$(printf '%s' "$answer" | json component)
