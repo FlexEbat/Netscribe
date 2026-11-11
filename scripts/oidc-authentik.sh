@@ -216,8 +216,9 @@ encoded=$(printf '%s' "$query" | python3 -c 'import sys,urllib.parse; print(urll
 exec="$ak/api/v3/flows/executor/$slug/?query=$encoded"
 say "executor: $exec"
 csrf() { awk '$6 == "authentik_csrf" {print $7}' "$jar" | tail -1; }
-step() { # step BODY: posts a JSON body to the executor, prints the answer
-	code=$(curl -sS -o "$dir/step.json" -D "$dir/step.head" -w '%{http_code}' -c "$jar" -b "$jar" \
+step() { # step BODY: posts a JSON body to the executor, prints the next challenge
+	# A good post is answered with a redirect to the executor, which holds the next stage: follow it.
+	code=$(curl -sS -L -o "$dir/step.json" -D "$dir/step.head" -w '%{http_code}' -c "$jar" -b "$jar" \
 		-H "X-authentik-CSRF: $(csrf)" -H 'Content-Type: application/json' -d "$1" "$exec" 2>>"$trace") || say "the post failed"
 	say "post answered $code, csrf cookie of $(csrf | wc -c) bytes, cookies: $(awk 'NF >= 7 {print $6}' "$jar" | paste -sd, -)"
 	say "location: $(grep -i "^location:" "$dir/step.head" | cut -c1-200)"
