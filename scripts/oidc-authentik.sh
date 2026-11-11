@@ -217,9 +217,10 @@ exec="$ak/api/v3/flows/executor/$slug/?query=$encoded"
 say "executor: $exec"
 csrf() { awk '$6 == "authentik_csrf" {print $7}' "$jar" | tail -1; }
 step() { # step BODY: posts a JSON body to the executor, prints the answer
-	code=$(curl -sS -o "$dir/step.json" -w '%{http_code}' -c "$jar" -b "$jar" \
+	code=$(curl -sS -o "$dir/step.json" -D "$dir/step.head" -w '%{http_code}' -c "$jar" -b "$jar" \
 		-H "X-authentik-CSRF: $(csrf)" -H 'Content-Type: application/json' -d "$1" "$exec" 2>>"$trace") || say "the post failed"
-	say "post answered $code, csrf cookie of $(csrf | wc -c) bytes"
+	say "post answered $code, csrf cookie of $(csrf | wc -c) bytes, cookies: $(awk 'NF >= 7 {print $6}' "$jar" | paste -sd, -)"
+	say "location: $(grep -i "^location:" "$dir/step.head" | cut -c1-200)"
 	cat "$dir/step.json" 2>/dev/null || true
 }
 answer=$(curl -sS -c "$jar" -b "$jar" "$exec")
