@@ -92,7 +92,7 @@ export function ClusterCanvas({
   return (
     <TooltipProvider delayDuration={300}>
       <div
-        className="surface h-[calc(100vh-16rem)] min-h-96 w-full overflow-hidden"
+        className="surface h-[calc(100vh-26rem)] min-h-96 w-full overflow-hidden"
         data-testid="cluster-canvas"
       >
         <ReactFlowProvider>
