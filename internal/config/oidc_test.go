@@ -166,8 +166,11 @@ func TestOIDCProviderDefaultsForTheEmail(t *testing.T) {
 	if got := (OIDCConfig{Provider: "entra", EmailClaim: "mail"}).EmailClaims(); len(got) != 1 || got[0] != "mail" {
 		t.Errorf("a named claim must win: %v", got)
 	}
-	if !(OIDCConfig{}).VerifiedEmailRequired() || (OIDCConfig{Provider: "entra"}).VerifiedEmailRequired() {
-		t.Error("verified is required except for entra")
+	if !(OIDCConfig{}).VerifiedEmailRequired() || !(OIDCConfig{Provider: "keycloak"}).VerifiedEmailRequired() {
+		t.Error("verified is required by default")
+	}
+	if (OIDCConfig{Provider: "entra"}).VerifiedEmailRequired() || (OIDCConfig{Provider: "authentik"}).VerifiedEmailRequired() {
+		t.Error("verified is not asked of entra and authentik, which do not send it")
 	}
 	if (OIDCConfig{RequireVerifiedEmail: &no}).VerifiedEmailRequired() || !(OIDCConfig{Provider: "entra", RequireVerifiedEmail: &yes}).VerifiedEmailRequired() {
 		t.Error("an explicit value must win")

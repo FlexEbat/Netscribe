@@ -114,6 +114,10 @@ Entra sends no `email_verified`, so for `provider: entra` Netscribe does not ask
 only because the issuer is one tenant: a person of another tenant cannot sign in, and an address
 is used only to name the account and to check `allowedEmailDomains`, never to find an account.
 
+The same holds for `provider: authentik`: its default `email` scope mapping sends a fixed
+`email_verified: false`, so Netscribe does not ask for it either. If you change the mapping to send
+a real value and want it checked, set `requireVerifiedEmail: true`.
+
 ## Other settings
 
 - `emailClaim`: the claim that holds the address, for a provider that uses another name.
