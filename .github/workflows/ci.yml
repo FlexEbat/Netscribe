@@ -20,8 +20,10 @@ env:
   GOVULNCHECK_VERSION: v1.8.0
 
 jobs:
-  gate:
-    # lint, typecheck and tests, then a build of the single binary
+  # The gate is four jobs that run side by side and one small job, named gate, that waits for them:
+  # the branch rule asks for the check called gate, and it is green only when all four are.
+  lint:
+    # gofmt, vet, golangci-lint, the sqlc check, eslint, prettier and the typecheck
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -37,21 +39,93 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - name: Go version for the tool cache
+        id: goversion
+        run: echo "version=$(go env GOVERSION)" >> "$GITHUB_OUTPUT"
+      - name: Cache the lint and codegen tools
+        id: tools
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/go/bin
+          key: tools-${{ runner.os }}-${{ steps.goversion.outputs.version }}-golangci-${{ env.GOLANGCI_LINT_VERSION }}-sqlc-${{ env.SQLC_VERSION }}
       - name: Install lint and codegen tools
+        if: steps.tools.outputs.cache-hit != 'true'
         run: |
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VERSION}
           go install github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}
+      - name: Lint and typecheck
+        run: make lint check
+
+  test-go:
+    # the Go tests with the race detector
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Go tests
+        run: make test-go
+
+  test-web:
+    # the tests of the web app
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Web tests
+        run: make test-web
+
+  build:
+    # dependencies verified and tidy, then a build of the single binary
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
       - name: Dependencies are verified and tidy
         run: |
           go mod verify
           go mod tidy
           git diff --exit-code -- go.mod go.sum
-      - name: Gate
-        run: make gate
       - name: Build the binary
         run: |
           make build
           ./netscribe help
+
+  gate:
+    # the check the branch rule asks for
+    if: always() && github.event_name != 'schedule'
+    needs: [lint, test-go, test-web, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: All four are green
+        run: |
+          echo "lint, test-go, test-web, build: ${{ join(needs.*.result, ', ') }}"
+          test "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = "false"
 
   e2e:
     # real browser tests of the panel on a temporary server; no secret, no network but loopback
