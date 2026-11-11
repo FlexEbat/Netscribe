@@ -3,7 +3,7 @@ GO_DIRS := cmd internal web/embed.go
 GO_PKGS := ./cmd/... ./internal/... ./web
 SQLC_QUERIES := $(wildcard internal/store/queries/*.sql)
 
-.PHONY: fmt lint check test gate audit gen dev dev-backend dev-web build e2e e2e-large e2e-lab oidc-dex
+.PHONY: fmt lint check test test-go test-web gate audit gen dev dev-backend dev-web build e2e e2e-large e2e-lab oidc-dex
 
 # go:embed needs a file under web/dist before the frontend is built.
 web/dist:
@@ -30,9 +30,13 @@ endif
 check: web/node_modules
 	cd web && npm run typecheck
 
-test: web/dist web/node_modules
+test-go: web/dist
 	go test -race $(GO_PKGS)
+
+test-web: web/node_modules
 	cd web && npm test
+
+test: test-go test-web
 
 gate: lint check test
 
