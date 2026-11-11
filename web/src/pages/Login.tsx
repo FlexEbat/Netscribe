@@ -91,19 +91,19 @@ export function Login() {
   }
 
   return (
-    <main className="grid min-h-screen lg:grid-cols-[1.2fr_1fr]">
-      <section className="flex flex-col justify-between gap-16 border-b p-8 lg:border-r lg:border-b-0 lg:p-16">
+    <main className="grid min-h-screen grid-cols-1 lg:grid-cols-[1.2fr_1fr]">
+      <section className="flex min-w-0 flex-col justify-between gap-16 border-b p-8 lg:border-r lg:border-b-0 lg:p-16">
         <Brand />
         <div className="flex max-w-2xl flex-col gap-6">
           <p className="eyebrow text-brand">{t("login.netscribe")}</p>
-          <h1 className="display text-5xl leading-none font-medium md:text-7xl">
+          <h1 className="display text-4xl leading-none font-medium break-words md:text-7xl">
             {t("login.networkDocumentationKeptCurrent")}
           </h1>
           <div aria-hidden="true" className="title-rule h-px w-full bg-foreground/40" />
         </div>
         <div aria-hidden="true" className="h-8" />
       </section>
-      <div className="page-enter grid place-items-center p-8">
+      <div className="page-enter grid min-w-0 place-items-center p-8">
         <div className="w-full max-w-sm">
           <Card className="gap-6 p-8">
             <CardHeader>
