@@ -102,7 +102,7 @@ function Body({ state }: { state: State }) {
       </p>
       <ul className="flex flex-col gap-3">
         {sorted(report.checks).map((c) => (
-          <li key={c.id} className="rounded-lg border p-4">
+          <li key={c.id} className="rounded-sm border p-4">
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant={c.status === "ok" ? "outline" : "default"}>
                 {t(label[c.status])}

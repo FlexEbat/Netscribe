@@ -1,4 +1,4 @@
-import { List, Moon, ShareNetwork, Sun, User as UserIcon, X } from "@phosphor-icons/react"
+import { List, Moon, Sun, X } from "@phosphor-icons/react"
 import { useState, type CSSProperties } from "react"
 import { NavLink, Outlet, useLocation, type RouteObject } from "react-router-dom"
 import { useSession } from "@/api/session"
@@ -46,52 +46,60 @@ interface SidebarProps {
 function NavGroup({
   group,
   items,
-  offset,
   onNavigate,
 }: {
   group: NavItem["group"]
   items: NavItem[]
-  /** How many links come before this group, so the entrance runs in reading order. */
-  offset: number
   onNavigate?: () => void
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <p className="px-3 pb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+    <div className="flex flex-col">
+      <p className="eyebrow flex items-center gap-3 pb-2 text-muted-foreground">
         {t(groupLabels[group])}
+        <span aria-hidden="true" className="h-px flex-1 bg-border" />
       </p>
-      {items.map(({ to, label, icon: Icon, tint }, index) => (
-        <NavLink
-          key={to}
-          to={to}
-          end
-          onClick={onNavigate}
-          style={{ "--i": offset + index, "--tile": tint } as CSSProperties}
-          className={({ isActive }) =>
-            cn(
-              "nav-item group flex items-center gap-3 rounded-full p-1 pr-4 text-sm font-medium transition-[background-color,color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-              isActive
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <span
-                aria-hidden="true"
-                className={cn(
-                  "nav-tile size-8 rounded-full transition-transform group-hover:scale-105",
-                  isActive && "nav-tile-active",
-                )}
-              >
-                <Icon className="size-4" weight={isActive ? "fill" : "duotone"} />
-              </span>
-              {t(label)}
-            </>
-          )}
-        </NavLink>
-      ))}
+      {items.map(({ to, label }) => {
+        const number = String(navItems.findIndex((i) => i.to === to) + 1).padStart(2, "0")
+        return (
+          <NavLink
+            key={to}
+            to={to}
+            end
+            onClick={onNavigate}
+            style={{ "--i": navItems.findIndex((i) => i.to === to) } as CSSProperties}
+            className={({ isActive }) =>
+              cn(
+                "nav-item group relative flex items-baseline gap-3 border-b border-dashed px-3 py-2 text-base transition-[background-color,color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                isActive
+                  ? "bg-accent font-semibold text-foreground"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+              )
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute inset-y-0 left-0 w-0.5 origin-top bg-primary transition-transform",
+                    isActive ? "scale-y-100" : "scale-y-0",
+                  )}
+                />
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "readout text-xs",
+                    isActive ? "text-brand" : "text-muted-foreground",
+                  )}
+                >
+                  {number}
+                </span>
+                <span className="transition-transform group-hover:translate-x-1">{t(label)}</span>
+              </>
+            )}
+          </NavLink>
+        )
+      })}
     </div>
   )
 }
@@ -102,14 +110,13 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
   return (
     <>
       <div className="flex min-h-0 flex-col gap-8 overflow-y-auto">
-        <Brand className="px-2 pt-1" />
-        <nav aria-label={t("app.main")} className="flex flex-col gap-6">
+        <Brand className="px-3 pt-1" />
+        <nav aria-label={t("app.main")} className="flex flex-col gap-8">
           {groups.map((g) => (
             <NavGroup
               key={g}
               group={g}
               items={allowed.filter((i) => i.group === g)}
-              offset={allowed.findIndex((i) => i.group === g)}
               onNavigate={onNavigate}
             />
           ))}
@@ -121,12 +128,12 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
 }
 
 /** The place of the current page, for the line at the top. */
-function pageLabel(pathname: string): { group: Key | null; label: Key; icon: NavItem["icon"] } {
+function pageLabel(pathname: string): { group: Key | null; label: Key } {
   const hit = navItems.find((i) => i.to === pathname)
-  if (hit) return { group: groupLabels[hit.group], label: hit.label, icon: hit.icon }
+  if (hit) return { group: groupLabels[hit.group], label: hit.label }
   return pathname === "/account"
-    ? { group: null, label: "nav.account", icon: UserIcon }
-    : { group: null, label: "nav.netscribe", icon: ShareNetwork }
+    ? { group: null, label: "nav.account" }
+    : { group: null, label: "nav.netscribe" }
 }
 
 function TopBar({
@@ -142,7 +149,7 @@ function TopBar({
   const { group, label } = pageLabel(pathname)
   const dark = resolved === "dark"
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b bg-background/80 px-4 py-3 backdrop-blur-xl md:border-b-0 md:bg-transparent md:px-8 md:pt-6 md:pb-0 md:backdrop-blur-none">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b bg-background/90 px-4 py-3 backdrop-blur md:px-8">
       <div className="flex items-center gap-3">
         <Button
           variant="outline"
@@ -168,14 +175,14 @@ function TopBar({
           </span>
         </Button>
         <BrandMark className="md:hidden" />
-        <p className="hidden items-center gap-2 text-sm text-muted-foreground md:flex">
+        <p className="eyebrow hidden items-center gap-2 text-muted-foreground md:flex">
           {group ? (
             <>
               <span>{t(group)}</span>
               <span aria-hidden="true">/</span>
             </>
           ) : null}
-          <span className="font-medium text-foreground">{t(label)}</span>
+          <span className="text-foreground">{t(label)}</span>
         </p>
       </div>
       <Button
@@ -183,7 +190,7 @@ function TopBar({
         size="icon"
         aria-label={t(dark ? "app.switchToLight" : "app.switchToDark")}
         onClick={() => setTheme(dark ? "light" : "dark")}
-        className="group rounded-full"
+        className="group"
       >
         {dark ? (
           <Sun
@@ -214,7 +221,7 @@ function Layout() {
     <div className="flex min-h-screen">
       {/* Below the md breakpoint the sidebar folds into a sheet behind a menu button. */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent className="right-auto left-0 w-72 justify-between border-r border-l-0 bg-sidebar/95 backdrop-blur-2xl">
+        <SheetContent className="right-auto left-0 w-72 justify-between border-r border-l-0 bg-sidebar">
           <SheetTitle className="sr-only">{t("app.navigation")}</SheetTitle>
           <SheetDescription className="sr-only">{t("app.pagesOfNetscribe")}</SheetDescription>
           <Sidebar
@@ -225,7 +232,7 @@ function Layout() {
           />
         </SheetContent>
       </Sheet>
-      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col justify-between gap-6 border-r bg-sidebar/90 p-4 backdrop-blur-xl md:flex">
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col justify-between gap-6 border-r bg-sidebar p-4 md:flex">
         <Sidebar user={user} permissions={permissions} onSignOut={onSignOut} />
       </aside>
       <VersionBadge permissions={permissions} />
@@ -235,7 +242,7 @@ function Layout() {
           onOpenMenu={() => setMenuOpen(true)}
           menuOpen={menuOpen}
         />
-        <main className="min-w-0 flex-1 p-4 md:px-8 md:pt-6 md:pb-10">
+        <main className="min-w-0 flex-1 p-4 md:px-8 md:pt-8 md:pb-16">
           {/* A new key per page resets the boundary and replays the entrance. */}
           <div key={location.pathname} className="page-enter">
             <ErrorBoundary>

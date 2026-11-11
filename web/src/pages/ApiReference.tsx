@@ -88,7 +88,7 @@ export function ApiReference() {
               <h2 className="text-lg font-semibold capitalize">{name}</h2>
               <ul className="flex flex-col gap-3">
                 {list.map(({ method, path, op }) => (
-                  <li key={method + path} className="rounded-lg border p-4">
+                  <li key={method + path} className="rounded-sm border p-4">
                     <div className="flex flex-wrap items-center gap-3">
                       <Badge variant="outline" className="font-mono uppercase">
                         {method}

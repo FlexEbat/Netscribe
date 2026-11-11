@@ -38,7 +38,7 @@ export function Overview() {
   )
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <PageTitle page="overview">{t("overview.overview")}</PageTitle>
       <Body state={state} />
     </div>
@@ -81,17 +81,22 @@ function Body({ state }: { state: State }) {
   ]
   return (
     <>
-      <ul className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <ul className="surface grid grid-cols-2 divide-x divide-y sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
         {tiles.map((t) => (
-          <li key={t.label}>
+          <li key={t.label} className="group">
             <Link
               to={t.to}
-              className="surface surface-lift flex flex-col gap-2 p-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="flex h-full flex-col gap-2 p-4 transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              <span className={cn("readout text-3xl font-semibold", t.alert && "text-warn")}>
+              <span className="eyebrow text-muted-foreground">{t.label}</span>
+              <span
+                className={cn(
+                  "display text-5xl leading-none font-medium transition-transform group-hover:translate-x-1",
+                  t.alert && "text-warn",
+                )}
+              >
                 {t.value}
               </span>
-              <span className="text-sm text-muted-foreground">{t.label}</span>
             </Link>
           </li>
         ))}

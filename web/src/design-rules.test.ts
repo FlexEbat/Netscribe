@@ -39,12 +39,14 @@ describe("design rules", () => {
     ).toEqual([])
   })
 
-  it("uses one typeface family and no banned fonts", () => {
+  it("uses Geist for the interface, one display face and no banned fonts", () => {
     const css = read(join(root, "index.css"))
     // The last entries of a fallback stack are system fonts the visitor already has, so only
     // the font the page asks for first counts.
     const primary = css.match(/--font-sans:\s*"([^"]+)"/)?.[1] ?? ""
     expect(primary).toBe("Geist Variable")
+    // One display face for titles and figures, and nothing else.
+    expect(css.match(/--font-display:\s*"([^"]+)"/)?.[1]).toBe("Fraunces Variable")
     for (const banned of ["Inter", "Roboto", "Arial", "Open Sans", "Helvetica"]) {
       expect(primary).not.toContain(banned)
     }
@@ -54,12 +56,10 @@ describe("design rules", () => {
     expect(offenders(source, /\b(italic|font-black|font-extrabold|font-\[9\d\d\])\b/g)).toEqual([])
   })
 
-  it("keeps backgrounds flat: a gradient is allowed only on the text of the heading", () => {
+  it("keeps backgrounds flat: a gradient is allowed only for the graticule of the sheet", () => {
     const css = read(join(root, "index.css"))
     const rules = css.split("}")
-    const bad = rules.filter(
-      (r) => /gradient\(/.test(r) && !/\.hero-heading|\.dark \.hero-heading/.test(r),
-    )
+    const bad = rules.filter((r) => /gradient\(/.test(r) && !/\.survey-grid/.test(r))
     expect(bad).toEqual([])
     expect(
       offenders(
@@ -72,7 +72,7 @@ describe("design rules", () => {
   it("keeps dark backgrounds to the approved set", () => {
     const css = read(join(root, "index.css"))
     const dark = css.slice(css.indexOf(".dark {"), css.indexOf("}", css.indexOf(".dark {")))
-    const allowed = new Set(["#05070d", "#0b1019", "#101726", "#141c2e", "#1b2640", "#070a12"])
+    const allowed = new Set(["#0c0d0b", "#121411", "#181a16", "#1a1c18", "#22251f"])
     for (const name of ["background", "card", "popover", "muted", "accent", "input", "sidebar"]) {
       const value = dark.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1]?.toLowerCase()
       expect(value, `--${name}`).toBeDefined()

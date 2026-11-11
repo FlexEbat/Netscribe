@@ -6,7 +6,7 @@ import { kindLabels } from "@/lib/topology"
 import { t } from "@/i18n"
 
 const selectClass =
-  "h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+  "h-9 rounded-sm border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 const kinds = Object.keys(kindLabels) as DeviceKind[]
 
 /** Changes the selected devices together. Every control applies at once and clears the choice. */
@@ -40,7 +40,7 @@ export function BulkBar({
     <div
       role="region"
       aria-label={t("bulkBar.selectedDevices")}
-      className="flex flex-col gap-2 rounded-lg border bg-card p-3"
+      className="flex flex-col gap-2 rounded-sm border bg-card p-3"
     >
       <div className="flex flex-wrap items-center gap-3">
         <span className="text-sm font-medium">{t("bulkBar.selected", { n: count })}</span>

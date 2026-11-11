@@ -108,7 +108,7 @@ export function TokensCard({ role }: TokensCardProps) {
             <Label htmlFor="token-scope">{t("tokensCard.scope")}</Label>
             <select
               id="token-scope"
-              className="h-9 rounded-lg border bg-input px-3 text-sm"
+              className="h-9 rounded-sm border bg-input px-3 text-sm"
               value={scope}
               onChange={(e) => setScope(e.target.value as "read" | "write")}
             >
@@ -147,7 +147,7 @@ export function TokensCard({ role }: TokensCardProps) {
         ) : state.tokens.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t("tokensCard.youHaveNoAccessTokens")}</p>
         ) : (
-          <ul className="flex flex-col divide-y rounded-lg border text-sm">
+          <ul className="flex flex-col divide-y rounded-sm border text-sm">
             {state.tokens.map((tok) => (
               <li key={tok.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
                 <span className="font-medium">{tok.name}</span>

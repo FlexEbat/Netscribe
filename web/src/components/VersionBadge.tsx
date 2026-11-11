@@ -52,7 +52,7 @@ export function VersionBadge({ permissions }: VersionBadgeProps) {
               tag: info.update.latest?.tag ?? "",
             })}
             className={cn(
-              "update-glow pointer-events-auto inline-flex items-center gap-2 rounded-full border bg-popover px-3 py-2 font-mono text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              "update-glow pointer-events-auto inline-flex items-center gap-2 border bg-popover px-3 py-2 font-mono text-xs text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
             )}
           >
             <ArrowCircleUp aria-hidden="true" className="size-3.5 text-brand" />
@@ -60,7 +60,7 @@ export function VersionBadge({ permissions }: VersionBadgeProps) {
             <span className="text-brand">→ {info.update.latest?.tag}</span>
           </button>
         ) : (
-          <span className="pointer-events-auto rounded-full border bg-popover/80 px-3 py-2 font-mono text-xs text-muted-foreground backdrop-blur">
+          <span className="pointer-events-auto border bg-popover px-3 py-2 font-mono text-xs text-muted-foreground">
             {label}
           </span>
         )}

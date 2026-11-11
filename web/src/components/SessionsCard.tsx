@@ -53,7 +53,7 @@ export function SessionsCard() {
           {(sessions ?? []).map((s) => (
             <li
               key={s.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-sm border p-3"
             >
               <div className="flex flex-col gap-1 text-sm">
                 <div className="flex flex-wrap items-center gap-2">

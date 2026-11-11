@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Navigate, useLocation } from "react-router-dom"
 import { ApiError, getProviders } from "@/api/client"
 import { useSession } from "@/api/session"
-import { BrandMark } from "@/components/Brand"
+import { Brand } from "@/components/Brand"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -91,15 +91,20 @@ export function Login() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center p-4">
-      <div className="page-enter w-full max-w-sm">
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col items-center gap-3">
-            <BrandMark className="size-12 rounded-2xl" />
-            <h1 className="hero-heading text-center text-3xl font-semibold">
-              {t("login.networkDocumentationKeptCurrent")}
-            </h1>
-          </div>
+    <main className="grid min-h-screen lg:grid-cols-[1.2fr_1fr]">
+      <section className="flex flex-col justify-between gap-16 border-b p-8 lg:border-r lg:border-b-0 lg:p-16">
+        <Brand />
+        <div className="flex max-w-2xl flex-col gap-6">
+          <p className="eyebrow text-brand">{t("login.netscribe")}</p>
+          <h1 className="display text-5xl leading-none font-medium md:text-7xl">
+            {t("login.networkDocumentationKeptCurrent")}
+          </h1>
+          <div aria-hidden="true" className="title-rule h-px w-full bg-foreground/40" />
+        </div>
+        <div aria-hidden="true" className="h-8" />
+      </section>
+      <div className="page-enter grid place-items-center p-8">
+        <div className="w-full max-w-sm">
           <Card className="gap-6 p-8">
             <CardHeader>
               <CardTitle className="text-xl">{t("login.netscribe")}</CardTitle>

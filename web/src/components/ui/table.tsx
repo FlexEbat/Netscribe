@@ -12,7 +12,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
 function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
-      className={cn("border-b text-xs tracking-wide text-muted-foreground uppercase", className)}
+      className={cn("eyebrow border-b border-foreground/40 text-muted-foreground", className)}
       {...props}
     />
   )
@@ -42,7 +42,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
 function TableCaption({ className, ...props }: React.ComponentProps<"caption">) {
   return (
     <caption
-      className={cn("px-4 pt-4 pb-1 text-left text-lg font-semibold", className)}
+      className={cn("display px-4 pt-4 pb-1 text-left text-2xl font-medium", className)}
       {...props}
     />
   )

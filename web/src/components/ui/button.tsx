@@ -9,13 +9,13 @@ import { cn } from "@/lib/utils"
  * (a press of scale 0.98), a visible focus ring and a disabled look.
  */
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-3 py-2 font-semibold whitespace-nowrap transition-[background-color,border-color,color,opacity,transform] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-sm px-3 py-2 font-semibold whitespace-nowrap transition-[background-color,border-color,color,opacity,transform] active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        default: "bg-primary text-primary-foreground hover:bg-primary/85",
         outline:
-          "border bg-muted hover:border-ring/50 hover:bg-accent hover:text-accent-foreground",
+          "border border-foreground/40 bg-transparent hover:border-foreground hover:bg-accent hover:text-accent-foreground",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         destructive: "bg-destructive text-white hover:bg-destructive/90",
       },

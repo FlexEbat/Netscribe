@@ -4,65 +4,66 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * The design system. Everything a surface, a text or an accent looks like is a token here,
- * so a component names a role (bg-card, text-muted-foreground) and never a color.
+ * The design system of Netscribe, a survey chart of your network.
  *
- *   dark   a blue black page, flat cards one step lighter, white lines at 8 percent. Backgrounds
- *          are flat and come only from this set: #05070D #0B1019 #101726 #141C2E #1B2640 #070A12
- *   radius Tailwind's own values, no custom ones
- *   light  a cool off-white page and white cards, the same structure
- *   brand  one electric blue, used for focus, the active page, the main button and the
- *          lines of the background. It is never a fill of a large area.
+ *   dark   "night chart": ink black paper with a faint graticule, bone white linework.
+ *          Backgrounds are flat and come only from this set:
+ *          #0C0D0B #121411 #181A16 #1A1C18 #22251F
+ *   light  "paper": a warm survey sheet, ink on bone.
+ *   signal one vermilion, used for the sheet you are on, the main button, focus and the
+ *          corner marks of a card. Nothing else is colored except status (ok and warn).
+ *   type   Fraunces for titles and big figures, Geist for the interface, Geist Mono for
+ *          every address, label, number and eyebrow.
+ *   shape  hairline rules, square corners (2 to 6 px), crop marks on cards, no shadows
+ *          that glow: a card sits on the sheet like a printed plate.
  */
 :root {
-  --background: #f3f5fa;
-  --foreground: #101114;
-  --card: #ffffff;
-  --popover: #ffffff;
-  --muted: #eceef2;
-  --muted-foreground: #5a5e69;
-  --accent: #e6e9f0;
-  --accent-foreground: #101114;
-  --primary: #3550e8;
-  --primary-foreground: #ffffff;
-  --brand: #3550e8;
+  --background: #efeadc;
+  --foreground: #1b1a16;
+  --card: #f8f4e8;
+  --popover: #fbf8ef;
+  --muted: #e6e0cf;
+  --muted-foreground: #6b6757;
+  --accent: #ddd6c1;
+  --accent-foreground: #1b1a16;
+  --primary: #d9421c;
+  --primary-foreground: #fffaf0;
+  --brand: #c43a17;
   --destructive: oklch(0.5 0.2 27);
-  --border: rgb(16 17 20 / 0.1);
-  --input: #ffffff;
-  --ring: rgb(53 80 232 / 0.55);
-  --sidebar: #fbfbfc;
-  --glow: rgb(53 80 232 / 0.22);
-  --hairline: rgb(255 255 255 / 0.9);
-  --shadow-surface: 0 1px 2px rgb(16 17 20 / 0.06), 0 18px 36px -26px rgb(16 17 20 / 0.28);
-  --particle: 58 70 140;
-  --ok: #15803d;
-  --warn: #b45309;
+  --border: rgb(27 26 22 / 0.2);
+  --input: #fbf8ef;
+  --ring: rgb(217 66 28 / 0.6);
+  --sidebar: #e9e3d2;
+  --ok: #3f7d1a;
+  --warn: #a15c00;
+  --grid: rgb(27 26 22 / 0.06);
+  --grid-major: rgb(27 26 22 / 0.11);
+  --shadow-surface: 0 1px 0 rgb(27 26 22 / 0.08);
   color-scheme: light;
 }
 
 .dark {
-  --background: #05070d;
-  --foreground: #f1f4fb;
-  --card: #0b1019;
-  --popover: #101726;
-  --muted: #141c2e;
-  --muted-foreground: #8b94a9;
-  --accent: #1b2640;
-  --accent-foreground: #f1f4fb;
-  --primary: #4f6bff;
-  --primary-foreground: #ffffff;
-  --brand: #8ba0ff;
+  --background: #0c0d0b;
+  --foreground: #ece8dc;
+  --card: #121411;
+  --popover: #181a16;
+  --muted: #1a1c18;
+  --muted-foreground: #8d8b7e;
+  --accent: #22251f;
+  --accent-foreground: #ece8dc;
+  --primary: #ff5a36;
+  --primary-foreground: #160a06;
+  --brand: #ff7a59;
   --destructive: oklch(0.68 0.2 25);
-  --border: rgb(255 255 255 / 0.08);
-  --input: #101726;
-  --ring: rgb(139 160 255 / 0.6);
-  --sidebar: #070a12;
-  --glow: rgb(79 107 255 / 0.45);
-  --hairline: rgb(255 255 255 / 0.06);
-  --ok: #4ade80;
-  --warn: #fbbf24;
-  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.5), 0 24px 44px -28px rgb(0 0 0 / 0.9);
-  --particle: 150 170 255;
+  --border: rgb(236 232 220 / 0.14);
+  --input: #181a16;
+  --ring: rgb(255 122 89 / 0.65);
+  --sidebar: #0c0d0b;
+  --ok: #a3e635;
+  --warn: #ffb020;
+  --grid: rgb(236 232 220 / 0.035);
+  --grid-major: rgb(236 232 220 / 0.07);
+  --shadow-surface: 0 1px 0 rgb(0 0 0 / 0.6);
   color-scheme: dark;
 }
 
@@ -73,6 +74,7 @@
   --font-sans:
     "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, sans-serif;
+  --font-display: "Fraunces Variable", ui-serif, Georgia, Cambria, "Times New Roman", serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -89,7 +91,6 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
-  --color-glow: var(--glow);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
@@ -110,12 +111,10 @@
     font-feature-settings:
       "ss01" 1,
       "cv11" 1;
-    letter-spacing: -0.006em;
   }
   h1,
   h2,
   h3 {
-    letter-spacing: -0.02em;
     text-wrap: balance;
   }
   p,
@@ -124,13 +123,51 @@
     text-wrap: pretty;
   }
   ::selection {
-    background: color-mix(in oklab, var(--primary) 45%, transparent);
-    color: var(--foreground);
+    background: var(--primary);
+    color: var(--primary-foreground);
   }
+}
+
+/*
+ * The graticule: a fine grid every 24px and a heavier line every 120px, drawn on the sheet
+ * and fixed to the window, so the page scrolls over it like a plate over a drafting table.
+ */
+.survey-grid {
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:
+    120px 120px,
+    120px 120px,
+    24px 24px,
+    24px 24px;
+  background-attachment: fixed;
 }
 
 input[type="checkbox"] {
   accent-color: var(--primary);
+}
+
+/* Titles and big figures. */
+.display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+  letter-spacing: -0.02em;
+}
+
+/* An eyebrow, a label or a figure of the data: monospace, small caps feel, wide tracking. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.readout {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 /* The canvas of the topology takes the colors of the design system. */
@@ -139,14 +176,14 @@ input[type="checkbox"] {
   --xy-background-color-default: transparent;
   --xy-background-pattern-dots-color-default: color-mix(
     in oklab,
-    var(--foreground) 14%,
+    var(--foreground) 22%,
     transparent
   );
-  --xy-edge-stroke-default: color-mix(in oklab, var(--foreground) 28%, transparent);
-  --xy-edge-stroke-selected-default: var(--brand);
-  --xy-handle-background-color-default: color-mix(in oklab, var(--foreground) 55%, var(--card));
-  --xy-handle-border-color-default: var(--card);
-  --xy-minimap-background-color-default: color-mix(in oklab, var(--card) 80%, transparent);
+  --xy-edge-stroke-default: color-mix(in oklab, var(--foreground) 45%, transparent);
+  --xy-edge-stroke-selected-default: var(--primary);
+  --xy-handle-background-color-default: var(--card);
+  --xy-handle-border-color-default: var(--foreground);
+  --xy-minimap-background-color-default: var(--popover);
   --xy-minimap-mask-background-color-default: color-mix(
     in oklab,
     var(--background) 70%,
@@ -154,7 +191,7 @@ input[type="checkbox"] {
   );
   --xy-minimap-node-background-color-default: color-mix(
     in oklab,
-    var(--foreground) 24%,
+    var(--foreground) 40%,
     transparent
   );
   --xy-controls-button-background-color-default: var(--popover);
@@ -169,8 +206,8 @@ input[type="checkbox"] {
 .react-flow__controls {
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
-  box-shadow: var(--shadow-surface);
+  border-radius: 2px;
+  box-shadow: none;
 }
 
 .react-flow__minimap {
@@ -181,18 +218,23 @@ input[type="checkbox"] {
   fill: color-mix(in oklab, var(--background) 70%, transparent);
 }
 
+.react-flow__handle {
+  border-radius: 0;
+}
+
 .react-flow__node:hover {
   z-index: 5;
 }
 
 /*
- * A surface is a flat card: one solid color, a border all the way around and a soft layered
- * shadow. Interactive surfaces also rise a little.
+ * A surface is a printed plate: one flat color, a hairline all the way round and two crop
+ * marks in the signal color, top left and bottom right. An interactive plate moves 2px
+ * and its marks grow.
  */
 .surface {
   position: relative;
   border: 1px solid var(--border);
-  border-radius: 1rem;
+  border-radius: 2px;
   background: var(--card);
   box-shadow: var(--shadow-surface);
   transition:
@@ -200,15 +242,48 @@ input[type="checkbox"] {
     border-color 0.3s var(--ease-out-quint);
 }
 
+.surface::before,
+.surface::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 0 solid var(--primary);
+  pointer-events: none;
+  transition:
+    width 0.3s var(--ease-out-quint),
+    height 0.3s var(--ease-out-quint);
+}
+
+.surface::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.surface::after {
+  right: -1px;
+  bottom: -1px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+
 .surface:hover {
-  border-color: color-mix(in oklab, var(--border), var(--brand) 22%);
+  border-color: color-mix(in oklab, var(--border), var(--foreground) 24%);
 }
 
 .surface-lift:hover {
   transform: translateY(-2px);
 }
 
-/* Entrance of a page: the page fades in and its sections rise one after the other. */
+.surface-lift:hover::before,
+.surface-lift:hover::after {
+  width: 14px;
+  height: 14px;
+}
+
+/* Entrance of a page: the sheet fades in and its parts rise one after the other. */
 @keyframes rise {
   from {
     opacity: 0;
@@ -262,6 +337,16 @@ input[type="checkbox"] {
   }
 }
 
+/* The rule under a page title is drawn from left to right. */
+@keyframes draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .page-enter {
   animation: fade 0.35s var(--ease-out-quint) backwards;
 }
@@ -286,6 +371,11 @@ input[type="checkbox"] {
   animation-delay: 350ms;
 }
 
+.title-rule {
+  transform-origin: left;
+  animation: draw 0.9s var(--ease-out-quint) 0.15s backwards;
+}
+
 /* Menus, tooltips and dialogs come in with a short pop. */
 [data-state="open"][role="menu"],
 [data-state="delayed-open"][role="tooltip"],
@@ -296,7 +386,7 @@ input[type="checkbox"] {
 /* The thin scrollbars of tables and panels. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 30%, transparent) transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -331,55 +421,31 @@ body[data-scroll-locked] {
  */
 .update-glow {
   position: relative;
-  border-color: color-mix(in oklab, var(--brand) 60%, var(--border));
+  border-color: var(--primary);
 }
 
 .update-glow::after {
   content: "";
   position: absolute;
-  inset: -2px;
+  inset: -3px;
   z-index: -1;
-  border-radius: inherit;
   pointer-events: none;
-  box-shadow:
-    0 0 0 1px color-mix(in oklab, var(--brand) 45%, transparent),
-    0 0 24px 4px var(--glow);
+  border: 1px solid var(--primary);
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .update-glow::after {
-    animation: update-pulse 2.4s var(--ease-out-quint) infinite alternate;
+    animation: update-pulse 1.6s var(--ease-out-quint) infinite alternate;
   }
 }
 
 @keyframes update-pulse {
   from {
-    opacity: 0.35;
+    opacity: 0.2;
   }
   to {
     opacity: 1;
   }
-}
-
-/*
- * The heading of a page that opens a flow (sign in): a left to right gradient on the text
- * only, never on a background. Dark runs from white to grey, light from black to grey.
- */
-.hero-heading {
-  max-width: 680px;
-  background-image: linear-gradient(90deg, #000000, #666666);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  -webkit-text-fill-color: transparent;
-}
-
-.dark .hero-heading {
-  background-image: linear-gradient(90deg, #ffffff, #9b9b9b);
-}
-
-.hero-subheading {
-  max-width: 680px;
 }
 
 /*
@@ -400,42 +466,4 @@ body[data-scroll-locked] {
 [role="dialog"] .nav-item {
   animation: menu-item 0.5s var(--ease-out-quint) backwards;
   animation-delay: min(calc(var(--i, 0) * 60ms), 400ms);
-}
-
-/*
- * The icon tile of a menu entry and of a page title: a rounded square (a circle in the menu)
- * tinted with the hue of the page. The hue arrives as --tile, so one rule serves every page.
- */
-.nav-tile {
-  display: inline-grid;
-  flex-shrink: 0;
-  place-items: center;
-  border: 1px solid color-mix(in oklab, var(--tile) 28%, transparent);
-  background: color-mix(in oklab, var(--tile) 14%, var(--card));
-  color: color-mix(in oklab, var(--tile) 62%, var(--foreground));
-}
-
-.dark .nav-tile {
-  color: var(--tile);
-}
-
-/* On the filled pill of the page you are on, the tile turns into a solid dot. */
-.nav-tile-active {
-  border-color: transparent;
-  background: var(--background);
-  color: var(--foreground);
-}
-
-/* A figure of a readout: monospace, tabular and in the color of what it measures. */
-.readout {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-/* The glass of the page header and of floating readouts: a flat tint over a blur. */
-.glass {
-  border: 1px solid var(--border);
-  background: color-mix(in oklab, var(--card) 72%, transparent);
-  backdrop-filter: blur(16px);
 }
