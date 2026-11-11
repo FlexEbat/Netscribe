@@ -32,7 +32,7 @@ cleanup() {
 		echo "::notice title=authentik trace::$(tail -40 "$trace" | cut -c1-300 | paste -sd'|' || true)"
 		echo "::notice title=authentik server log::$(docker logs "$tag-server" 2>&1 | tail -12 | cut -c1-300 | paste -sd'|' || true)"
 		echo "::notice title=authentik worker log::$(docker logs "$tag-worker" 2>&1 | tail -12 | cut -c1-300 | paste -sd'|' || true)"
-		echo "::notice title=netscribe sso log::$(grep -i 'single sign-on' "$dir/server.log" 2>/dev/null | tail -4 | cut -c1-600 | paste -sd'|' || true)"
+		echo "::notice title=netscribe sso log::$(tail -6 "$dir/server.log" 2>/dev/null | cut -c1-600 | paste -sd'|' || true)"
 	fi
 	[ -n "$pid" ] && kill "$pid" 2>/dev/null || true
 	docker rm -f "$tag-server" "$tag-worker" "$tag-db" >/dev/null 2>&1 || true
@@ -87,6 +87,11 @@ entries:
       authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
       invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
       client_type: confidential
+      # Empty by default: with no grant type Authentik answers the authorize request with
+      # invalid_request ("Invalid grant_type for provider").
+      grant_types:
+        - authorization_code
+        - refresh_token
       client_id: netscribe
       client_secret: ak-test-client-secret
       redirect_uris:
