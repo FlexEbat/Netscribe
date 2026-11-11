@@ -15,6 +15,7 @@ import { Alert } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { kindClasses, kindLabels, scanPoints } from "@/lib/changes"
 import { formatDateTime, t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 type State =
   | { status: "loading" }
@@ -38,7 +39,7 @@ export function Changes() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("changes.changes")}</h1>
+      <PageTitle page="changes">{t("changes.changes")}</PageTitle>
       <Body state={state} />
     </div>
   )

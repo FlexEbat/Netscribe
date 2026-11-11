@@ -25,6 +25,7 @@ import { filterContainers, formatPort, stateClasses, uniquePorts } from "@/lib/c
 import { compareIp } from "@/lib/ip"
 import { displayName } from "@/lib/topology"
 import { t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 type State =
   | { status: "loading" }
@@ -51,7 +52,7 @@ export function Containers() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("containers.containers")}</h1>
+      <PageTitle page="containers">{t("containers.containers")}</PageTitle>
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"

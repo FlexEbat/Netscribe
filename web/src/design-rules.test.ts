@@ -72,7 +72,7 @@ describe("design rules", () => {
   it("keeps dark backgrounds to the approved set", () => {
     const css = read(join(root, "index.css"))
     const dark = css.slice(css.indexOf(".dark {"), css.indexOf("}", css.indexOf(".dark {")))
-    const allowed = new Set(["#000000", "#181818", "#1f1f1f", "#272727", "#313131", "#131209"])
+    const allowed = new Set(["#05070d", "#0b1019", "#101726", "#141c2e", "#1b2640", "#070a12"])
     for (const name of ["background", "card", "popover", "muted", "accent", "input", "sidebar"]) {
       const value = dark.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1]?.toLowerCase()
       expect(value, `--${name}`).toBeDefined()

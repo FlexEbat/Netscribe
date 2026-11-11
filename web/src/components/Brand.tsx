@@ -10,7 +10,7 @@ export function BrandMark({ className }: { className?: string }) {
     <span
       aria-hidden="true"
       className={cn(
-        "relative grid size-9 place-items-center rounded-xl border bg-muted shadow-[inset_0_1px_0_var(--hairline),0_8px_24px_-12px_var(--glow)]",
+        "relative grid size-9 place-items-center rounded-2xl border bg-muted shadow-[inset_0_1px_0_var(--hairline),0_8px_24px_-12px_var(--glow)]",
         className,
       )}
     >

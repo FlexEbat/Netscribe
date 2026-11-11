@@ -12,7 +12,7 @@ import {
   WifiHigh,
   type Icon,
 } from "@phosphor-icons/react"
-import { memo } from "react"
+import { memo, type CSSProperties } from "react"
 import { Handle, Position, useStore, type NodeProps } from "@xyflow/react"
 import type { DeviceKind } from "@/api/client"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -49,7 +49,7 @@ function DeviceNodeView({ data, selected }: NodeProps) {
     return (
       <div
         data-lod="far"
-        className={`flex h-[92px] w-48 items-center justify-center rounded-xl ${
+        className={`flex h-[92px] w-52 items-center justify-center rounded-xl ${
           device.online ? "bg-primary/25" : "bg-muted"
         } ${selected ? "ring-4 ring-ring" : ""}`}
       >
@@ -63,19 +63,26 @@ function DeviceNodeView({ data, selected }: NodeProps) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`surface surface-lift flex w-48 items-center gap-3 rounded-xl px-3 py-3 text-card-foreground ${
+          className={`surface surface-lift flex w-52 items-center gap-3 rounded-2xl p-3 text-card-foreground ${
             selected ? "ring-2 ring-ring" : ""
           } ${device.online ? "" : "opacity-60"}`}
         >
           <Handle type="target" position={Position.Top} className="!size-2.5" />
           <Handle type="source" position={Position.Bottom} className="!size-2.5" />
-          <Icon
-            className="size-6 shrink-0 text-muted-foreground"
-            aria-label={kindLabels[device.kind]}
-          />
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="truncate text-sm font-medium">{displayName(device)}</span>
-            <span className="truncate font-mono text-xs text-muted-foreground">
+          <span
+            aria-hidden="true"
+            style={
+              {
+                "--tile": device.online ? "var(--brand)" : "var(--muted-foreground)",
+              } as CSSProperties
+            }
+            className="nav-tile size-10 rounded-xl"
+          >
+            <Icon className="size-5" weight="duotone" aria-label={kindLabels[device.kind]} />
+          </span>
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="truncate text-sm font-semibold">{displayName(device)}</span>
+            <span className="readout truncate text-xs text-muted-foreground">
               {device.ip || device.ip6 || t("deviceNode.noAddress")}
             </span>
             <StatusBadge online={device.online} />

@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatDateTime, t, type Key } from "@/i18n"
 import { tRich } from "@/i18n/rich"
+import { PageTitle } from "@/components/PageTitle"
 
 /** What the person typed or chose for each key. A key stays out until it is touched. */
 type Draft = Record<string, string | boolean>
@@ -241,7 +242,7 @@ export function Settings() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("settings.settings")}</h1>
+      <PageTitle page="settings">{t("settings.settings")}</PageTitle>
       <p className="text-sm text-muted-foreground">
         {tRich("settings.intro", {
           file: <code className="font-mono">{t("settings.netscribeConfig")}</code>,

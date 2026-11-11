@@ -1,22 +1,4 @@
-import {
-  ClockCounterClockwise,
-  Cube,
-  BracketsCurly,
-  Gauge,
-  Heartbeat,
-  Stack,
-  List,
-  ListBullets,
-  Moon,
-  PlugsConnected,
-  Scroll,
-  ShareNetwork,
-  SlidersHorizontal,
-  Sun,
-  User as UserIcon,
-  Users as UsersIcon,
-  X,
-} from "@phosphor-icons/react"
+import { List, Moon, ShareNetwork, Sun, User as UserIcon, X } from "@phosphor-icons/react"
 import { useState, type CSSProperties } from "react"
 import { NavLink, Outlet, useLocation, type RouteObject } from "react-router-dom"
 import { useSession } from "@/api/session"
@@ -29,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { UserMenu } from "@/components/UserMenu"
 import { VersionBadge } from "@/components/VersionBadge"
+import { navItems, type NavItem } from "@/lib/nav"
 import { can, type Permission, type User } from "@/lib/permissions"
 import { setTheme, useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -47,90 +30,6 @@ import { Health } from "@/pages/Health"
 import { Settings } from "@/pages/Settings"
 import { Topology } from "@/pages/Topology"
 import { t, type Key } from "@/i18n"
-
-// The pages of the panel and the navigation that leads to them.
-interface NavItem {
-  to: string
-  label: Key
-  icon: typeof ShareNetwork
-  permission: Permission
-  group: "workspace" | "admin"
-}
-
-const navItems: NavItem[] = [
-  {
-    to: "/",
-    label: "nav.topology",
-    icon: ShareNetwork,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  {
-    to: "/overview",
-    label: "nav.overview",
-    icon: Gauge,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  {
-    to: "/groups",
-    label: "nav.groups",
-    icon: Stack,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  {
-    to: "/inventory",
-    label: "nav.inventory",
-    icon: ListBullets,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  {
-    to: "/services",
-    label: "nav.services",
-    icon: PlugsConnected,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  {
-    to: "/containers",
-    label: "nav.containers",
-    icon: Cube,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  {
-    to: "/changes",
-    label: "nav.changes",
-    icon: ClockCounterClockwise,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  {
-    to: "/reference",
-    label: "nav.apiReference",
-    icon: BracketsCurly,
-    permission: "topology:read",
-    group: "workspace",
-  },
-  { to: "/users", label: "nav.users", icon: UsersIcon, permission: "users:manage", group: "admin" },
-  { to: "/audit", label: "nav.auditLog", icon: Scroll, permission: "audit:read", group: "admin" },
-  {
-    to: "/health",
-    label: "nav.health",
-    icon: Heartbeat,
-    permission: "system:manage",
-    group: "admin",
-  },
-  {
-    to: "/settings",
-    label: "nav.settings",
-    icon: SlidersHorizontal,
-    permission: "system:manage",
-    group: "admin",
-  },
-]
 
 const groupLabels = {
   workspace: "nav.workspace",
@@ -158,21 +57,21 @@ function NavGroup({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <p className="px-3 pb-1 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+      <p className="px-3 pb-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
         {t(groupLabels[group])}
       </p>
-      {items.map(({ to, label, icon: Icon }, index) => (
+      {items.map(({ to, label, icon: Icon, tint }, index) => (
         <NavLink
           key={to}
           to={to}
           end
           onClick={onNavigate}
-          style={{ "--i": offset + index } as CSSProperties}
+          style={{ "--i": offset + index, "--tile": tint } as CSSProperties}
           className={({ isActive }) =>
             cn(
-              "nav-item group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-[background-color,color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+              "nav-item group flex items-center gap-3 rounded-full p-1 pr-4 text-sm font-medium transition-[background-color,color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               isActive
-                ? "bg-accent font-medium text-foreground shadow-[inset_0_1px_0_var(--hairline)]"
+                ? "bg-foreground text-background"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
             )
           }
@@ -182,17 +81,12 @@ function NavGroup({
               <span
                 aria-hidden="true"
                 className={cn(
-                  "absolute top-1/2 -left-4 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand shadow-[0_0_14px_var(--glow)] transition-[opacity,transform]",
-                  isActive ? "scale-y-100 opacity-100" : "scale-y-50 opacity-0",
+                  "nav-tile size-8 rounded-full transition-transform group-hover:scale-105",
+                  isActive && "nav-tile-active",
                 )}
-              />
-              <Icon
-                aria-hidden="true"
-                className={cn(
-                  "size-5 transition-[transform,color] group-hover:-translate-y-px group-hover:scale-110",
-                  isActive && "text-brand",
-                )}
-              />
+              >
+                <Icon className="size-4" weight={isActive ? "fill" : "duotone"} />
+              </span>
               {t(label)}
             </>
           )}
@@ -207,7 +101,7 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
   const groups = (["workspace", "admin"] as const).filter((g) => allowed.some((i) => i.group === g))
   return (
     <>
-      <div className="flex flex-col gap-8">
+      <div className="flex min-h-0 flex-col gap-8 overflow-y-auto">
         <Brand className="px-2 pt-1" />
         <nav aria-label={t("app.main")} className="flex flex-col gap-6">
           {groups.map((g) => (
@@ -226,13 +120,13 @@ function Sidebar({ user, permissions, onSignOut, onNavigate }: SidebarProps) {
   )
 }
 
-/** The label of the current page, for the capsule at the top. */
-function pageLabel(pathname: string): { label: Key; icon: typeof ShareNetwork } {
+/** The place of the current page, for the line at the top. */
+function pageLabel(pathname: string): { group: Key | null; label: Key; icon: NavItem["icon"] } {
   const hit = navItems.find((i) => i.to === pathname)
-  if (hit) return { label: hit.label, icon: hit.icon }
+  if (hit) return { group: groupLabels[hit.group], label: hit.label, icon: hit.icon }
   return pathname === "/account"
-    ? { label: "nav.account", icon: UserIcon }
-    : { label: "nav.netscribe", icon: ShareNetwork }
+    ? { group: null, label: "nav.account", icon: UserIcon }
+    : { group: null, label: "nav.netscribe", icon: ShareNetwork }
 }
 
 function TopBar({
@@ -245,10 +139,10 @@ function TopBar({
   menuOpen: boolean
 }) {
   const { resolved } = useTheme()
-  const { label, icon: Icon } = pageLabel(pathname)
+  const { group, label } = pageLabel(pathname)
   const dark = resolved === "dark"
   return (
-    <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b bg-background/70 px-4 py-3 backdrop-blur-xl md:border-b-0 md:bg-transparent md:px-8 md:pt-6 md:pb-0 md:backdrop-blur-none">
+    <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b bg-background/80 px-4 py-3 backdrop-blur-xl md:border-b-0 md:bg-transparent md:px-8 md:pt-6 md:pb-0 md:backdrop-blur-none">
       <div className="flex items-center gap-3">
         <Button
           variant="outline"
@@ -274,17 +168,22 @@ function TopBar({
           </span>
         </Button>
         <BrandMark className="md:hidden" />
-        <div className="hidden items-center gap-2 rounded-full border bg-muted py-2 pr-4 pl-3 text-sm md:inline-flex">
-          <Icon aria-hidden="true" className="size-4 text-brand" />
-          <span className="font-medium">{t(label)}</span>
-        </div>
+        <p className="hidden items-center gap-2 text-sm text-muted-foreground md:flex">
+          {group ? (
+            <>
+              <span>{t(group)}</span>
+              <span aria-hidden="true">/</span>
+            </>
+          ) : null}
+          <span className="font-medium text-foreground">{t(label)}</span>
+        </p>
       </div>
       <Button
         variant="outline"
         size="icon"
         aria-label={t(dark ? "app.switchToLight" : "app.switchToDark")}
         onClick={() => setTheme(dark ? "light" : "dark")}
-        className="group"
+        className="group rounded-full"
       >
         {dark ? (
           <Sun
@@ -326,7 +225,7 @@ function Layout() {
           />
         </SheetContent>
       </Sheet>
-      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col justify-between border-r bg-sidebar/80 p-4 backdrop-blur-xl md:flex">
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col justify-between gap-6 border-r bg-sidebar/90 p-4 backdrop-blur-xl md:flex">
         <Sidebar user={user} permissions={permissions} onSignOut={onSignOut} />
       </aside>
       <VersionBadge permissions={permissions} />

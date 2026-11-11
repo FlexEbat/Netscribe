@@ -7,15 +7,15 @@
  * The design system. Everything a surface, a text or an accent looks like is a token here,
  * so a component names a role (bg-card, text-muted-foreground) and never a color.
  *
- *   dark   a black page, flat cards one step lighter, white lines at 8 percent. Backgrounds
- *          are flat and come only from this set: #000000 #181818 #1F1F1F #272727 #313131 #131209
+ *   dark   a blue black page, flat cards one step lighter, white lines at 8 percent. Backgrounds
+ *          are flat and come only from this set: #05070D #0B1019 #101726 #141C2E #1B2640 #070A12
  *   radius Tailwind's own values, no custom ones
  *   light  a cool off-white page and white cards, the same structure
  *   brand  one electric blue, used for focus, the active page, the main button and the
  *          lines of the background. It is never a fill of a large area.
  */
 :root {
-  --background: #f5f6f8;
+  --background: #f3f5fa;
   --foreground: #101114;
   --card: #ffffff;
   --popover: #ffffff;
@@ -35,30 +35,34 @@
   --hairline: rgb(255 255 255 / 0.9);
   --shadow-surface: 0 1px 2px rgb(16 17 20 / 0.06), 0 18px 36px -26px rgb(16 17 20 / 0.28);
   --particle: 58 70 140;
+  --ok: #15803d;
+  --warn: #b45309;
   color-scheme: light;
 }
 
 .dark {
-  --background: #000000;
-  --foreground: #f4f4f5;
-  --card: #181818;
-  --popover: #1f1f1f;
-  --muted: #272727;
-  --muted-foreground: #8d9098;
-  --accent: #313131;
-  --accent-foreground: #f4f4f5;
-  --primary: #4059f5;
+  --background: #05070d;
+  --foreground: #f1f4fb;
+  --card: #0b1019;
+  --popover: #101726;
+  --muted: #141c2e;
+  --muted-foreground: #8b94a9;
+  --accent: #1b2640;
+  --accent-foreground: #f1f4fb;
+  --primary: #4f6bff;
   --primary-foreground: #ffffff;
-  --brand: #8095ff;
-  --destructive: oklch(0.66 0.2 25);
+  --brand: #8ba0ff;
+  --destructive: oklch(0.68 0.2 25);
   --border: rgb(255 255 255 / 0.08);
-  --input: #1f1f1f;
-  --ring: rgb(128 149 255 / 0.6);
-  --sidebar: #000000;
-  --glow: rgb(64 89 245 / 0.42);
+  --input: #101726;
+  --ring: rgb(139 160 255 / 0.6);
+  --sidebar: #070a12;
+  --glow: rgb(79 107 255 / 0.45);
   --hairline: rgb(255 255 255 / 0.06);
+  --ok: #4ade80;
+  --warn: #fbbf24;
   --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.5), 0 24px 44px -28px rgb(0 0 0 / 0.9);
-  --particle: 176 188 255;
+  --particle: 150 170 255;
   color-scheme: dark;
 }
 
@@ -86,6 +90,8 @@
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-glow: var(--glow);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
   --default-transition-duration: 300ms;
   --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
@@ -165,6 +171,14 @@ input[type="checkbox"] {
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   box-shadow: var(--shadow-surface);
+}
+
+.react-flow__minimap {
+  background: var(--popover);
+}
+
+.react-flow__minimap-mask {
+  fill: color-mix(in oklab, var(--background) 70%, transparent);
 }
 
 .react-flow__node:hover {
@@ -386,4 +400,42 @@ body[data-scroll-locked] {
 [role="dialog"] .nav-item {
   animation: menu-item 0.5s var(--ease-out-quint) backwards;
   animation-delay: min(calc(var(--i, 0) * 60ms), 400ms);
+}
+
+/*
+ * The icon tile of a menu entry and of a page title: a rounded square (a circle in the menu)
+ * tinted with the hue of the page. The hue arrives as --tile, so one rule serves every page.
+ */
+.nav-tile {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid color-mix(in oklab, var(--tile) 28%, transparent);
+  background: color-mix(in oklab, var(--tile) 14%, var(--card));
+  color: color-mix(in oklab, var(--tile) 62%, var(--foreground));
+}
+
+.dark .nav-tile {
+  color: var(--tile);
+}
+
+/* On the filled pill of the page you are on, the tile turns into a solid dot. */
+.nav-tile-active {
+  border-color: transparent;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* A figure of a readout: monospace, tabular and in the color of what it measures. */
+.readout {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* The glass of the page header and of floating readouts: a flat tint over a blur. */
+.glass {
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 72%, transparent);
+  backdrop-filter: blur(16px);
 }

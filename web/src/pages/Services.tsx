@@ -19,6 +19,7 @@ import {
 import { compareIp } from "@/lib/ip"
 import { filterServices } from "@/lib/services"
 import { t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 type State =
   | { status: "loading" }
@@ -47,7 +48,7 @@ export function Services() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("services.services")}</h1>
+      <PageTitle page="services">{t("services.services")}</PageTitle>
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="search"

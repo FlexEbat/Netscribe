@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { kindClasses, kindLabels } from "@/lib/changes"
 import { cn } from "@/lib/utils"
 import { formatDateTime, t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; data: OverviewData }
 
@@ -37,8 +38,8 @@ export function Overview() {
   )
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("overview.overview")}</h1>
+    <div className="flex flex-col gap-6">
+      <PageTitle page="overview">{t("overview.overview")}</PageTitle>
       <Body state={state} />
     </div>
   )
@@ -85,14 +86,9 @@ function Body({ state }: { state: State }) {
           <li key={t.label}>
             <Link
               to={t.to}
-              className="flex flex-col gap-1 rounded-lg border bg-card p-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              className="surface surface-lift flex flex-col gap-2 p-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              <span
-                className={cn(
-                  "text-2xl font-semibold",
-                  t.alert && "text-amber-700 dark:text-amber-300",
-                )}
-              >
+              <span className={cn("readout text-3xl font-semibold", t.alert && "text-warn")}>
                 {t.value}
               </span>
               <span className="text-sm text-muted-foreground">{t.label}</span>
