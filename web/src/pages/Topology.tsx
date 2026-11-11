@@ -108,6 +108,12 @@ export function Topology() {
   const deviceId = Number.isInteger(selected) && selected > 0 ? selected : null
 
   const allDevices = state.status === "ready" ? state.topology.devices : null
+  // The device that a link points at: the selected one, or the host of the selected container.
+  const containerHost =
+    state.status === "ready"
+      ? state.topology.containers.find((c) => c.id === params.get("container"))?.deviceId
+      : undefined
+  const pointedAt = deviceId ?? containerHost ?? null
   const view: TopologyView =
     chosenView ?? (allDevices && allDevices.length > CLUSTER_AUTO_ABOVE ? "clusters" : "devices")
   const by: ClusterBy = chosenBy ?? defaultBy(allDevices ?? [])
@@ -142,13 +148,13 @@ export function Topology() {
   // A device that is selected (from a link, say) must be on the screen: its cluster opens.
   // This is state adjusted while rendering, the way React asks for a change that follows a
   // prop, so the open cluster is there in the same frame.
-  if (deviceId === null) {
+  if (pointedAt === null) {
     if (seen !== null) setSeen(null)
-  } else if (view === "clusters" && allDevices && seen !== deviceId) {
-    const d = allDevices.find((x) => x.id === deviceId)
+  } else if (view === "clusters" && allDevices && seen !== pointedAt) {
+    const d = allDevices.find((x) => x.id === pointedAt)
     if (d) {
       const key = clusterKeyOf(d, by)
-      setSeen(deviceId)
+      setSeen(pointedAt)
       setExpanded((cur) => (cur.has(key) ? cur : new Set(cur).add(key)))
       setFocus(key)
     }
@@ -223,6 +229,8 @@ export function Topology() {
           onToggle={toggleCluster}
           selectedDevice={deviceId}
           onSelect={select}
+          selectedContainer={params.get("container")}
+          onSelectContainer={selectContainer}
           onSelectLink={setLinkId}
           focus={focus}
         />

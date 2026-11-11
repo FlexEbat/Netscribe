@@ -200,6 +200,7 @@ export const en = {
   "cluster.clusters": "Clusters",
   "cluster.collapse": "Close {name}",
   "cluster.collapseAll": "Close all",
+  "cluster.containers": "{n} containers",
   "cluster.devices": "Devices",
   "cluster.devicesOnline": "{n} devices, {online} online",
   "cluster.expand": "Open {name}, {n} devices",

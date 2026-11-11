@@ -31,6 +31,7 @@ function ClusterCardView({ data }: NodeProps) {
         </span>
         <span className="text-sm text-muted-foreground">
           {t("cluster.devicesOnline", { n: total, online: cluster.online })}
+          {cluster.containers > 0 ? `, ${t("cluster.containers", { n: cluster.containers })}` : ""}
         </span>
         <span className="flex flex-wrap items-center gap-3">
           {cluster.kinds.slice(0, 4).map(([kind, n]) => {

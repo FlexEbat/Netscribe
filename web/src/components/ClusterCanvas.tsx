@@ -13,12 +13,19 @@ import {
 import "@xyflow/react/dist/style.css"
 import type { Topology } from "@/api/client"
 import { ClusterBox, ClusterCard } from "@/components/ClusterNode"
+import { ContainerNode } from "@/components/ContainerNode"
 import { DeviceNode } from "@/components/DeviceNode"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { buildClusterGraph, clusterNodeId, type ClusterBy } from "@/lib/clusters"
+import { containerNodeId } from "@/lib/topology"
 import { useTheme } from "@/lib/theme"
 
-const nodeTypes = { cluster: ClusterCard, clusterBox: ClusterBox, device: DeviceNode }
+const nodeTypes = {
+  cluster: ClusterCard,
+  clusterBox: ClusterBox,
+  device: DeviceNode,
+  container: ContainerNode,
+}
 
 interface ClusterCanvasProps {
   topology: Topology
@@ -28,6 +35,9 @@ interface ClusterCanvasProps {
   /** The device whose panel is open, for the ring around its card. */
   selectedDevice: number | null
   onSelect: (id: number | null) => void
+  /** The container whose panel is open, and the way to open another. */
+  selectedContainer?: string | null
+  onSelectContainer?: (id: string | null) => void
   onSelectLink?: (linkId: number | null) => void
   /** The cluster the visitor opened last: the view moves to it. */
   focus: string | null
@@ -58,6 +68,8 @@ export function ClusterCanvas({
   onToggle,
   selectedDevice,
   onSelect,
+  selectedContainer = null,
+  onSelectContainer,
   onSelectLink,
   focus,
 }: ClusterCanvasProps) {
@@ -67,8 +79,14 @@ export function ClusterCanvas({
     [topology, by, expanded, onToggle],
   )
   const nodes = useMemo(
-    () => graph.nodes.map((n) => ({ ...n, selected: n.id === String(selectedDevice) })) as Node[],
-    [graph.nodes, selectedDevice],
+    () =>
+      graph.nodes.map((n) => ({
+        ...n,
+        selected:
+          n.id === String(selectedDevice) ||
+          (selectedContainer !== null && n.id === containerNodeId(selectedContainer)),
+      })) as Node[],
+    [graph.nodes, selectedDevice, selectedContainer],
   )
   const edges = graph.edges as Edge[]
   return (
@@ -91,6 +109,9 @@ export function ClusterCanvas({
             onNodeClick={(_, node) => {
               onSelectLink?.(null)
               if (node.type === "device") onSelect(Number(node.id))
+              if (node.type === "container") {
+                onSelectContainer?.((node.data as { container: { id: string } }).container.id)
+              }
             }}
             onEdgeClick={(_, edge) => {
               const linkId = (edge.data as { linkId?: number } | undefined)?.linkId
@@ -98,6 +119,7 @@ export function ClusterCanvas({
             }}
             onPaneClick={() => {
               onSelect(null)
+              onSelectContainer?.(null)
               onSelectLink?.(null)
             }}
             onlyRenderVisibleElements
