@@ -316,6 +316,36 @@ func TestHelperUpdateKeepsThePreviousProgramBeforeReplacingIt(t *testing.T) {
 	}
 }
 
+// The running service reports 0.3.0, the version of the build, and the release is v0.3.0.
+// Comparing the two as plain text rolled back every update of a healthy program.
+func TestHelperAcceptsTheVersionTheServiceReportsWithoutTheV(t *testing.T) {
+	f, o, env, _ := updateEnv(t)
+	env.HealthVersion = func(context.Context, string) (string, error) { return "0.3.0", nil }
+	if err := Helper(context.Background(), env, o, leaveRequest(t, o, "update")); err != nil {
+		t.Fatalf("a program that answers as 0.3.0 for the release v0.3.0 was rejected: %v", err)
+	}
+	if st := statusOf(t, o); st.State != "done" {
+		t.Errorf("status = %+v, want done", st)
+	}
+	prev := filepath.Join(filepath.Dir(o.BinPath), "netscribe.previous")
+	if last := f.copied[len(f.copied)-1]; last == [2]string{prev, o.BinPath} {
+		t.Errorf("the previous program was put back over a program that works")
+	}
+}
+
+func TestHelperRollbackNamesTheVersionThatAnsweredWhenItIsTheWrongOne(t *testing.T) {
+	_, o, env, _ := updateEnv(t)
+	o.RollbackWait = 300 * time.Millisecond
+	env.HealthVersion = func(context.Context, string) (string, error) { return "0.2.0", nil } // the old one
+	err := Helper(context.Background(), env, o, leaveRequest(t, o, "update"))
+	if err == nil {
+		t.Fatal("the old version answered and the update was kept")
+	}
+	if st := statusOf(t, o); !strings.Contains(st.Message, "0.2.0") {
+		t.Errorf("message = %q, want the version that answered, not only that time ran out", st.Message)
+	}
+}
+
 func TestHelperRollsBackWhenTheNewProgramDoesNotAnswer(t *testing.T) {
 	f, o, env, _ := updateEnv(t)
 	env.HealthVersion = func(context.Context, string) (string, error) { return "", errors.New("connection refused") }
