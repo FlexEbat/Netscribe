@@ -1,5 +1,3 @@
-> **Under development:** Netscribe is still being developed. Settings, commands, and screens may change between releases. Please review the release notes before updating an instance you rely on.
-
 # Netscribe
 
 **English** · [Русский](README.ru.md)
