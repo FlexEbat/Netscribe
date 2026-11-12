@@ -127,7 +127,7 @@ export function ClusterCanvas({
             minZoom={0.05}
           >
             <Background />
-            <MiniMap pannable zoomable />
+            <MiniMap pannable zoomable className="!hidden sm:!block" />
             <Controls showInteractive={false} />
           </ReactFlow>
           <FocusOn cluster={focus} />
