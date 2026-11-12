@@ -131,7 +131,7 @@ function Body({ state }: { state: State }) {
   ]
   return (
     <>
-      <ul className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map((tile) => (
           <li key={tile.label}>
             <Link

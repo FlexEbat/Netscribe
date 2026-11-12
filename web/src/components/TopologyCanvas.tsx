@@ -116,7 +116,7 @@ export function TopologyCanvas({
           minZoom={0.1}
         >
           <Background />
-          <MiniMap pannable zoomable />
+          <MiniMap pannable zoomable className="!hidden sm:!block" />
           <Controls showInteractive={false} />
         </ReactFlow>
       </div>
