@@ -19,6 +19,7 @@ import { CLUSTER_AUTO_ABOVE, clusterKeyOf, defaultBy, type ClusterBy } from "@/l
 import { can } from "@/lib/permissions"
 import { displayName } from "@/lib/topology"
 import { t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 const VIEW_KEY = "netscribe.topology.view"
 
@@ -178,7 +179,8 @@ export function Topology() {
   const toolbar = actions
   if (state.topology.devices.length === 0) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
+        <PageTitle page="topology">{t("nav.topology")}</PageTitle>
         {toolbar}
         <EmptyState title={t("topology.noScansYet")} text={t("topology.noScansText")} />
       </div>
@@ -193,7 +195,8 @@ export function Topology() {
   // A container that is gone from the topology closes its panel.
   const container = state.topology.containers.find((c) => c.id === params.get("container"))
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      <PageTitle page="topology">{t("nav.topology")}</PageTitle>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <ClusterControls
           view={view}

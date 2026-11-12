@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { t } from "@/i18n"
 import { tRich } from "@/i18n/rich"
+import { PageTitle } from "@/components/PageTitle"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; doc: ApiDocument }
 
@@ -59,7 +60,7 @@ export function ApiReference() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">{t("apiReference.apiReference")}</h1>
+      <PageTitle page="reference">{t("apiReference.apiReference")}</PageTitle>
       <p className="text-sm text-muted-foreground">
         {tRich("apiReference.intro", {
           header: (

@@ -44,12 +44,13 @@ test("the topology answers a drag and shows no long task over 500 ms", async ({ 
   const pane = page.locator(".react-flow__pane")
   const box = await pane.boundingBox()
   if (!box) throw new Error("the topology pane has no box")
-  // A corner of the pane: the middle may sit on a node, and a drag on a node moves the node.
-  const x = box.x + 12
-  const y = box.y + box.height - 12
+  // The top right corner of the pane: the middle may sit on a node, a drag on a node moves
+  // the node, and the zoom buttons and the minimap hold the bottom corners.
+  const x = box.x + box.width - 12
+  const y = box.y + 12
   await page.mouse.move(x, y)
   await page.mouse.down()
-  await page.mouse.move(x + 150, y - 90, { steps: 20 })
+  await page.mouse.move(x - 150, y + 90, { steps: 20 })
   await page.mouse.up()
 
   await expect.poll(() => viewport.getAttribute("style")).not.toBe(before)

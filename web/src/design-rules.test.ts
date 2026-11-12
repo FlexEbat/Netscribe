@@ -54,11 +54,11 @@ describe("design rules", () => {
     expect(offenders(source, /\b(italic|font-black|font-extrabold|font-\[9\d\d\])\b/g)).toEqual([])
   })
 
-  it("keeps backgrounds flat: a gradient is allowed only on the text of the heading", () => {
+  it("keeps backgrounds flat: a gradient is allowed only for the plate, the aurora, the active pill and the heading", () => {
     const css = read(join(root, "index.css"))
     const rules = css.split("}")
     const bad = rules.filter(
-      (r) => /gradient\(/.test(r) && !/\.hero-heading|\.dark \.hero-heading/.test(r),
+      (r) => /gradient\(/.test(r) && !/\.hero-heading|\.surface \{|\.aurora|\.pill-active/.test(r),
     )
     expect(bad).toEqual([])
     expect(
@@ -72,7 +72,7 @@ describe("design rules", () => {
   it("keeps dark backgrounds to the approved set", () => {
     const css = read(join(root, "index.css"))
     const dark = css.slice(css.indexOf(".dark {"), css.indexOf("}", css.indexOf(".dark {")))
-    const allowed = new Set(["#000000", "#181818", "#1f1f1f", "#272727", "#313131", "#131209"])
+    const allowed = new Set(["#05070d", "#0b1019", "#101726", "#141c2e", "#1b2640", "#070a12"])
     for (const name of ["background", "card", "popover", "muted", "accent", "input", "sidebar"]) {
       const value = dark.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1]?.toLowerCase()
       expect(value, `--${name}`).toBeDefined()

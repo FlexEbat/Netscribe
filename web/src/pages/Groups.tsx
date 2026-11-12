@@ -35,6 +35,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { can } from "@/lib/permissions"
 import { t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; groups: Group[] }
 type Editing = { kind: "new" } | { kind: "edit"; group: Group } | { kind: "delete"; group: Group }
@@ -70,7 +71,7 @@ export function Groups() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-semibold">{t("groups.groups")}</h1>
+        <PageTitle page="groups">{t("groups.groups")}</PageTitle>
         {canWrite ? (
           <Button size="sm" onClick={() => setEditing({ kind: "new" })}>
             <Plus className="size-4" aria-hidden="true" />

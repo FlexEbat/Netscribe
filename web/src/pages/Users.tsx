@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table"
 import { roleLabels, type Role, type User } from "@/lib/permissions"
 import { formatDateTime, t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 const roles = Object.keys(roleLabels) as Role[]
 
@@ -82,7 +83,7 @@ export function Users() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{t("users.users")}</h1>
+        <PageTitle page="users">{t("users.users")}</PageTitle>
         <Button size="sm" onClick={() => setDialog({ kind: "add" })}>
           {t("users.addUser")}
         </Button>

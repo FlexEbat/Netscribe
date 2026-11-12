@@ -41,6 +41,7 @@ import {
 import { sortByIp } from "@/lib/ip"
 import { can } from "@/lib/permissions"
 import { t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 type Filter = "all" | "online" | "offline"
 type TrustFilter = "all" | "unknown" | "trusted"
@@ -199,7 +200,7 @@ export function Inventory() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{t("inventory.inventory")}</h1>
+        <PageTitle page="inventory">{t("inventory.inventory")}</PageTitle>
         {canWrite ? (
           <div className="flex gap-2">
             <ImportDialog onImported={() => setRefresh((n) => n + 1)} />

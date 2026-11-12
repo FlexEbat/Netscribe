@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { type Key, formatDateTime, t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 type State =
   { status: "loading" } | { status: "failed" } | { status: "ready"; report: HealthReport }
@@ -63,7 +64,7 @@ export function Health() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">{t("health.health")}</h1>
+        <PageTitle page="health">{t("health.health")}</PageTitle>
         <Button
           variant="outline"
           disabled={running || state.status !== "ready"}

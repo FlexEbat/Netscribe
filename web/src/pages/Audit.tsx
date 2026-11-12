@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { formatDateTime, t } from "@/i18n"
+import { PageTitle } from "@/components/PageTitle"
 
 const pageSize = 50
 
@@ -143,7 +144,7 @@ export function Audit() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">{t("audit.auditLog")}</h1>
+      <PageTitle page="audit">{t("audit.auditLog")}</PageTitle>
       <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
