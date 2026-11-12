@@ -53,6 +53,11 @@ discovery:
   tlsCerts: false
 updates:
   check: false
+export:
+  # The runner restricts user namespaces, so Chrome's sandbox fails after up to a minute and the
+  # print of the large network runs past the limit of the server. The fallback is covered by the
+  # Go tests of internal/render.
+  noSandbox: true
 YAML
 chmod 600 "$dir/netscribe.yaml"
 
