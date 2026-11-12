@@ -178,10 +178,15 @@ func (s *session) waitVersion(ctx context.Context, tag string) error {
 	defer tick.Stop()
 	var last error
 	for {
-		last = s.probe(ctx, url, tag)
-		if last == nil {
+		err := s.probe(ctx, url, tag)
+		if err == nil {
 			s.ui.done(tag + " answers")
 			return nil
+		}
+		// A probe cut short by the end of the wait says only that time ran out: keep the
+		// answer of the one before it, which says why the new version was not accepted.
+		if last == nil || ctx.Err() == nil {
+			last = err
 		}
 		select {
 		case <-ctx.Done():
@@ -200,7 +205,9 @@ func (s *session) probe(ctx context.Context, url, tag string) error {
 	if err != nil {
 		return err
 	}
-	if got != tag {
+	// The service reports its version as the build stamps it, 0.13.0, and a release tag is
+	// v0.13.0: they name the same version.
+	if strings.TrimPrefix(strings.TrimSpace(got), "v") != strings.TrimPrefix(tag, "v") {
 		return fmt.Errorf("the panel answers as %q", got)
 	}
 	return nil
