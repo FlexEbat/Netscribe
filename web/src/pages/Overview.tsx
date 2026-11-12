@@ -10,6 +10,16 @@ import { kindClasses, kindLabels } from "@/lib/changes"
 import { cn } from "@/lib/utils"
 import { formatDateTime, t } from "@/i18n"
 import { PageTitle } from "@/components/PageTitle"
+import {
+  Desktop,
+  Question,
+  Sparkle,
+  Warning,
+  WifiHigh,
+  WifiSlash,
+  type Icon,
+} from "@phosphor-icons/react"
+import type { CSSProperties } from "react"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; data: OverviewData }
 
@@ -38,7 +48,7 @@ export function Overview() {
   )
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <PageTitle page="overview">{t("overview.overview")}</PageTitle>
       <Body state={state} />
     </div>
@@ -66,37 +76,84 @@ function Body({ state }: { state: State }) {
   if (lastScan === null && devices.total === 0) {
     return <EmptyState title={t("overview.nothingToShowYet")} text={t("overview.nothingText")} />
   }
-  const tiles: { label: string; value: number; to: string; alert?: boolean }[] = [
-    { label: t("overview.devices"), value: devices.total, to: "/inventory" },
-    { label: t("overview.online"), value: devices.online, to: "/inventory?status=online" },
-    { label: t("overview.offline"), value: devices.offline, to: "/inventory?status=offline" },
+  const tiles: {
+    label: string
+    value: number
+    to: string
+    icon: Icon
+    tone: string
+    alert?: boolean
+  }[] = [
+    {
+      label: t("overview.devices"),
+      value: devices.total,
+      to: "/inventory",
+      icon: Desktop,
+      tone: "#7b93ff",
+    },
+    {
+      label: t("overview.online"),
+      value: devices.online,
+      to: "/inventory?status=online",
+      icon: WifiHigh,
+      tone: "#4ade80",
+    },
+    {
+      label: t("overview.offline"),
+      value: devices.offline,
+      to: "/inventory?status=offline",
+      icon: WifiSlash,
+      tone: "#94a3b8",
+    },
     {
       label: t("overview.unknown"),
       value: devices.unknown,
       to: "/inventory?trust=unknown",
+      icon: Question,
+      tone: "#fbbf24",
       alert: devices.unknown > 0,
     },
-    { label: t("overview.newThisWeek"), value: devices.newThisWeek, to: "/changes" },
-    { label: t("overview.riskyServices"), value: risky, to: "/services", alert: risky > 0 },
+    {
+      label: t("overview.newThisWeek"),
+      value: devices.newThisWeek,
+      to: "/changes",
+      icon: Sparkle,
+      tone: "#38bdf8",
+    },
+    {
+      label: t("overview.riskyServices"),
+      value: risky,
+      to: "/services",
+      icon: Warning,
+      tone: "#fb7185",
+      alert: risky > 0,
+    },
   ]
   return (
     <>
-      <ul className="surface grid grid-cols-2 divide-x divide-y sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
-        {tiles.map((t) => (
-          <li key={t.label} className="group">
+      <ul className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        {tiles.map((tile) => (
+          <li key={tile.label}>
             <Link
-              to={t.to}
-              className="flex h-full flex-col gap-2 p-4 transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              to={tile.to}
+              className="surface surface-lift flex h-full flex-col gap-4 p-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             >
-              <span className="eyebrow text-muted-foreground">{t.label}</span>
+              <span
+                aria-hidden="true"
+                style={{ "--tile": tile.tone } as CSSProperties}
+                className="nav-tile size-10 rounded-xl"
+              >
+                <tile.icon className="size-5" weight="duotone" />
+              </span>
               <span
                 className={cn(
-                  "display text-5xl leading-none font-medium transition-transform group-hover:translate-x-1",
-                  t.alert && "text-warn",
+                  "readout text-4xl leading-none font-semibold",
+                  tile.alert && "text-warn",
                 )}
               >
-                {t.value}
+                {tile.value}
               </span>
+              <span className="text-sm text-muted-foreground">{tile.label}</span>
             </Link>
           </li>
         ))}

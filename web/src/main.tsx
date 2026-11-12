@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { openEvents } from "@/api/events"
 import { SessionProvider, useSession } from "@/api/session"
 import { routes } from "@/App"
+import { AmbientBackground } from "@/components/AmbientBackground"
 import { Toaster } from "@/components/ui/sonner"
 import { can } from "@/lib/permissions"
 import { initTheme } from "@/lib/theme"
@@ -12,7 +13,6 @@ import { t } from "@/i18n"
 import { I18nRoot } from "@/i18n/root"
 import "@fontsource-variable/geist"
 import "@fontsource-variable/geist-mono"
-import "@fontsource-variable/fraunces/opsz.css"
 import "./index.css"
 
 initTheme()
@@ -45,6 +45,7 @@ createRoot(root).render(
   <StrictMode>
     <I18nRoot>
       <SessionProvider>
+        <AmbientBackground />
         <ConfigToasts />
         <RouterProvider router={router} />
         <Toaster />

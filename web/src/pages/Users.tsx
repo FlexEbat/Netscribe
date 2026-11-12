@@ -244,7 +244,7 @@ function AddUserDialog({ onClose, onDone }: { onClose: () => void; onDone: () =>
             <Label htmlFor="new-role">{t("users.role")}</Label>
             <select
               id="new-role"
-              className="h-9 rounded-sm border bg-input px-3 text-sm"
+              className="h-9 rounded-lg border bg-input px-3 text-sm"
               value={role}
               onChange={(e) => setRole(e.target.value as Role)}
             >

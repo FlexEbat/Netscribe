@@ -166,7 +166,7 @@ export function Audit() {
           <Label htmlFor="audit-action">{t("audit.action")}</Label>
           <select
             id="audit-action"
-            className="h-9 rounded-sm border bg-input px-3 text-sm"
+            className="h-9 rounded-lg border bg-input px-3 text-sm"
             value={draft.action}
             onChange={(e) => set("action")(e.target.value)}
           >
@@ -182,7 +182,7 @@ export function Audit() {
           <Label htmlFor="audit-result">{t("audit.result")}</Label>
           <select
             id="audit-result"
-            className="h-9 rounded-sm border bg-input px-3 text-sm"
+            className="h-9 rounded-lg border bg-input px-3 text-sm"
             value={draft.result}
             onChange={(e) => set("result")(e.target.value)}
           >

@@ -586,7 +586,6 @@ export const ru: Record<Key, Entry> = {
   "pageSubtitle.settings": "Сканы, уведомления, вход и экспорт",
   "pageSubtitle.topology": "Устройства и связи между ними",
   "pageSubtitle.users": "Люди, роли и доступ",
-  "pageTitle.sheet": "Лист {n} из {total}",
   "portsDialog.cancel": "Отмена",
   "portsDialog.couldNotSave": "Не удалось сохранить связь. Попробуйте позже.",
   "portsDialog.createLink": "Создать связь",

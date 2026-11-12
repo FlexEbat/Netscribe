@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react"
 import {
   CartesianGrid,
-  Line,
-  LineChart,
+  Area,
+  AreaChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -83,21 +83,45 @@ function DeviceChart({ scans }: { scans: Scan[] }) {
           height="100%"
           initialDimension={{ width: 640, height: 240 }}
         >
-          <LineChart data={points} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-            <YAxis allowDecimals={false} width={32} tick={{ fontSize: 11 }} />
-            <Tooltip />
-            <Line
+          <AreaChart data={points} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
+            <defs>
+              <linearGradient id="devices-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.45} />
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
+              stroke="var(--border)"
+            />
+            <YAxis
+              allowDecimals={false}
+              width={32}
+              tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
+              stroke="var(--border)"
+            />
+            <Tooltip
+              contentStyle={{
+                background: "var(--popover)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+              }}
+            />
+            <Area
               type="monotone"
               dataKey="devices"
               name="Devices"
-              stroke="var(--color-primary, #2563eb)"
-              strokeWidth={2}
+              stroke="var(--brand)"
+              strokeWidth={2.5}
+              fill="url(#devices-fill)"
               dot={points.length < 40}
               isAnimationActive={false}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </figure>

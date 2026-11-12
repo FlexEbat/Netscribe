@@ -232,7 +232,7 @@ export function Inventory() {
         />
         <select
           aria-label={t("inventory.filterByStatus")}
-          className="h-9 rounded-sm border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           value={filter}
           onChange={(e) => setFilter(e.target.value as Filter)}
         >
@@ -242,7 +242,7 @@ export function Inventory() {
         </select>
         <select
           aria-label={t("inventory.filterByTrust")}
-          className="h-9 rounded-sm border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           value={trust}
           onChange={(e) => setTrust(e.target.value as TrustFilter)}
         >
@@ -252,7 +252,7 @@ export function Inventory() {
         </select>
         <select
           aria-label={t("inventory.filterByGroup")}
-          className="h-9 rounded-sm border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="h-9 rounded-lg border bg-input px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           value={groupFilter}
           onChange={(e) => setGroupFilter(e.target.value)}
         >

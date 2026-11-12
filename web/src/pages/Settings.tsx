@@ -95,7 +95,7 @@ function SettingRow({
             id={id}
             value={String(value)}
             onChange={(e) => onChange(e.target.value)}
-            className="h-9 rounded-sm border bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="h-9 rounded-xl border bg-background px-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             {(setting.choices ?? []).map((c) => (
               <option key={c} value={c}>

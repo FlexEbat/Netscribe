@@ -39,7 +39,7 @@ export function ScanBar({
             aria-valuemin={0}
             aria-valuemax={progress.total}
             aria-valuenow={progress.done}
-            className="h-1.5 w-full max-w-xs overflow-hidden rounded-sm bg-muted"
+            className="h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-muted"
           >
             <div
               className="h-full w-full origin-left bg-primary transition-transform"

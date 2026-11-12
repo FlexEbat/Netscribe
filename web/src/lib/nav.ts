@@ -1,3 +1,18 @@
+import {
+  BracketsCurly,
+  ClockCounterClockwise,
+  Cube,
+  Gauge,
+  Heartbeat,
+  ListBullets,
+  PlugsConnected,
+  Scroll,
+  ShareNetwork,
+  SlidersHorizontal,
+  Stack,
+  Users as UsersIcon,
+  type Icon,
+} from "@phosphor-icons/react"
 import type { Key } from "@/i18n"
 import type { Permission } from "@/lib/permissions"
 
@@ -21,17 +36,22 @@ export interface NavItem {
   label: Key
   /** One line under the page title. */
   subtitle: Key
+  icon: Icon
+  /** The hue of the icon tile. It is the only place a page gets a color of its own. */
+  tint: string
   permission: Permission
   group: "workspace" | "admin"
 }
 
-/** The sheets of the panel, in order: the index, the page title and the breadcrumb read from here. */
+/** The pages of the panel: the sidebar, the page title and the route label read from here. */
 export const navItems: NavItem[] = [
   {
     id: "topology",
     to: "/",
     label: "nav.topology",
     subtitle: "pageSubtitle.topology",
+    icon: ShareNetwork,
+    tint: "#7b93ff",
     permission: "topology:read",
     group: "workspace",
   },
@@ -40,6 +60,8 @@ export const navItems: NavItem[] = [
     to: "/overview",
     label: "nav.overview",
     subtitle: "pageSubtitle.overview",
+    icon: Gauge,
+    tint: "#38bdf8",
     permission: "topology:read",
     group: "workspace",
   },
@@ -48,6 +70,8 @@ export const navItems: NavItem[] = [
     to: "/groups",
     label: "nav.groups",
     subtitle: "pageSubtitle.groups",
+    icon: Stack,
+    tint: "#a78bfa",
     permission: "topology:read",
     group: "workspace",
   },
@@ -56,6 +80,8 @@ export const navItems: NavItem[] = [
     to: "/inventory",
     label: "nav.inventory",
     subtitle: "pageSubtitle.inventory",
+    icon: ListBullets,
+    tint: "#2dd4bf",
     permission: "topology:read",
     group: "workspace",
   },
@@ -64,6 +90,8 @@ export const navItems: NavItem[] = [
     to: "/services",
     label: "nav.services",
     subtitle: "pageSubtitle.services",
+    icon: PlugsConnected,
+    tint: "#fbbf24",
     permission: "topology:read",
     group: "workspace",
   },
@@ -72,6 +100,8 @@ export const navItems: NavItem[] = [
     to: "/containers",
     label: "nav.containers",
     subtitle: "pageSubtitle.containers",
+    icon: Cube,
+    tint: "#34d399",
     permission: "topology:read",
     group: "workspace",
   },
@@ -80,6 +110,8 @@ export const navItems: NavItem[] = [
     to: "/changes",
     label: "nav.changes",
     subtitle: "pageSubtitle.changes",
+    icon: ClockCounterClockwise,
+    tint: "#fb923c",
     permission: "topology:read",
     group: "workspace",
   },
@@ -88,6 +120,8 @@ export const navItems: NavItem[] = [
     to: "/reference",
     label: "nav.apiReference",
     subtitle: "pageSubtitle.reference",
+    icon: BracketsCurly,
+    tint: "#94a3b8",
     permission: "topology:read",
     group: "workspace",
   },
@@ -96,6 +130,8 @@ export const navItems: NavItem[] = [
     to: "/users",
     label: "nav.users",
     subtitle: "pageSubtitle.users",
+    icon: UsersIcon,
+    tint: "#f472b6",
     permission: "users:manage",
     group: "admin",
   },
@@ -104,6 +140,8 @@ export const navItems: NavItem[] = [
     to: "/audit",
     label: "nav.auditLog",
     subtitle: "pageSubtitle.audit",
+    icon: Scroll,
+    tint: "#facc15",
     permission: "audit:read",
     group: "admin",
   },
@@ -112,6 +150,8 @@ export const navItems: NavItem[] = [
     to: "/health",
     label: "nav.health",
     subtitle: "pageSubtitle.health",
+    icon: Heartbeat,
+    tint: "#4ade80",
     permission: "system:manage",
     group: "admin",
   },
@@ -120,6 +160,8 @@ export const navItems: NavItem[] = [
     to: "/settings",
     label: "nav.settings",
     subtitle: "pageSubtitle.settings",
+    icon: SlidersHorizontal,
+    tint: "#cbd5e1",
     permission: "system:manage",
     group: "admin",
   },

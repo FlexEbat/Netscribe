@@ -29,11 +29,11 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="h-auto w-full justify-between gap-3 border border-foreground/40 bg-card p-3 text-left hover:bg-accent"
+          className="h-auto w-full justify-between gap-3 rounded-3xl border bg-card p-3 hover:bg-accent"
         >
           <span
             aria-hidden="true"
-            className="display grid size-10 shrink-0 place-items-center bg-primary text-xl font-semibold text-primary-foreground uppercase"
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-primary text-base font-semibold text-primary-foreground uppercase"
           >
             {user.username.slice(0, 1)}
           </span>

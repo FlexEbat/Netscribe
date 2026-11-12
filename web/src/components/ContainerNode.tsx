@@ -9,7 +9,7 @@ function ContainerNodeView({ data, selected }: NodeProps) {
   const { container } = data as ContainerNodeData
   return (
     <div
-      className={`surface flex w-40 flex-col gap-1 px-3 py-2 text-card-foreground ${
+      className={`surface flex w-40 flex-col gap-1 rounded-xl px-3 py-2 text-card-foreground ${
         selected ? "ring-2 ring-ring" : ""
       }`}
     >

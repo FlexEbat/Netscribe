@@ -12,9 +12,10 @@ import {
   WifiHigh,
   type Icon,
 } from "@phosphor-icons/react"
-import { memo } from "react"
+import { memo, type CSSProperties } from "react"
 import { Handle, Position, useStore, type NodeProps } from "@xyflow/react"
 import type { DeviceKind } from "@/api/client"
+import { StatusBadge } from "@/components/StatusBadge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { displayName, kindLabels, type DeviceNodeData } from "@/lib/topology"
 import { t } from "@/i18n"
@@ -48,8 +49,8 @@ function DeviceNodeView({ data, selected }: NodeProps) {
     return (
       <div
         data-lod="far"
-        className={`flex h-[92px] w-48 items-center justify-center rounded-sm ${
-          device.online ? "border-2 border-primary bg-card" : "border border-dashed bg-muted"
+        className={`flex h-[92px] w-52 items-center justify-center rounded-xl ${
+          device.online ? "bg-primary/25" : "bg-muted"
         } ${selected ? "ring-4 ring-ring" : ""}`}
       >
         <Handle type="target" position={Position.Top} className="!size-2.5" />
@@ -62,37 +63,29 @@ function DeviceNodeView({ data, selected }: NodeProps) {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`surface surface-lift flex h-[92px] w-48 flex-col justify-between p-3 text-card-foreground ${
+          className={`surface surface-lift flex w-52 items-center gap-3 rounded-2xl p-3 text-card-foreground ${
             selected ? "ring-2 ring-ring" : ""
           } ${device.online ? "" : "opacity-60"}`}
         >
           <Handle type="target" position={Position.Top} className="!size-2.5" />
           <Handle type="source" position={Position.Bottom} className="!size-2.5" />
-          <div className="eyebrow flex items-center justify-between text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Icon className="size-4" weight="bold" aria-label={kindLabels[device.kind]} />
-              {kindLabels[device.kind]}
-            </span>
-            <span className="readout">{String(device.id).padStart(3, "0")}</span>
-          </div>
-          <span className="display truncate text-lg leading-none font-medium">
-            {displayName(device)}
+          <span
+            aria-hidden="true"
+            style={
+              {
+                "--tile": device.online ? "var(--brand)" : "var(--muted-foreground)",
+              } as CSSProperties
+            }
+            className="nav-tile size-10 rounded-xl"
+          >
+            <Icon className="size-5" weight="duotone" aria-label={kindLabels[device.kind]} />
           </span>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="truncate text-sm font-semibold">{displayName(device)}</span>
             <span className="readout truncate text-xs text-muted-foreground">
               {device.ip || device.ip6 || t("deviceNode.noAddress")}
             </span>
-            <span
-              className={`flex items-center gap-2 text-xs ${device.online ? "text-ok" : "text-muted-foreground"}`}
-            >
-              <span
-                aria-hidden="true"
-                className={`size-2 ${device.online ? "bg-ok" : "bg-muted-foreground"}`}
-              />
-              <span className="sr-only">
-                {t(device.online ? "statusBadge.online" : "statusBadge.offline")}
-              </span>
-            </span>
+            <StatusBadge online={device.online} />
           </div>
         </div>
       </TooltipTrigger>

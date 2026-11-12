@@ -166,7 +166,7 @@ export function DevicePanel({
                 </Button>
                 <select
                   aria-label={t("devicePanel.groupOfTheDevice")}
-                  className="h-8 rounded-sm border bg-input px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  className="h-8 rounded-lg border bg-input px-2 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                   value={state.device.groupId === null ? "" : String(state.device.groupId)}
                   onChange={(e) => {
                     const d = state.device

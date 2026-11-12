@@ -547,7 +547,6 @@ export const en = {
   "pageSubtitle.settings": "Scans, notifications, sign in and export",
   "pageSubtitle.topology": "Devices and the links between them",
   "pageSubtitle.users": "People, roles and access",
-  "pageTitle.sheet": "Sheet {n} of {total}",
   "portsDialog.cancel": "Cancel",
   "portsDialog.couldNotSave": "The link could not be saved. Try again later.",
   "portsDialog.createLink": "Create link",

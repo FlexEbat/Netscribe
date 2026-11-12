@@ -12,7 +12,7 @@ function ClusterCardView({ data }: NodeProps) {
   const { cluster, onToggle } = data as ClusterNodeData
   const total = cluster.devices.length
   return (
-    <div className="surface surface-lift h-full w-full rounded-sm text-card-foreground">
+    <div className="surface surface-lift h-full w-full rounded-2xl text-card-foreground">
       <Handle type="target" position={Position.Top} className="!size-2.5" />
       <Handle type="source" position={Position.Bottom} className="!size-2.5" />
       <button
@@ -20,7 +20,7 @@ function ClusterCardView({ data }: NodeProps) {
         aria-expanded={false}
         aria-label={t("cluster.expand", { name: cluster.label, n: total })}
         onClick={() => onToggle(cluster.key)}
-        className="flex h-full w-full flex-col justify-between gap-2 rounded-sm p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-full w-full flex-col justify-between gap-2 rounded-2xl p-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="flex items-center gap-2">
           <CaretRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -53,7 +53,7 @@ function ClusterCardView({ data }: NodeProps) {
 function ClusterBoxView({ data }: NodeProps) {
   const { cluster, onToggle } = data as ClusterNodeData
   return (
-    <div className="h-full w-full rounded-sm border border-dashed border-primary/40 bg-primary/5">
+    <div className="h-full w-full rounded-2xl border border-dashed border-primary/40 bg-primary/5">
       <Handle type="target" position={Position.Top} className="!size-2.5 !opacity-0" />
       <Handle type="source" position={Position.Bottom} className="!size-2.5 !opacity-0" />
       <button
