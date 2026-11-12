@@ -140,7 +140,7 @@ function Results({ state, query }: { state: State; query: string }) {
             <TableCell className="font-mono text-xs">{c.image}</TableCell>
             <TableCell>
               <span
-                className={`rounded border px-2 py-0.5 text-xs font-medium ${stateClasses(c.state)}`}
+                className={`rounded-full border px-2 py-0.5 text-xs font-medium ${stateClasses(c.state)}`}
               >
                 {c.state}
               </span>

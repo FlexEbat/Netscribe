@@ -199,7 +199,7 @@ function Body({ state }: { state: State }) {
               {changes.map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center gap-2">
                   <span
-                    className={cn("rounded-md border px-2 py-0.5 text-xs", kindClasses(c.kind))}
+                    className={cn("rounded-full border px-2 py-0.5 text-xs", kindClasses(c.kind))}
                   >
                     {kindLabels[c.kind] ?? c.kind}
                   </span>

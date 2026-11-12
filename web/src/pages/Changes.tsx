@@ -73,7 +73,7 @@ function DeviceChart({ scans }: { scans: Scan[] }) {
   }
   const last = points[points.length - 1]
   return (
-    <figure className="flex flex-col gap-2" aria-label={t("changes.devicesPerScan")}>
+    <figure className="surface flex flex-col gap-2 p-4" aria-label={t("changes.devicesPerScan")}>
       <figcaption className="text-sm text-muted-foreground">
         {t("changes.chartCaption", { devices: last?.devices ?? 0, scan: last?.scanId ?? 0 })}
       </figcaption>
@@ -93,6 +93,7 @@ function DeviceChart({ scans }: { scans: Scan[] }) {
             <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
             <XAxis
               dataKey="label"
+              minTickGap={48}
               tick={{ fontSize: 11, fontFamily: "var(--font-mono)" }}
               stroke="var(--border)"
             />
@@ -133,14 +134,17 @@ function Feed({ changes }: { changes: Change[] }) {
     return <EmptyState title={t("changes.noChangesYet")} text={t("changes.noChangesText")} />
   }
   return (
-    <ul aria-label={t("changes.changes")} className="flex flex-col divide-y rounded-md border">
+    <ul
+      aria-label={t("changes.changes")}
+      className="surface flex flex-col divide-y overflow-hidden"
+    >
       {changes.map((c) => (
-        <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
-          <time dateTime={c.at} className="w-44 shrink-0 text-xs text-muted-foreground">
+        <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm">
+          <time dateTime={c.at} className="readout w-44 shrink-0 text-xs text-muted-foreground">
             {formatDateTime(c.at)}
           </time>
           <span
-            className={`w-36 shrink-0 rounded border px-2 py-0.5 text-center text-xs font-medium ${kindClasses(c.kind)}`}
+            className={`w-36 shrink-0 rounded-full border px-2 py-0.5 text-center text-xs font-medium ${kindClasses(c.kind)}`}
           >
             {kindLabels[c.kind] ?? c.kind}
           </span>

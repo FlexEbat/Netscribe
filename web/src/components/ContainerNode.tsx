@@ -22,7 +22,7 @@ function ContainerNodeView({ data, selected }: NodeProps) {
         {container.image}
       </span>
       <span
-        className={`w-fit rounded border px-2 text-xs font-medium ${stateClasses(container.state)}`}
+        className={`w-fit rounded-full border px-2 text-xs font-medium ${stateClasses(container.state)}`}
       >
         {container.state}
       </span>
