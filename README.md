@@ -1,4 +1,4 @@
-> **Under development:** dpistack is still being developed. Settings, commands, and screens may change between releases. Please review the release notes before updating an instance you rely on.
+> **Under development:** netscribe is still being developed. Settings, commands, and screens may change between releases. Please review the release notes before updating an instance you rely on.
 
 # Netscribe
 
