@@ -1,8 +1,9 @@
 # tech.md: network documentation generator (Netscribe)
 
-**Version: v0 (draft)** (2026-10-23)
+**Version: v0 (draft)** (2026-11-25)
 
 Changelog:
+- v0 (amendment 74) - the review of the program and the Russian interface, decided by the owner. (1) Slices 46 to 60 are added to section 16: steadier alerts (offline grace, flapping, quiet hours, maintenance windows, more events and channels), the self-signed certificate (command, wizard and panel card), a wider table of risky services, device details and merging, scan control and schedules, inventory export and comparing scans, uptime and trends, SNMP v3, CDP, forgetting old devices, encrypted secrets and backups, release image, SBOM and signatures, access by group, LDAP and remote scan agents. They take the open questions 6, 9, 10, 12, 13 and 16 of section 18, and name the ones that stay open. Slices 44 and 45 had no section; their text is in amendments 62 and 63. The migrations of the new slices are numbered from 0019. (2) The Russian interface is complete: the dictionaries already held every key, but the panel printed English sentences that the server writes. `web/src/i18n/server.ts` and `server.ru.ts` now give a Russian text for them by the exact English sentence or by a pattern (change feed, classifier reasons, health checks with the titles by check id, the settings catalog, the notes of the risk rules, the messages about a CSV file, the validation errors, the API reference with its group names); a sentence that is not known stays as the server wrote it. `apiErrorText` handles the five errors that carry a number or a name, the audit page shows the action codes and results in words (45 actions, with the code in the tooltip, and the filter now lists every action the server writes), `Saving...` of the device form was a literal and is a key, and `audit.ok`, `audit.denied`, `audit.error`, `health.ok` and the Wake on LAN button are translated. `server.test.ts` reads `internal/setup/settings.go`, `internal/model/risk.go`, `internal/health/health.go` and `internal/api/routedocs.go` and fails when a fixed sentence has no Russian text. The server, the exports, the notifications, the CLI and the logs stay English as slice 37 says. (3) Section 18 is brought up to date: the questions that were answered are closed.
 - v0 (amendment 73) - the under development notice at the top of both README files (amendment 72) is removed: the owner considers the planned development complete. Settings, commands and screens can still change between releases, and the release notes say how.
 - v0 (amendment 72) - the phone layout of the redesign (amendment 69) is tightened: the overview tiles are two in a row below 640 px, and the minimap of the topology and of the clusters is hidden below 640 px, where it covered half of the canvas. Both README files open with a block quote that says the project is under development, that settings, commands and screens may change between releases and that the release notes should be read before an instance that is relied on is updated.
 - v0 (amendment 71) - the update of the panel no longer rolls back a healthy program. The service reports its version on `/healthz` as the build stamps it (`0.13.0`) and the helper compared it as plain text with the release tag (`v0.13.0`), so every update through the panel failed its check and was put back after 60 s; the tests hid it because their fake answered with the tag. The helper now compares the two without the `v`, a probe cut short by the end of the wait no longer replaces the reason of the one before it in the message of the rollback, and the update dialog says that the program is updated only when the helper has finished (`running` and `waiting` keep it waiting), not when the new version first answers. A program older than this fix still rolls back by its own helper: it is updated once with `sudo netscribe update` and the panel works from then on.
@@ -1365,7 +1366,7 @@ Do not write code with an invented type. Do not extend or weaken on your own the
 
 ## 16. Stages and slices
 
-Status: slices 0-30 are merged into `main`. Slices 31-43 are planned (amendment 41).
+Status: slices 0-45 are built (slices 31-43 by amendments 41 to 61, slice 44 by amendment 62 and slice 45 by amendment 63; their text is in those amendments). Slices 46-60 are planned (amendment 74).
 
 The order is strict, from top to bottom. One slice per session pass. A slice is closed when the Definition of Done from section 13 is met.
 
@@ -2206,6 +2207,7 @@ Acceptance criteria.
 4. The language survives a reload, follows `navigator.language` when unset, and sets `<html lang>`.
 5. A known API error shows in Russian and an unknown one shows its English text.
 6. At 390 pixels no button or heading overflows in Russian (checked in the e2e run of slice 42).
+7. The sentences the server writes in English and the panel shows (the notes of the risk rules, the health checks, the settings catalog, the change feed, the reasons of the classifier, the messages about a file of devices and the API reference) have a Russian text in `web/src/i18n/server.ru.ts` or a pattern in `web/src/i18n/server.ts`, and `server.test.ts` reads the Go sources and fails when a fixed sentence of them has no Russian text (amendment 74). The audit actions and results show in words, and the code stays in the tooltip.
 
 ### Slice 38 - device actions
 
@@ -2326,6 +2328,312 @@ Acceptance criteria.
 5. The topology of 500 nodes answers a drag in the e2e run and shows no long task over 500 ms.
 6. A bulk edit of 201 devices still answers 400 with the existing text.
 
+### Slice 46 - steadier alerts
+
+The goal: one lost packet does not page anybody, and a message says what a person needs to act on.
+
+Files: `internal/store/migrations/0019_missed_scans.sql`, `internal/store/apply.go`, `internal/store/queries/`, `internal/notify/` (`quiet.go`, `flap.go`, `ntfy.go`, `gotify.go`, `format.go`), `internal/config/` (`scan.offlineAfter`, `notify.quietHours`, `notify.maintenance`, `notify.flapCount`), `internal/model/` (event names), `web/src/pages/Settings.tsx`, `web/src/components/NotificationsCard.tsx`, `docs/`.
+
+- **Offline grace.** `scan.offlineAfter` (a number of scans, 1 to 20, default 3). A new column `devices.missed_scans INTEGER NOT NULL DEFAULT 0`: a scan that sees the device sets it to 0, a scan that does not see it adds 1, and the device turns offline (and `device_offline` is written to the change feed and to the notification summary) only when the column reaches `scan.offlineAfter`. A device added by hand never turns offline by itself. A failed scan counts for nobody: when a scan ends in `failed` or `cancelled` no `missed_scans` changes. The migration changes no data. Setting the key to 1 restores the old behaviour.
+- **More events.** `notify.events` accepts, besides the existing ones, `device_online`, `tls_expiring` (the change kind that already exists), `address_changed` (a known device whose `ip`, `ip6` or MAC changed, built from the `device_changed` change), `link_down` (the `link_removed` change) and `device_flapping`. An unknown name is refused by the config check.
+- **Flapping.** A device that goes offline and online `notify.flapCount` times (default 3, 2 to 20) within one hour sends one message `device_flapping` and then no `device_offline` or `device_online` message until it has been steady for one hour. The change feed still records every change.
+- **Quiet hours.** `notify.quietHours` is a local time range `HH:MM-HH:MM` that may cross midnight (empty by default, which means always on). Messages made inside it are kept in memory and sent as one summary of at most 200 lines when the range ends; a restart inside the range drops them, and the change feed still holds them. The summary says how many lines were cut when there are more than 200.
+- **Maintenance.** `notify.maintenance` is a list of `{from, to, group}` where `from` and `to` are local dates and times (`2026-12-01T22:00`), and `group` is a group name or empty for the whole network. Changes of the devices of that group inside the window are written to the feed as always but make no message. A window that has ended is ignored, and a config with a window of more than 31 days or with `to` before `from` is refused.
+- **Channels.** New types `ntfy` (`url`, `topic`, optional `token`, a secret) and `gotify` (`url`, `token`, a secret). The `webhook` type gets `format`: `json` (the present body, default), `slack`, `discord` or `teams`, each sending one text field in the shape that service expects. All of them go through the same URL checks, timeouts and size limits as the existing webhook (section 9) and the same secret handling.
+- **Panel.** The notifications card lists the new events, the Settings page edits `scan.offlineAfter` and `notify.flapCount` (applied at once) and shows quiet hours and maintenance read only with the text "edit these in the config file".
+
+Acceptance criteria.
+1. A device missed by one scan stays online and sends nothing; missed by `scan.offlineAfter` scans in a row it turns offline once, and a failed scan between them changes no counter.
+2. With `scan.offlineAfter: 1` the behaviour of the earlier releases returns (test over the old cases).
+3. Three offline and online changes in an hour give one `device_flapping` message and then silence until an hour of steadiness.
+4. Messages made inside quiet hours arrive as one summary after it; a summary of 300 changes has 200 lines and says 100 were cut.
+5. A change of a device in a group under maintenance makes no message and still appears in the feed.
+6. `ntfy`, `gotify` and the three webhook formats send the documented body (test against an in-process server), and a URL outside the allowed schemes is refused.
+7. No secret of a channel appears in a log, an API answer or an error text.
+
+### Slice 47 - self-signed certificate
+
+The goal: an owner who wants https without a reverse proxy gets a working certificate in one step, from the command line, from the setup wizard or from the panel.
+
+Files: `internal/certgen/` (`certgen.go`, `certgen_test.go`), `cmd/netscribe/cert.go` (the command `netscribe cert`), `internal/setup/` (a wizard question, a settings entry), `internal/api/tls.go`, `internal/api/router.go`, `internal/api/routedocs.go`, `cmd/netscribe/main.go` (certificate reload), `internal/health/health.go`, `web/src/components/TlsCard.tsx`, `web/src/pages/Settings.tsx`, `web/src/i18n/`, `docs/installation.md`, `docs/installation.ru.md`.
+
+- **Package `certgen`.** `Generate(Options) (certPEM, keyPEM []byte, err error)` with `Options{Names []string, Days int, Now time.Time}`. The key is ECDSA P-256 from `crypto/rand`; the serial is 128 random bits; `NotBefore` is five minutes before `Now`; `NotAfter` is `Now` plus `Days` (default 365, at most 825, more is refused); the signature is SHA-256. The certificate is a leaf, `BasicConstraints` `CA:false`, key usage `DigitalSignature`, extended key usage `ServerAuth`. It is signed by its own key: no certificate authority is made and no root is installed anywhere.
+- **Names.** At most 20 names. A name is a DNS name (letters, digits, hyphens, dots, at most 253 characters, an optional leading `*.`) or an IP address. The first name is the subject common name. With no names given the defaults are the host name, `localhost`, `127.0.0.1`, `::1` and the addresses of the interfaces the panel listens on (all of them when it listens on `0.0.0.0`). Duplicates are removed, and a name that is neither a DNS name nor an IP is refused with `name is not a host name or an address`.
+- **Command.** `netscribe cert generate [--name NAME]... [--days N] [--dir DIR] [--force] [--set]` writes `tls.crt` (0644) and `tls.key` (0600) into `DIR` (default `/etc/netscribe/tls`, created with 0750). It refuses to overwrite either file without `--force` and, with `--force`, first renames the old files to `tls.crt.previous` and `tls.key.previous`. It writes through a temporary file and a rename, checks the modes after writing and refuses a directory that other users can write to. It prints the names, the dates, the SHA-256 fingerprint and the two config lines; with `--set` it also writes `tls.certFile` and `tls.keyFile` into the config by the same writer as `netscribe config set`. `netscribe cert show` prints the subject, the names, the dates and the fingerprint of the configured certificate, and says whether it is self-signed. `netscribe cert renew` makes a new one for the same names and the same number of days, and a running service picks it up without a restart.
+- **Reload.** The server gives `tls.Config.GetCertificate` a function that reads the two files again when their modification time changes (at most one check per 30 seconds, and a failed read keeps the certificate in use). Turning https on for the first time still needs a restart, because the listener changes from http to https; a renewal does not.
+- **Wizard.** The setup wizard of slice 22 asks "Serve https with a self-signed certificate?" when no reverse proxy is chosen (default no). The answer runs the same code as the command and writes the config.
+- **Routes.** `GET /api/tls` (`system:manage`, also for tokens that may read) returns `{enabled, selfSigned, subject, names, notBefore, notAfter, fingerprint}` and never a key or a path. `POST /api/tls/self-signed` (`system:manage`, not for tokens) takes `{names, days, replace}` and the password of the caller in `X-Confirm-Password` as the backup route does; it makes the files as above in the `tls` directory next to the config, sets the two config keys, and answers `{subject, names, notAfter, fingerprint, needRestart}`. When a certificate is configured already it answers 409 unless `replace` is true. The private key never leaves the host: no route returns it, and it is not part of an export, a log or an audit detail. Audit: `tls_generate`, with the names and the fingerprint.
+- **Panel.** The Settings page gets a TLS card: the state (off, or the subject, names, dates and fingerprint and the words "self-signed" or "from a file"), the field for names (filled with the host name and the address the page was opened on) and for days, a Generate button that asks for the password, and, when the answer says `needRestart`, a Restart now button that uses the helper of slice 24 (without a helper, the card shows `sudo systemctl restart netscribe`). The card also tells that a browser will warn about a self-signed certificate until the person trusts it, and shows the fingerprint to compare.
+- **Health.** The existing check `tls.cert` stays; its OK text adds "self-signed" when the certificate is.
+- **Security.** Nothing of section 9 is weakened: the cookies get the `Secure` flag and the headers (HSTS among them) follow the same rule as for any configured certificate, TLS 1.2 is still the minimum, and the key file is never written with a mode wider than 0600.
+
+Acceptance criteria.
+1. `Generate` makes a certificate that `crypto/x509` verifies against itself for each given name and each IP, with the right dates, `CA:false` and `ServerAuth` (table test), and refuses 826 days, 21 names and `bad_name!`.
+2. `netscribe cert generate` writes the files with the modes 0644 and 0600, refuses to overwrite them without `--force`, keeps `.previous` copies with it, and refuses a world-writable directory.
+3. A running service serves the new certificate after `netscribe cert renew` with no restart (test with a listener and two handshakes).
+4. `POST /api/tls/self-signed` needs `system:manage` and a session, answers 403 to a token, 400 to a wrong password, 409 when a certificate is set and `replace` is false, and writes the config keys on success; the answer holds no key material (test over the whole body).
+5. The private key does not appear in the audit log, the logs or any API answer (a test greps them for the PEM header).
+6. The TLS card shows the fingerprint, asks for the password, and shows Restart now only when `needRestart` is true.
+7. The wizard question writes working files and config, and a test never touches `/etc`.
+
+### Slice 48 - a wider table of risky services
+
+The goal: the list of risky services covers what a small network really runs, and each note says why it matters.
+
+Files: `internal/model/risk.go`, `internal/model/risk_test.go`, `internal/api/` (the `risk` field), `internal/notify/`, `web/src/components/RiskBadge.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/i18n/`, `docs/`.
+
+- **Rule.** `Risk` gains `code` (a stable lower case id such as `telnet`) and `why` (one sentence, at most 120 characters, saying what an attacker gains). The table stays fixed in code on purpose (the reason in the comment of `risk.go` stays). `RateService` takes the service row and returns the most severe matching risk, at most one per service.
+- **New port rules.** High: Docker API without TLS (tcp 2375), Redis (tcp 6379), MongoDB (tcp 27017), Elasticsearch (tcp 9200), Memcached (tcp and udp 11211). Medium: MySQL (3306), PostgreSQL (5432), Microsoft SQL Server (1433), CouchDB (5984), NFS (2049), rpcbind (111), rsync (873), MQTT without TLS (1883), and the Windows RPC endpoint mapper (135). The seven rules of before keep their ports, severities and `message` text.
+- **Rules from what the scan already read.** Medium: the certificate of a TLS service is expired (`tls_not_after` is in the past); the SSH banner starts with `SSH-1.` (protocol 1). No new data is collected for these.
+- **No guessing of credentials.** Netscribe never tries a user name or a password on a device, in this slice or any other (section 1 stays: read only). A check of default credentials is therefore out of scope, and the docs say so.
+- **API.** `risk` is `{severity, message, code, why}`. The panel shows the Russian text from the dictionary under the key `risk.<code>` and `riskWhy.<code>`, so the server sentence is only the fallback.
+- **Metrics and notices.** The names of the Prometheus metrics do not change; the count `risky_services` counts the new rules too. A `risky_service` message names the code.
+
+Acceptance criteria.
+1. A table test over every rule: the code is unique, the severity is `high` or `medium`, the message and the why are at most 120 characters, and both dictionaries have `risk.<code>` and `riskWhy.<code>`.
+2. Each new rule has a test that hits and one that misses (the wrong protocol, the wrong port, a certificate that is still valid).
+3. The seven old rules answer exactly as before.
+4. A service with two matching rules shows the more severe one only.
+5. No code path writes to a device to rate it.
+
+### Slice 49 - device details and merging
+
+The goal: the inventory holds who owns a device and where it is, and two records of one machine can become one.
+
+Files: `internal/store/migrations/0020_device_details.sql`, `internal/store/queries/`, `internal/store/devices.go`, `internal/store/merge.go`, `internal/model/`, `internal/api/devices.go`, `internal/api/merge.go`, `internal/render/` (the fields in the Markdown, HTML and draw.io exports), `web/src/components/DeviceForm.tsx`, `web/src/components/DevicePanel.tsx`, `web/src/pages/Inventory.tsx`, `web/src/components/MergeDialog.tsx`.
+
+- **Columns.** `devices.owner` (at most 100 characters), `devices.location` (at most 100), `devices.serial` (at most 64) and `devices.warranty_until` (a date `YYYY-MM-DD` or empty), all `TEXT NOT NULL DEFAULT ''`, cleaned like the other text a person types (control characters removed, trimmed). A scan never writes them.
+- **Tags.** A table `device_tags(device_id, tag, PRIMARY KEY (device_id, tag))`, at most 12 tags per device, a tag is 1 to 30 characters of `a-z`, `0-9`, space, `_` and `-`, saved in lower case. The inventory filters by tag (`tag=` in the query string, saved filters of slice 30 keep it) and the bulk edit of slice 29 gets `addTags` and `removeTags`.
+- **Fields of your own.** A table `device_fields(device_id, name, value, PRIMARY KEY (device_id, name))`, at most 10 per device, a name of at most 30 characters and a value of at most 200. They are shown in the panel in the order they were made.
+- **Search and import.** `q` also looks in owner, location, serial, tags and the values of the fields. The CSV import accepts the columns `owner`, `location`, `serial`, `warranty` and `tags` (separated by `;`); the check of the import (slice 29) judges them like the form does. The exports print them.
+- **Merge.** `POST /api/devices/{id}/merge` with `{intoId}` (`devices:write`; the device `id` is the one that disappears). In one transaction: the services, interfaces, links, containers, history, tags and fields move to the target (a duplicate of a service on the same port keeps the target's row), empty fields of the target are filled from the source, the group is taken only when the target has none, `first_seen` becomes the older of the two, and every MAC and address of the source is written to a new table `device_aliases(value, device_id)`. From then on the lookup of `ApplyResult` that finds a device by MAC or address also consults `device_aliases`, so the next scan updates the target and does not create the source again. Merging a device into itself, into a missing device or into a container host row is refused. There is no undo; the dialog lists what moves before the person confirms. Audit: `device_merge` with both ids. The `updated_at` version check of slice 5 applies to both devices.
+
+Acceptance criteria.
+1. The new fields are saved, shown, searched, exported and imported, and a value over its limit is refused with the existing error style.
+2. A scan never changes owner, location, serial, warranty, tags or fields.
+3. After a merge the source row is gone, its services and links belong to the target, and a scan that sees the source's MAC updates the target (test over `ApplyResult` twice).
+4. A merge that fails half way leaves both devices as they were.
+5. Merging a device into itself answers 400, into a missing one 404, with a stale version 409.
+6. Tags and fields do not change the count of database queries per request with the number of devices (the rule of slice 43).
+
+### Slice 50 - scan control and schedules
+
+The goal: a person can stop a scan, run a light check often and a heavy one at night, and fix a link without drawing it again.
+
+Files: `internal/scanner/`, `internal/api/scans.go`, `internal/api/links.go`, `internal/config/` (`scan.quickInterval`, `scan.schedules`), `internal/store/migrations/0021_scan_mode.sql`, `internal/model/`, `web/src/pages/Overview.tsx`, `web/src/components/LinkBar.tsx`, `web/src/pages/Settings.tsx`.
+
+- **Cancel.** `POST /api/scans/{id}/cancel` (`scans:run`): ends the running scan through its context. The scan row gets the status `cancelled`, nothing it found is applied, and no `missed_scans` of slice 46 changes. A scan that is not running answers 409. Audit: `scan_cancel`. The Overview page shows a Cancel button while a scan runs.
+- **Quick scans.** `POST /api/scans` takes `{mode}`, `full` (default) or `quick`. A quick scan does only the discovery that finds who is present (ARP and the neighbour table, and the ICMP probe of routed targets): no port scan, no SNMP, no SSH, no Nmap, no HTTP, mDNS, SSDP or TLS reading. It updates presence and `last_seen` and writes `device_added`, `device_online` and `device_offline` changes, and counts for `scan.offlineAfter`. The column `scans.mode TEXT NOT NULL DEFAULT 'full'` (migration 0021) records it. `scan.quickInterval` (a duration, default 0 which means off, at least 1m) schedules quick scans between full ones; a quick scan never starts while another scan runs.
+- **Schedules.** `scan.schedules` is a list of `{name, targets, interval, when}`: `targets` is a subset of `scan.targets` (the config check says `schedule target is not a scan target`), `interval` is a duration of at least 1m, `when` is an optional local range `HH:MM-HH:MM` inside which a scan of that schedule may start. Every schedule runs its own full scan over its own targets; with no schedules the single global interval works as before. Only one scan runs at a time, a due schedule waits for the running one. The panel shows the schedules read only.
+- **Links.** `PATCH /api/links/{id}` (`devices:write`) changes `aPort`, `bPort` and the label of a link drawn by hand; the two devices cannot change. A link found by a scan answers 409 with the existing text `the link was found by a scan, not drawn by hand`.
+
+Acceptance criteria.
+1. Cancelling a running scan ends it within five seconds with the status `cancelled`, applies nothing and leaves every presence counter as it was; cancelling a finished scan answers 409.
+2. A quick scan on the lab network makes no connection to a TCP port (test with a counting dialer) and still marks presence.
+3. A schedule whose target is not in `scan.targets` fails the config check; two schedules never run at the same time.
+4. `when` keeps a heavy scan out of the day (test with a fake clock).
+5. A link found by a scan cannot be edited, a link drawn by hand can, and the devices of it cannot be changed.
+
+### Slice 51 - inventory export and comparing scans
+
+The goal: the inventory can leave Netscribe as data, and a person can ask what changed between two scans.
+
+Files: `internal/render/csv.go`, `internal/render/json.go`, `internal/api/export.go`, `internal/api/diff.go`, `internal/store/changes.go`, `internal/store/queries/`, `internal/render/diff.go`, `web/src/pages/Changes.tsx`, `web/src/components/ExportMenu.tsx`.
+
+- **Formats.** `GET /api/export/{format}` accepts `csv` and `json` besides the four it has. CSV: one row per device, with the columns `id, label, ip, ip6, mac, hostname, kind, group, trusted, online, firstSeen, lastSeen, owner, location, serial, warrantyUntil, tags, notes, ports`; `ports` is a list such as `22/tcp;80/tcp`. With `?columns=import` it writes only the columns the import of slice 29 accepts, so the file can be imported again. JSON: `{generatedAt, devices, links, services, containers}` with the same fields as the API. The same limits of section 9.5 as for the other exports hold.
+- **Spreadsheet safety.** A CSV cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, because the hostname and the notes can come from the network.
+- **Secrets.** No export holds a secret, a token, a hash or a config value.
+- **Comparing.** `GET /api/scans/{from}/diff/{to}` (`topology:read`, `from` older than `to`) returns the changes of the scans after `from` up to and including `to`, in order, with the counts per kind, at most 1000 changes (`truncated: true` beyond that). `GET /api/export/diff?from=&to=&format=md` returns the same as a Markdown document (only `md` is allowed for the diff). The Changes page gets a "Compare scans" area with two selects.
+
+Acceptance criteria.
+1. The CSV of a seeded network opens in the import check of slice 29 with `?columns=import` and gives back the same devices.
+2. A hostname `=cmd|' /C calc'!A0` is exported with a leading apostrophe (test).
+3. The JSON export holds no field that the API hides, and the four old formats are unchanged.
+4. A diff of scans 3 and 7 lists exactly the changes recorded by scans 4 to 7; `from` equal to or after `to` answers 400; a missing scan 404.
+5. The 500 device export of the budget of slice 43 passes for CSV and JSON.
+
+### Slice 52 - uptime and trends
+
+The goal: the panel shows how steady a device and the whole network are over time, not only now.
+
+Files: `internal/store/migrations/0022_trends.sql`, `internal/store/uptime.go`, `internal/store/queries/`, `internal/api/trends.go`, `internal/config/` (`history.keepTrendDays`), `internal/collector/` (interface counters), `web/src/components/UptimeStrip.tsx`, `web/src/components/TrendChart.tsx`, `web/src/pages/Overview.tsx`, `web/src/components/HistoryTab.tsx`, `web/src/components/InterfacesTable.tsx`.
+
+- **Uptime.** A table `device_uptime(device_id, day, seen, scans, PRIMARY KEY (device_id, day))`, one row per device and local day. Every applied scan (full or quick) adds 1 to `scans` for each device that is not added by hand, and 1 to `seen` for each that the scan saw; a failed or cancelled scan adds nothing. The percentage over 7, 30 or 90 days is the sum of `seen` over the sum of `scans`. Rows older than `history.keepTrendDays` (default 400, 30 to 3650) are pruned with the audit log.
+- **The network over time.** A table `network_daily(day PRIMARY KEY, devices, online, services, risky)` holds the numbers of the last applied scan of the day.
+- **Routes.** `GET /api/devices/{id}/uptime?days=30` (`topology:read`) returns `{percent, days: [{day, seen, scans}]}`; `GET /api/trends?days=90` returns the rows of `network_daily`. `days` is 1 to 400.
+- **Panel.** The History tab of a device shows a strip of one cell per day coloured by the share seen, with the percentage; the Overview page shows a chart of devices, online and risky services per day, drawn as inline SVG with the chart components of the panel, no new library.
+- **Interface rates.** For a device read over SNMP the interface rows keep the last two samples of `ifHCInOctets` and `ifHCOutOctets` (`in_octets`, `out_octets`, `sampled_at` and the same with `prev_`); the panel shows the rate between them in bits per second. A counter that went backwards (a reset, or a 32-bit wrap when only 32-bit counters exist) shows no rate for that scan. No history of rates is kept and no metric is added.
+
+Acceptance criteria.
+1. A device seen in 3 of 4 scans of a day has 75 percent for that day; a failed scan changes nothing; a device added by hand has no row.
+2. Rows older than `history.keepTrendDays` are pruned and newer ones are not.
+3. The two routes answer 400 for `days` outside 1 to 400 and are limited to what the caller may read.
+4. The query count of both routes is the same at 50 and at 500 devices.
+5. The rate of an interface is right for a counter that wrapped once and absent for one that was reset.
+6. The charts work at 390 pixels and have text alternatives.
+
+### Slice 53 - SNMP version 3
+
+The goal: a network that cannot send a community in clear text can still be read.
+
+Files: `internal/config/snmp.go`, `internal/collector/snmp.go`, `internal/collector/snmp_v3.go`, `internal/store/migrations/0023_snmp_cred.sql`, `internal/health/health.go`, `internal/setup/` (the console and the settings), `netscribe.example.yaml`, `docs/`.
+
+- **Config.** `snmp.v3` is a list of `{name, user, level, authProto, authPass, privProto, privPass, context}`. `level` is `authNoPriv` or `authPriv`; `noAuthNoPriv` is refused by the config check (`snmp v3 needs authentication`). `authProto` is `SHA`, `SHA256`, `SHA384` or `SHA512`; MD5 is refused. `privProto` is `AES`, `AES192` or `AES256`; DES is refused. Passphrases are secrets (`config.Secret`), at least 8 characters, never logged, never in an API answer or an export, and they are written to the file with mode 0600 as all secrets are. `name` is unique and is what the rest of the program shows.
+- **Order.** For a device the collector tries, in order, the credential that worked last time, the v3 users, then the v2c communities. The name of the credential that worked is kept in `devices.snmp_cred` (a name only, never a secret); a device that stops answering to it is tried from the start next scan.
+- **Collectors.** Every SNMP collector of slices 7 and 18 runs over v3 unchanged: same OIDs, same limits, same sanitising, same read only rule (only GET and GETNEXT or GETBULK). The engine id is discovered by the library.
+- **Health.** A new check `snmp.version` warns when communities are set and no v3 user is, with the text `SNMP v2c sends the community in clear text` and the fix `Add a user under snmp.v3.`; it is OK when v3 users exist, and says nothing when SNMP is not configured.
+- **Panel and console.** The Settings page lists the v3 users by name and level, read only; the console (`netscribe config`) asks for the fields and never prints a passphrase.
+
+Acceptance criteria.
+1. The config check refuses `noAuthNoPriv`, MD5, DES, a passphrase of 7 characters and a duplicate name, each with its own text.
+2. No passphrase appears in a log, an API answer, an export, a backup listing or an error (test over the log and the answers).
+3. Against the lab agent (tag `lab`, a net-snmp with a v3 user) the device is read over v3 and `devices.snmp_cred` holds the name.
+4. A device that answers neither v3 nor v2c ends as before (no SNMP data, no failure of the scan).
+5. The credential order is tested with a fake querier: last good, then v3, then v2c.
+6. The `snmp.version` check follows the three cases above.
+
+### Slice 54 - CDP neighbours
+
+The goal: Cisco networks that speak CDP and not LLDP get their links too.
+
+Files: `internal/collector/cdp.go`, `internal/collector/cdp_test.go`, `internal/collector/snmp.go`, `internal/store/apply.go`, `internal/model/`.
+
+- **Source.** The collector reads `cdpCacheTable` (`1.3.6.1.4.1.9.9.23.1.2.1.1`) of a device that has an SNMP session: the neighbour device id (column 6), the neighbour port (column 7), the address (column 4), the platform (column 8) and the local interface index. Only read requests are sent, as for LLDP.
+- **Limits and cleaning.** At most 500 neighbours per device, every string at most 255 characters, control characters removed, an address that is not an IP ignored. The data is untrusted and goes through the same normalising as LLDP (section 9.6).
+- **Links.** A CDP neighbour becomes a link the same way an LLDP neighbour does. When both protocols see the same pair of devices and ports it is one link whose `source` says both (`lldp,cdp`); the link keys and the change feed do not duplicate it.
+- **Unknown neighbours.** A neighbour with an address that is in a scan target becomes a device and a link, as for LLDP; one that is not stays a link note only, never a new device outside the targets.
+
+Acceptance criteria.
+1. A recorded `cdpCacheTable` walk gives the expected neighbours and links (test with a canned walk).
+2. A device that answers both LLDP and CDP gives one link, with both sources.
+3. A walk of 600 rows keeps 500; a 400 character name is cut at 255.
+4. A neighbour outside the scan targets creates no device.
+5. A device with no CDP answer changes nothing and is not an error.
+
+### Slice 55 - forgetting old devices
+
+The goal: a network that changes does not fill the inventory with machines that are long gone.
+
+Files: `internal/config/` (`history.forgetAfterDays`), `internal/store/prune.go`, `internal/store/queries/`, `internal/model/` (the change kind `device_forgotten`), `cmd/netscribe/devices.go`, `internal/api/devices.go` (`stale`), `web/src/pages/Inventory.tsx`, `web/src/pages/Settings.tsx`.
+
+- **Setting.** `history.forgetAfterDays` (a number, 0 turns it off, otherwise 7 to 3650, default 0). It applies to a running service.
+- **Rule.** In the daily prune a device is deleted when it is offline, its `last_seen` is older than the number of days, it was not added by hand, it is not trusted, and it is not the end of a link drawn by hand. Its services, interfaces, tags, fields, history and links go with it (the foreign keys already cascade).
+- **Record.** Each forgotten device writes the change `device_forgotten` (summary `Device NAME was forgotten after N days offline`), and the prune writes one audit entry `devices_forget` with the count. The notification event list does not get it.
+- **Look before.** `GET /api/devices?stale=30` lists devices offline for more than 30 days, and the Inventory page has a filter "Not seen for" with 7, 30, 90 and 365 days. `netscribe devices forget --days N --dry-run` prints what would go; without `--dry-run` it deletes after a yes/no question.
+
+Acceptance criteria.
+1. With the key at 0 nothing is deleted whatever the age.
+2. A device offline for N+1 days is forgotten; at N days, a trusted one, a manual one and one that is the end of a manual link are not.
+3. The change `device_forgotten` and the audit entry are written once per device and once per prune.
+4. `--dry-run` deletes nothing and prints the same list the deleting run would delete.
+5. The prune stays one transaction per batch of 200 and the query count does not grow with the devices.
+
+### Slice 56 - encrypted secrets and backups
+
+The goal: a stolen config file or backup does not hand over the passwords and tokens in it.
+
+Files: `internal/config/secret.go`, `internal/config/crypt.go`, `internal/setup/`, `cmd/netscribe/config.go`, `internal/store/backup.go`, `internal/api/backup.go`, `internal/backupcrypt/` (`stream.go`), `web/src/components/BackupCard.tsx`, `docs/`.
+
+- **Master key.** A file `master.key` (32 random bytes from `crypto/rand`, mode 0600, owned by the service user) next to the config, made by the setup or by `netscribe config encrypt`. It is never part of a backup, a log, an API answer or an export.
+- **Secrets in the config.** A secret value may be `enc:v1:` followed by base64 of a 24 byte nonce and the XChaCha20-Poly1305 sealed value (`golang.org/x/crypto/chacha20poly1305`, already a dependency of the module). `config.Secret` decrypts at load; a plaintext secret still loads, as before. `netscribe config encrypt` rewrites every plaintext secret as `enc:v1:` (after making `master.key` if there is none) and keeps a `.bak` of the old file with mode 0600; `netscribe config set` of a secret writes the encrypted form when a key exists. A value that cannot be decrypted fails the config check with `a secret cannot be decrypted: check master.key` and never starts the service with an empty secret.
+- **Database.** The SQLite file is not encrypted (no SQLCipher, because the build has no cgo); the docs say so and name disk encryption as the answer for the whole file.
+- **Encrypted backups.** `GET /api/backup?encrypt=1` with the passphrase in the header `X-Backup-Passphrase` (UTF-8, base64) makes a file with the magic `NSBK1`, a 16 byte salt, the Argon2id parameters, and the archive sealed as a stream of 64 KiB frames of XChaCha20-Poly1305 with a counter in each nonce, so a cut or reordered file fails. Passphrase of at least 12 characters. `POST /api/backup/restore` recognises the magic, asks for the same header and restores; a wrong passphrase or a damaged file answers 400 `the backup cannot be opened` with no more detail. A backup made without `encrypt` still works, and the card says it holds secrets in clear when the config holds any. The helper that restores (slice 31) receives the decrypted archive from the service through the same file it uses now, never the passphrase.
+- **Restore on another host.** A backup made while secrets are encrypted holds them encrypted and does not hold `master.key`; restoring it on another host needs the key file copied by the owner, and the restore says so when a secret cannot be decrypted.
+
+Acceptance criteria.
+1. `config encrypt` makes no plaintext secret remain in the file, keeps a `.bak` with mode 0600 and the service still starts and reads the same values.
+2. A wrong or missing `master.key` stops the config check; nothing is ever started with an empty secret.
+3. An encrypted backup restores with the right passphrase and refuses a wrong one, a truncated file, a file with two frames swapped and a file with one flipped byte.
+4. A passphrase of 11 characters is refused; the passphrase and the master key appear in no log or answer.
+5. A backup of an install with encrypted secrets holds no `master.key`.
+6. The unencrypted backup keeps working as in slice 31.
+
+### Slice 57 - release: image, SBOM and signatures
+
+The goal: a person can check where a download came from and what is in it, and the Docker image looks after itself.
+
+Files: `.goreleaser.yaml`, `.github/workflows/release.yml`, `deploy/Dockerfile`, `deploy/Dockerfile.pdf`, `deploy/compose.yaml`, `cmd/netscribe/healthcheck.go`, `docs/installation.md`, `docs/installation.ru.md`, `SECURITY.md`.
+
+- **SBOM.** The release makes a CycloneDX JSON SBOM for every archive and for the image, with a tool pinned by the SHA of its action, and attaches them to the release.
+- **Signatures.** `checksums.txt` and the image are signed with cosign keyless (the OIDC identity of the release workflow), the signature and the certificate bundle are attached next to the file. `docs/installation.md` shows `cosign verify-blob` and `cosign verify` with the exact identity and issuer to expect. The updater of the program keeps checking the SHA-256 from `checksums.txt` as before; checking the cosign signature inside the program is not part of this slice and is written as an open question.
+- **Image.** The release pushes a multi-arch image (`linux/amd64`, `linux/arm64`) to `ghcr.io/flexebat/netscribe` with the tags `X.Y.Z`, `X.Y` and `latest` (never `latest` for a pre-release), with build provenance. `deploy/compose.yaml` uses it by default and keeps the build as an option.
+- **Health check.** A command `netscribe healthcheck [--addr ADDR]` asks `/healthz` of the address (default the configured `listen`, `https` when TLS is on, certificate not verified because it talks to itself) and exits 0 on `ok` and 1 otherwise, in two seconds at most. The `Dockerfile` and `compose.yaml` get a `HEALTHCHECK` that runs it, because the image has no curl.
+- **Image with Chromium.** `deploy/Dockerfile.pdf` builds a second image tag `X.Y.Z-pdf` on a Debian slim base with Chromium installed, so the PDF export works in a container; the plain image stays small. `export.noSandbox` guidance for containers goes into the docs.
+- **Security contact.** `SECURITY.md` names a private way to report: the GitHub private vulnerability report link, and the supported versions.
+
+Acceptance criteria.
+1. A release run attaches an SBOM per archive and for the image, and signatures that `cosign verify-blob` accepts with the documented identity.
+2. The image runs as a non-root user, and `docker inspect` shows the health status turn `healthy` and then `unhealthy` when the service stops.
+3. `netscribe healthcheck` exits 1 against a closed port within two seconds and 0 against `/healthz`.
+4. The `-pdf` image makes a PDF through `GET /api/export/pdf` (checked in CI with the lab).
+5. No action or tool of the workflow is used by a floating tag: every one is pinned by SHA.
+
+### Slice 58 - access by group
+
+The goal: a person can see and change only the part of the network that is theirs.
+
+Files: `internal/store/migrations/0024_user_groups.sql`, `internal/auth/scope.go`, `internal/store/` (every read and write that lists devices), `internal/api/` (the scope from the principal), `internal/api/events.go`, `internal/render/`, `web/src/pages/Users.tsx`, `web/src/components/UserDialog.tsx`.
+
+- **Scope.** A table `user_groups(user_id, group_id)`. A user with no row sees the whole network, as today, and an administrator is never limited. A user with rows is limited to the devices of those groups. The scope is part of the principal, built from the session or the token (a token cannot be wider than its owner).
+- **Where it applies.** The store takes a `Scope` in every method that reads or changes devices, services, interfaces, links, containers, history, changes, saved filters' results, the overview counts, the topology, the exports, the search and the event stream; the API never filters after the fact and handlers never compare roles (the rule of section 3 stays). A link is shown only when both of its devices are in scope. A device in no group is visible only to unlimited users.
+- **Writes.** A limited user cannot edit, delete, merge or import a device outside the scope; the answer is 404, not 403, so it does not say that the device exists. New devices made by a limited user must be put in one of their groups.
+- **Scans.** Running, cancelling and scheduling a scan is global, so a limited user does not get `scans:run`, and the change feed shows them only the changes of their devices.
+- **Events.** The event stream sends a limited user only events about devices in scope.
+- **Metrics.** `/metrics` counts the whole network and stays for unlimited tokens only.
+- **Panel.** The Users page lets an administrator choose groups for an operator or a viewer; the header shows "Limited to: group names" for a limited user.
+
+Acceptance criteria.
+1. A matrix test runs every list and read route and every export as a limited user and sees only the devices of the groups; a count of the devices in the answers equals the count in scope.
+2. A write to a device outside the scope answers 404 and changes nothing, for edit, delete, merge, wake, identify and bulk edit alike.
+3. A link with one end out of scope is absent from the topology, the exports and the change feed.
+4. The event stream of a limited user carries no event about a device outside the scope.
+5. A token of a limited user is limited the same way; a token cannot be made wider than its owner.
+6. Removing a group removes it from the scope of every user, and a user left with no rows becomes unlimited only after an explicit choice of the administrator (the dialog says so; by default the user is blocked from seeing anything until a group is chosen).
+
+### Slice 59 - sign in with LDAP
+
+The goal: an office with a directory signs in with it, with no copy of the passwords in Netscribe.
+
+Files: `internal/config/ldap.go`, `internal/auth/ldap.go`, `internal/auth/ldaptest/` (an in-process directory for tests), `internal/api/auth.go`, `internal/store/identities.go`, `web/src/pages/Login.tsx`, `docs/ldap.md`, `docs/ldap.ru.md`, `go.mod`.
+
+- **Dependency.** One library, `github.com/go-ldap/ldap/v3`, added to `go.mod` with this slice; `govulncheck` in the gate covers it. Nothing else new.
+- **Config `auth.ldap`.** `url` (`ldaps://` or `ldap://` with `startTLS: true`; a plain `ldap://` without it is refused), `bindDN` and `bindPassword` (a secret) of a read only search account, `userBase`, `userFilter` (for example `(uid={user})`; the user name is escaped by the library's filter escaping and may not contain a NUL), `nameAttr`, `groupAttr` (default `memberOf`), `roleMap` (group DN to role), `defaultRole` (`viewer` or `operator`, never `admin`), `timeout` (default 5s, 1 to 30). The certificate of the server is always verified, with `caFile` as the only way to trust a private authority; there is no switch to skip the check.
+- **Flow.** The sign in form sends the name and password as for a local account. A local account with that name wins and is checked as before; otherwise the service binds as the search account, finds the one entry that matches `userFilter` (zero or more than one is a refusal), and binds as that entry with the given password. An empty password is refused before any network call. The roles come from `roleMap` over the groups of the entry, the highest role wins, and with no match `defaultRole` applies.
+- **Accounts.** The first successful sign in creates an account keyed by `(url, DN)` in the `identities` table of slice 36, the same way OIDC does; no password is stored. The name and role are refreshed at each sign in. A person who is gone from the directory cannot sign in (the bind fails), and an administrator can still disable the account.
+- **Second factor.** An LDAP account does not use the second factor of slice 35, because the directory is the authority (the docs say so); the failed-login lockout and the rate limit of section 9 apply to LDAP attempts as to any other.
+- **Audit.** `ldap_login`, `ldap_login_failed` (with the reason class only: `directory`, `no user`, `bad password`, `many users`), and the existing `user_create`.
+
+Acceptance criteria.
+1. Against the in-process directory: a right password signs in and creates the account once; a wrong one, an empty one, an unknown user and a filter that matches two entries are refused with the same public message.
+2. A user name with `*`, `(`, `)` or a NUL cannot change the search filter (test with injection strings).
+3. `ldap://` without `startTLS`, a role of `admin` as default and a missing `userBase` fail the config check; a certificate that does not verify refuses the connection.
+4. The roles follow `roleMap` and the highest wins; a person removed from a mapped group loses the role at the next sign in.
+5. No bind password, user password or entry attribute beyond the mapped ones appears in a log or an answer.
+6. A local administrator can still sign in when the directory is down.
+
+### Slice 60 - remote scan agents
+
+The goal: a network that has several segments or sites is scanned from inside each one and documented in one place.
+
+Files: `cmd/netscribe/agent.go`, `internal/agent/` (`agent.go`, `client.go`), `internal/api/agent.go`, `internal/store/migrations/0025_agents.sql`, `internal/store/agents.go`, `internal/model/`, `internal/auth/` (the scope `agent`), `internal/health/health.go`, `web/src/pages/Agents.tsx`, `docs/agents.md`, `docs/agents.ru.md`.
+
+- **Idea.** The same binary runs as `netscribe agent --server URL --token-file FILE` on a host in another segment. It asks the server what to scan, scans with the same collectors, and sends the result back. It has no database and no panel, and it never listens on a port.
+- **Agents.** A table `agents(id, name UNIQUE, token_id, targets, interval, enabled, last_seen, version)`. `targets` and `interval` live on the server and are fetched by the agent, so an owner changes them in the panel. The credentials the collectors need (SNMP communities and users, SSH keys) stay in the agent's own config file and are never sent by the server.
+- **Token and routes.** A new token scope `agent` can call only `GET /api/agent/config` and `POST /api/agent/results` (new permission `agent:push`, never given to a session or to a `read` or `write` token). Creating an agent shows its token once, as the Tokens page does. The agent talks only over https; it refuses an `http://` server except for `localhost`, and verifies the certificate (a private authority through `--ca-file`; a self-signed certificate of slice 47 is trusted by its fingerprint with `--pin SHA256`).
+- **Applying a result.** `POST /api/agent/results` takes the same `Result` the local scanner produces, at most 8 MiB. The server checks every device address against the agent's `targets` and against the private-range rule of section 9, drops anything outside them, and applies the rest through `ApplyResult` with the agent's name as the source of the scan. A scan row records `agent_id`. Devices belong to the network, not to an agent; a device seen by two agents is one device.
+- **Presence.** `scan.offlineAfter` counts the scans of the agent that is responsible for the device's address. When an agent has not reported for three of its intervals its devices are not counted as missed (no false offline wave), a health check `agent.stale` warns with the agent's name, and the Agents page marks it.
+- **Panel.** An Agents page (`system:manage`): the list with last seen, version, number of devices and state; create (name, targets, interval, token shown once); disable; delete (the devices stay).
+- **Limits.** At most 50 agents; an agent may send at most one result per interval and a second one within it answers 429.
+
+Acceptance criteria.
+1. An in-process agent against a test server sends a result that creates devices, links and a scan row with the agent's name, and a second identical result changes nothing.
+2. A device outside the agent's targets, or outside private ranges, is dropped and counted; a result over 8 MiB answers 413.
+3. An agent token cannot call any other route, and no other token or session can call the two agent routes (test over the route table).
+4. The agent refuses `http://` for a host that is not `localhost`, and refuses a certificate that does not verify or does not match `--pin`.
+5. With an agent silent for three intervals its devices do not turn offline and `agent.stale` warns; when it reports again nothing was lost.
+6. A secret of the agent's config never reaches the server (test over the request body).
+7. The query count of the agent routes does not grow with the number of devices.
+
 ---
 
 ## 17. Review after each slice
@@ -2357,18 +2665,27 @@ The findings are fixed in the same pass, then the gate is run again.
 ## 18. Open questions (delete after finalization)
 
 1. ~~Project name~~ Closed: Netscribe.
-2. **Interface language.** In the draft the interface is in English without i18n. An alternative: Russian and English at once through i18n.
+2. ~~Interface language~~ Closed: Russian and English through i18n (slice 37, amendment 74).
+   Old text: **Interface language.** In the draft the interface is in English without i18n. An alternative: Russian and English at once through i18n.
 3. **Topology layout.** In the draft there is one deterministic layered layout in Go, used by the panel and all exports. An alternative: `elkjs` in the interface for a nice auto-layout on a button, and then the coordinates are saved in the database and the exports take them from there.
 4. **PDF.** In the draft through `chromedp` and an external Chrome. An alternative: only print styles in the HTML, with no dependency on a browser. If Chrome is needed in the Docker image, the image becomes noticeably larger, and a separate tag is possible.
 5. **License.** MIT, Apache-2.0 or AGPL. It affects the repository and the README.
-6. **SNMP v3.** In the draft only v2c, and the community goes in clear text (section 9.6). SNMP v3 adds authentication and encryption but complicates the config and the storage of secrets. For sensitive networks v3 is worth including in v1.
-7. **External authentication and a second factor.** In the draft only local users with a password. Options: OIDC (single sign-on), LDAP, TOTP as a second factor.
+6. **SNMP v3.** Taken by slice 53.
+   Old text: **SNMP v3.** In the draft only v2c, and the community goes in clear text (section 9.6). SNMP v3 adds authentication and encryption but complicates the config and the storage of secrets. For sensitive networks v3 is worth including in v1.
+7. ~~External authentication and a second factor~~ Closed: TOTP (slice 35), OIDC (slice 36, amendment 63) and LDAP (slice 59).
+   Old text: **External authentication and a second factor.** In the draft only local users with a password. Options: OIDC (single sign-on), LDAP, TOTP as a second factor.
 8. ~~Password check~~ Closed: length, a ban on equality with the username and a built-in list of common passwords (amendment 27).
-9. **Encryption of data at rest.** The database and the secrets of the config are not encrypted, and the protection is file permissions. Options: SQLCipher, encrypting secrets with a master key.
-10. **Object permissions.** All users see the whole network. An option: access by segments or groups of devices.
-11. **Discovery sources.** Not included: DHCP leases (they depend on the router model), passive listening (slice 18 has only one active mDNS and SSDP query per scan), NetBIOS, importing devices from CSV.
-12. **Forgetting devices.** Offline devices stay forever. An option: `history.forgetAfterDays`.
-13. **Charts over time.** In v1 the number of devices per scan. Interface traffic (SNMP counters) and uptime are left outside v1.
+9. **Encryption of data at rest.** Secrets and backups: slice 56. The database file stays unencrypted (no cgo for SQLCipher); disk encryption is the answer.
+   Old text: **Encryption of data at rest.** The database and the secrets of the config are not encrypted, and the protection is file permissions. Options: SQLCipher, encrypting secrets with a master key.
+10. **Object permissions.** Taken by slice 58 (groups), and LDAP by slice 59.
+    Old text: **Object permissions.** All users see the whole network. An option: access by segments or groups of devices.
+11. **Discovery sources.** Importing devices from CSV was done in slice 29, DHCP in slice 40; CDP is slice 54. Passive listening and NetBIOS stay out.
+    Old text: **Discovery sources.** Not included: DHCP leases (they depend on the router model), passive listening (slice 18 has only one active mDNS and SSDP query per scan), NetBIOS, importing devices from CSV.
+12. **Forgetting devices.** Taken by slice 55.
+    Old text: **Forgetting devices.** Offline devices stay forever. An option: `history.forgetAfterDays`.
+13. **Charts over time.** Taken by slice 52 (uptime, device counts, interface rates without history).
+    Old text: **Charts over time.** In v1 the number of devices per scan. Interface traffic (SNMP counters) and uptime are left outside v1.
 14. **PostgreSQL.** In v1 only SQLite. The interfaces `Repo` and `AuthRepo` leave room for a second backend.
 15. **Platforms.** In v1 only Linux.
-16. **Release signing.** In v1 a checksum file. An option: a `cosign` signature and an SBOM.
+16. **Release signing.** Taken by slice 57 (cosign and an SBOM); checking the signature inside the updater stays open.
+    Old text: **Release signing.** In v1 a checksum file. An option: a `cosign` signature and an SBOM.
