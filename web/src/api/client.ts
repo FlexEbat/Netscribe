@@ -1,4 +1,5 @@
 import { apiErrorText } from "@/i18n"
+import { serverText } from "@/i18n/server"
 import type { Role, User } from "@/lib/permissions"
 
 export class ApiError extends Error {
@@ -16,7 +17,7 @@ export class ApiError extends Error {
     retryAfter: number | null = null,
     rows: ImportProblem[] = [],
   ) {
-    super(apiErrorText(message))
+    super(serverText(apiErrorText(message)))
     this.name = "ApiError"
     this.serverMessage = message
     this.status = status

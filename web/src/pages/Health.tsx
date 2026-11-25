@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { type Key, formatDateTime, t } from "@/i18n"
+import { healthTitle, serverText } from "@/i18n/server"
 import { PageTitle } from "@/components/PageTitle"
 
 type State =
@@ -107,13 +108,15 @@ function Body({ state }: { state: State }) {
               <Badge variant={c.status === "ok" ? "outline" : "default"}>
                 {t(label[c.status])}
               </Badge>
-              <span className="font-medium">{c.title}</span>
+              <span className="font-medium">{healthTitle(c.id, c.title)}</span>
             </div>
-            {c.detail ? <p className="mt-2 text-sm text-muted-foreground">{c.detail}</p> : null}
+            {c.detail ? (
+              <p className="mt-2 text-sm text-muted-foreground">{serverText(c.detail)}</p>
+            ) : null}
             {c.fix && c.status !== "ok" ? (
               <p className="mt-2 text-sm">
                 <span className="font-medium">{t("health.whatToDo")} </span>
-                <code className="font-mono text-xs">{c.fix}</code>
+                <code className="font-mono text-xs">{serverText(c.fix)}</code>
               </p>
             ) : null}
           </li>

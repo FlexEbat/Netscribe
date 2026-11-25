@@ -181,7 +181,7 @@ export function DeviceForm({
           {t("deviceForm.cancel")}
         </Button>
         <Button type="submit" disabled={saving}>
-          {saving ? "Saving…" : submitLabel}
+          {saving ? t("deviceForm.saving") : submitLabel}
         </Button>
       </div>
     </form>

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { t } from "@/i18n"
 import { tRich } from "@/i18n/rich"
+import { apiGroupName, serverText } from "@/i18n/server"
 import { PageTitle } from "@/components/PageTitle"
 
 type State = { status: "loading" } | { status: "failed" } | { status: "ready"; doc: ApiDocument }
@@ -85,7 +86,7 @@ export function ApiReference() {
       {groups
         ? [...groups.entries()].map(([name, list]) => (
             <section key={name} className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold capitalize">{name}</h2>
+              <h2 className="text-lg font-semibold capitalize">{apiGroupName(name)}</h2>
               <ul className="flex flex-col gap-3">
                 {list.map(({ method, path, op }) => (
                   <li key={method + path} className="rounded-lg border p-4">
@@ -98,22 +99,25 @@ export function ApiReference() {
                         {t(op["x-token"] ? "apiReference.tokensMay" : "apiReference.notForTokens")}
                       </Badge>
                     </div>
-                    <p className="mt-2 text-sm">{op.summary}</p>
-                    <p className="mt-1 text-sm text-muted-foreground">{op.description}</p>
+                    <p className="mt-2 text-sm">{serverText(op.summary)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {serverText(op.description)}
+                    </p>
                     {op.parameters?.filter((p) => p.in === "query").length ? (
                       <ul className="mt-2 text-sm text-muted-foreground">
                         {op.parameters
                           .filter((p) => p.in === "query")
                           .map((p) => (
                             <li key={p.name}>
-                              <code className="font-mono text-xs">{p.name}</code>: {p.description}
+                              <code className="font-mono text-xs">{p.name}</code>:{" "}
+                              {serverText(p.description ?? "")}
                             </li>
                           ))}
                       </ul>
                     ) : null}
                     {op.requestBody ? (
                       <p className="mt-2 text-sm text-muted-foreground">
-                        {t("apiReference.body", { text: op.requestBody.description })}
+                        {t("apiReference.body", { text: serverText(op.requestBody.description) })}
                       </p>
                     ) : null}
                     {op["x-token"] ? (

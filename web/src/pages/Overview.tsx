@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { kindClasses, kindLabels } from "@/lib/changes"
 import { cn } from "@/lib/utils"
 import { formatDateTime, t } from "@/i18n"
+import { serverText } from "@/i18n/server"
 import { PageTitle } from "@/components/PageTitle"
 import {
   Desktop,
@@ -203,7 +204,7 @@ function Body({ state }: { state: State }) {
                   >
                     {kindLabels[c.kind] ?? c.kind}
                   </span>
-                  <span>{c.summary}</span>
+                  <span>{serverText(c.summary)}</span>
                   <span className="text-muted-foreground">{formatDateTime(c.at)}</span>
                 </li>
               ))}

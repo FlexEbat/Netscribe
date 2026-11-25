@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatDateTime, t, type Key } from "@/i18n"
 import { tRich } from "@/i18n/rich"
+import { serverText } from "@/i18n/server"
 import { PageTitle } from "@/components/PageTitle"
 
 /** What the person typed or chose for each key. A key stays out until it is touched. */
@@ -73,7 +74,7 @@ function SettingRow({
 }) {
   const id = useId()
   const hint =
-    `${setting.help} ${t(setting.hot ? "settings.appliesAtOnce" : "settings.appliesAfterRestart")}`.trim()
+    `${serverText(setting.help)} ${t(setting.hot ? "settings.appliesAtOnce" : "settings.appliesAfterRestart")}`.trim()
   const field = (() => {
     switch (setting.type) {
       case "bool":
@@ -138,7 +139,7 @@ function SettingRow({
   })()
   return (
     <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{setting.label}</Label>
+      <Label htmlFor={id}>{serverText(setting.label)}</Label>
       {field}
       <p className="text-xs text-muted-foreground">{hint}</p>
     </div>
@@ -285,8 +286,8 @@ export function Settings() {
       {groups.map((g) => (
         <Card key={g.name}>
           <CardHeader>
-            <CardTitle>{g.name}</CardTitle>
-            <CardDescription>{g.hint}</CardDescription>
+            <CardTitle>{serverText(g.name)}</CardTitle>
+            <CardDescription>{serverText(g.hint)}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
             {g.settings.map((s) => (
@@ -413,7 +414,7 @@ function AutoUpdatesCard({
               date: formatDateTime(auto.last.at),
               result: result ? t(result) : auto.last.result,
             })}
-            {auto.last.message ? ` ${auto.last.message}` : ""}
+            {auto.last.message ? ` ${serverText(auto.last.message)}` : ""}
           </p>
         ) : (
           <p className="text-muted-foreground">{t("settings.autoNone")}</p>

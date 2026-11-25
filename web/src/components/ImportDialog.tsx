@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { t } from "@/i18n"
+import { serverText } from "@/i18n/server"
 
 type Checked =
   | { status: "idle" }
@@ -104,12 +105,12 @@ export function ImportDialog({ onImported }: { onImported: (count: number) => vo
           ) : null}
           {checked.status === "bad" ? (
             <Alert variant="destructive">
-              <p>{checked.message}</p>
+              <p>{serverText(checked.message)}</p>
               {checked.rows.length > 0 ? (
                 <ul className="mt-2 list-disc pl-4 text-sm">
                   {checked.rows.map((r) => (
                     <li key={`${r.line}-${r.error}`}>
-                      {t("importDialog.line", { line: r.line, error: r.error })}
+                      {t("importDialog.line", { line: r.line, error: serverText(r.error) })}
                     </li>
                   ))}
                 </ul>
