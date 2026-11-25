@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { formatDateTime, t } from "@/i18n"
+import { type Key, formatDateTime, hasKey, t } from "@/i18n"
 import { PageTitle } from "@/components/PageTitle"
 
 const pageSize = 50
@@ -54,7 +54,31 @@ const actions = [
   "totp_disable",
   "totp_reset",
   "totp_failed",
+  "oidc_login",
+  "oidc_login_failed",
+  "oidc_user_create",
+  "settings_change",
+  "device_identify",
+  "device_wake",
+  "restart_request",
+  "update_request",
+  "auto_update_request",
+  "auto_update_resume",
+  "auto_update_rollback",
 ]
+
+/** The words for an action code; a code this panel does not know shows as it is. */
+function actionLabel(code: string): string {
+  const key = `audit.actions.${code}`
+  return hasKey(key) ? t(key as Key) : code
+}
+
+/** The words for the result of an action. */
+function resultLabel(result: string): string {
+  return result === "ok" || result === "denied" || result === "error"
+    ? t(`audit.${result}` as Key)
+    : result
+}
 
 interface Filters {
   user: string
@@ -173,7 +197,7 @@ export function Audit() {
             <option value="">{t("audit.anyAction")}</option>
             {actions.map((a) => (
               <option key={a} value={a}>
-                {a}
+                {actionLabel(a)}
               </option>
             ))}
           </select>
@@ -257,8 +281,8 @@ function Entries({
             <TableRow key={e.id}>
               <TableCell className="whitespace-nowrap">{formatDateTime(e.at)}</TableCell>
               <TableCell>{e.username || "–"}</TableCell>
-              <TableCell className="font-mono text-xs">{e.action}</TableCell>
-              <TableCell>{e.result}</TableCell>
+              <TableCell title={e.action}>{actionLabel(e.action)}</TableCell>
+              <TableCell>{resultLabel(e.result)}</TableCell>
               <TableCell className="font-mono text-xs">{e.ip || "–"}</TableCell>
               <TableCell className="break-words">{e.detail}</TableCell>
             </TableRow>

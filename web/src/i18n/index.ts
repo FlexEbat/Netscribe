@@ -133,6 +133,24 @@ const apiErrorKeys = new Map<string, Key>(
     .map((k) => [en[k] as string, k]),
 )
 
+/** Errors that carry a number or a name: the pattern, the key and the names of its groups. */
+const dynamicApiErrors: [RegExp, Key, string[]][] = [
+  [/^ids must hold 1 to (\d+) devices$/, "apiError.idsMustHold", ["n"]],
+  [/^limit must be a number from 1 to (\d+)$/, "apiError.limitMustBe", ["n"]],
+  [/^you can keep at most (\d+) filters per page$/, "apiError.filtersPerPage", ["n"]],
+  [/^the message was not delivered: (.*)$/s, "apiError.notDelivered", ["error"]],
+  [
+    /^the password is missing: send it in the (.+) header, base64 encoded$/,
+    "apiError.passwordMissing",
+    ["header"],
+  ],
+]
+
+/** Whether a dictionary has this key, for a key that is built from data (an audit action). */
+export function hasKey(key: string): key is Key {
+  return key in en
+}
+
 /**
  * The text of an error the server answered. A known English text shows in the current
  * language, anything else keeps the text the server sent.
@@ -140,6 +158,10 @@ const apiErrorKeys = new Map<string, Key>(
 export function apiErrorText(message: string): string {
   const key = apiErrorKeys.get(message)
   if (key) return t(key)
+  for (const [re, dynamic, names] of dynamicApiErrors) {
+    const m = re.exec(message)
+    if (m) return t(dynamic, Object.fromEntries(names.map((n, i) => [n, m[i + 1] ?? ""])))
+  }
   const failed = /^Request failed \((\d+)\)$/.exec(message)
   if (failed) return t("apiError.requestFailed", { status: failed[1] ?? "" })
   return message

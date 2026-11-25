@@ -28,6 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { displayName, kindLabels } from "@/lib/topology"
 import { formatDateTime, t } from "@/i18n"
+import { serverText } from "@/i18n/server"
 
 interface DevicePanelProps {
   deviceId: number
@@ -376,7 +377,7 @@ function KindCell({ device: d }: { device: Device }) {
       {reasons.length > 0 ? (
         <ul className="list-disc pl-4 text-xs text-muted-foreground">
           {reasons.map((r) => (
-            <li key={r}>{r}</li>
+            <li key={r}>{serverText(r)}</li>
           ))}
         </ul>
       ) : null}

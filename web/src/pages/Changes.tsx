@@ -15,6 +15,7 @@ import { Alert } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import { kindClasses, kindLabels, scanPoints } from "@/lib/changes"
 import { formatDateTime, t } from "@/i18n"
+import { serverText } from "@/i18n/server"
 import { PageTitle } from "@/components/PageTitle"
 
 type State =
@@ -148,7 +149,7 @@ function Feed({ changes }: { changes: Change[] }) {
           >
             {kindLabels[c.kind] ?? c.kind}
           </span>
-          <span className="min-w-0 flex-1 break-words">{c.summary}</span>
+          <span className="min-w-0 flex-1 break-words">{serverText(c.summary)}</span>
         </li>
       ))}
     </ul>
