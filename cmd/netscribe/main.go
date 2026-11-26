@@ -266,7 +266,7 @@ func serve(args []string, e streams) error {
 	}
 	router := api.NewRouter(api.Options{
 		OIDC: sso, Version: releaseVersion(), Updates: updates, UpdatesEnabled: func() bool { return live.Current().Updates.Check },
-		Helper: newHelperClient(cfg.Database), Auto: auto, Sessions: db, MFA: db, Sealer: sealer, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
+		Helper: newHelperClient(cfg.Database), Auto: auto, Sessions: db, MFA: db, Sealer: sealer, Health: newHealthRunner(live.Current, *flags.configPath, db, newHelperClient(cfg.Database)), Backup: newBackupService(db, *flags.configPath, cfg.Database), TLS: newTLSService(*flags.configPath, live.Current), MetricsEnabled: func() bool { return live.Current().Metrics.Enabled }, Settings: newSettingsEditor(*flags.configPath), Notifications: notifier,
 		Static: static, Auth: svc, Audit: db, AuditLog: db, Repo: db, Events: hub,
 		Containers: db, Docker: scanner.Docker(), Nmap: scanner,
 		Identifier: deviceIdentifier{scanner: scanner, repo: db, hub: hub, ctx: ctx, log: logger},

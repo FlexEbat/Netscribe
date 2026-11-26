@@ -128,6 +128,7 @@ export const ru: Record<Key, Entry> = {
   "audit.actions.auto_update_resume": "Автообновления возобновлены",
   "audit.actions.auto_update_rollback": "Автообновление откачено",
   "audit.actions.backup_create": "Резервная копия создана",
+  "audit.actions.tls_generate": "Сертификат создан",
   "audit.actions.backup_restore": "Резервная копия восстановлена",
   "audit.actions.config_reload": "Конфигурация перезагружена",
   "audit.actions.config_reload_failed": "Не удалось перезагрузить конфигурацию",

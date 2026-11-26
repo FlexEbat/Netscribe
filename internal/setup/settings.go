@@ -419,6 +419,31 @@ func SetTLSFiles(ctx context.Context, env Env, o Options, certFile, keyFile stri
 	return s.commit(ctx, doc, false)
 }
 
+// ConfigureTLS points tls.certFile and tls.keyFile at a pair and saves the config, with the
+// checks and the .bak of every other edit. Unlike SetTLSFiles it never restarts the service:
+// the panel asks the person, because the restart ends the request that asked for it.
+func ConfigureTLS(env Env, o Options, certFile, keyFile string) error {
+	s := newSession(env, o)
+	doc, err := s.openConfig()
+	if err != nil {
+		return err
+	}
+	if err := doc.set(p("tls.certFile"), strNode(certFile)); err != nil {
+		return err
+	}
+	if err := doc.set(p("tls.keyFile"), strNode(keyFile)); err != nil {
+		return err
+	}
+	data, err := doc.bytes()
+	if err != nil {
+		return err
+	}
+	if err := s.validate(data); err != nil {
+		return fmt.Errorf("the config would not be valid, nothing was saved: %w", err)
+	}
+	return s.saveConfig(data)
+}
+
 // ConfigEdit opens the file in the editor of the person. The result is checked before it
 // replaces the file, and the person may go back and fix it.
 func ConfigEdit(ctx context.Context, env Env, o Options) error {

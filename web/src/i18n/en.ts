@@ -126,6 +126,7 @@ export const en = {
   "audit.actions.auto_update_resume": "Automatic updates resumed",
   "audit.actions.auto_update_rollback": "Automatic update rolled back",
   "audit.actions.backup_create": "Backup created",
+  "audit.actions.tls_generate": "Certificate made",
   "audit.actions.backup_restore": "Backup restored",
   "audit.actions.config_reload": "Config reloaded",
   "audit.actions.config_reload_failed": "Config reload failed",
