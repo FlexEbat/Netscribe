@@ -73,7 +73,7 @@ func (t *tlsService) GenerateSelfSigned(_ context.Context, names []string, days 
 		return api.TLSResult{}, api.TLSRefusal(fmt.Sprintf("days must be from 1 to %d", certgen.MaxDays))
 	}
 	if len(names) == 0 {
-		names = defaultCertNames(cfg.Listen)
+		names = certgen.DefaultNames(cfg.Listen)
 	}
 	clean, err := certgen.NormalizeNames(names)
 	if err != nil {

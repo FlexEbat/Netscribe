@@ -159,39 +159,3 @@ func TestCertSetShowAndRenew(t *testing.T) {
 		t.Errorf("key mode %o", m)
 	}
 }
-
-func TestDefaultCertNames(t *testing.T) {
-	for _, listen := range []string{"127.0.0.1:8080", "0.0.0.0:8443", "", "192.168.1.5:8080", "panel.lan:8080"} {
-		names := defaultCertNames(listen)
-		if len(names) > certgen.MaxNames {
-			t.Errorf("%q: %d names", listen, len(names))
-		}
-		if _, err := certgen.NormalizeNames(names); err != nil {
-			t.Errorf("%q: %v", listen, err)
-		}
-		have := map[string]bool{}
-		for _, n := range names {
-			have[n] = true
-		}
-		for _, want := range []string{"localhost", "127.0.0.1", "::1"} {
-			if !have[want] {
-				t.Errorf("%q: no %s in %v", listen, want, names)
-			}
-		}
-	}
-	if names := defaultCertNames("192.168.1.5:8080"); !contains(names, "192.168.1.5") {
-		t.Errorf("the listen address is missing: %v", names)
-	}
-	if names := defaultCertNames("panel.lan:8080"); !contains(names, "panel.lan") {
-		t.Errorf("the listen host is missing: %v", names)
-	}
-}
-
-func contains(list []string, want string) bool {
-	for _, s := range list {
-		if s == want {
-			return true
-		}
-	}
-	return false
-}

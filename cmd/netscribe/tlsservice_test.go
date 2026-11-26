@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -137,7 +138,7 @@ func TestTLSServiceDefaultsToTheNamesOfTheHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"localhost", "127.0.0.1", "::1"} {
-		if !contains(res.Names, want) {
+		if !slices.Contains(res.Names, want) {
 			t.Errorf("no %s in %v", want, res.Names)
 		}
 	}

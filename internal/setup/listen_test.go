@@ -79,8 +79,8 @@ func TestPickListenWithTLSChecksThePair(t *testing.T) {
 	cert, key := writeKeyPair(t)
 	other, otherKey := writeKeyPair(t)
 	_ = other
-	// every interface, TLS, then a key that does not match, then the right one
-	s := newSession(f.env("3\n2\n"+cert+"\n"+otherKey+"\n"+key+"\n"), f.opts())
+	// every interface, TLS, no self-signed certificate, then a key that does not match, then the right one
+	s := newSession(f.env("3\n2\nn\n"+cert+"\n"+otherKey+"\n"+key+"\n"), f.opts())
 	got, err := s.pickListen("127.0.0.1:8080", false)
 	if err != nil {
 		t.Fatal(err)
@@ -193,5 +193,101 @@ func TestSetupWritesTLSAndProxiesIntoTheConfig(t *testing.T) {
 	text := readFile(t, o.ConfigPath)
 	if !strings.Contains(text, "listen: 0.0.0.0:8443") || !strings.Contains(text, "trustedProxies: [10.0.0.2/32]") {
 		t.Errorf("config:\n%s", text)
+	}
+}
+
+func TestPickListenSelfSignedMakesAPairNextToTheConfig(t *testing.T) {
+	f := newFake(t)
+	o := f.opts()
+	// every interface (3), the panel serves TLS itself (2), yes to a self-signed certificate
+	s := newSession(f.env("3\n2\ny\n"), o)
+	got, err := s.pickListen("127.0.0.1:8080", false)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, f.out.String())
+	}
+	dir := filepath.Join(filepath.Dir(o.ConfigPath), "tls")
+	if got.Listen != "0.0.0.0:8080" || got.TLSCert != filepath.Join(dir, "tls.crt") || got.TLSKey != filepath.Join(dir, "tls.key") {
+		t.Fatalf("%+v", got)
+	}
+	if err := s.checkKeyPair(got.TLSCert, got.TLSKey); err != nil {
+		t.Errorf("the pair does not belong together: %v", err)
+	}
+	for path, want := range map[string]os.FileMode{got.TLSKey: 0o600, got.TLSCert: 0o644} {
+		st, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != want {
+			t.Errorf("%s mode = %o, want %o", filepath.Base(path), st.Mode().Perm(), want)
+		}
+	}
+	out := f.out.String()
+	for _, want := range []string{"self-signed certificate", "localhost", "fingerprint SHA-256"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the output lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "PRIVATE KEY") {
+		t.Error("the output shows the key")
+	}
+}
+
+func TestPickListenSelfSignedKeepsAPairThatIsThere(t *testing.T) {
+	f := newFake(t)
+	o := f.opts()
+	first, err := newSession(f.env("3\n2\ny\n"), o).pickListen("127.0.0.1:8080", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(first.TLSCert) //nolint:gosec // a path inside the test directory
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.out.Reset()
+	second, err := newSession(f.env("3\n2\ny\n"), o).pickListen("127.0.0.1:8080", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(second.TLSCert) //nolint:gosec // a path inside the test directory
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Error("the wizard replaced a certificate")
+	}
+	if !strings.Contains(f.out.String(), "kept the certificate") {
+		t.Errorf("the output does not say it kept the pair:\n%s", f.out.String())
+	}
+}
+
+func TestPickListenSelfSignedRefusesABrokenPair(t *testing.T) {
+	f := newFake(t)
+	o := f.opts()
+	dir := filepath.Join(filepath.Dir(o.ConfigPath), "tls")
+	if err := os.MkdirAll(dir, 0o750); err != nil { //nolint:gosec // the test directory
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "tls.crt"), []byte("broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := newSession(f.env("3\n2\ny\n"), o).pickListen("127.0.0.1:8080", false)
+	if err == nil || !strings.Contains(err.Error(), "cannot be used") {
+		t.Fatalf("err = %v, want a refusal that names the file", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "tls.crt")); string(b) != "broken" { //nolint:gosec // a path inside the test directory
+		t.Error("the wizard replaced a file it could not use")
+	}
+}
+
+func TestPickListenNoToSelfSignedStillAsksForThePaths(t *testing.T) {
+	f := newFake(t)
+	o := f.opts()
+	cert, key := writeKeyPair(t)
+	got, err := newSession(f.env("3\n2\nn\n"+cert+"\n"+key+"\n"), o).pickListen("127.0.0.1:8080", false)
+	if err != nil || got.TLSCert != cert || got.TLSKey != key {
+		t.Fatalf("%+v, %v", got, err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(o.ConfigPath), "tls")); err == nil {
+		t.Error("declining made the directory")
 	}
 }

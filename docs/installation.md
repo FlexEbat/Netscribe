@@ -309,8 +309,8 @@ Run `sudo systemctl daemon-reload && sudo systemctl restart netscribe` afterward
 ## Network and firewall
 
 The panel listens on `127.0.0.1:8080` by default. To reach it from another machine, put a
-reverse proxy that terminates TLS in front of it, or set `tls.certFile` and `tls.keyFile`,
-see [TLS and reverse proxy](../README.md#tls-and-reverse-proxy). Netscribe sends packets
+reverse proxy that terminates TLS in front of it, set `tls.certFile` and `tls.keyFile`, or make
+a self-signed certificate with `netscribe cert generate --set`, see [TLS and reverse proxy](../README.md#tls-and-reverse-proxy). Netscribe sends packets
 only to the targets you configure.
 
 ICMP probes need the group of the service in `net.ipv4.ping_group_range`. Without it

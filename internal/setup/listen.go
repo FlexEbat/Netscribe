@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"path/filepath"
+	"strings"
+	"time"
 
+	"github.com/FlexEbat/Netscribe/internal/certgen"
 	"github.com/FlexEbat/Netscribe/internal/config"
 )
 
@@ -152,6 +156,13 @@ func (s *session) protect(addr string) (listenChoice, error) {
 		}
 		return listenChoice{Listen: addr, Proxies: proxies}, nil
 	case 1:
+		self, err := s.p.confirm("Serve https with a self-signed certificate?", false)
+		if err != nil {
+			return listenChoice{}, err
+		}
+		if self {
+			return s.selfSigned(addr)
+		}
 		cert, err := s.p.ask("Path of the certificate (PEM)", "", nil)
 		if err != nil {
 			return listenChoice{}, err
@@ -171,6 +182,50 @@ func (s *session) protect(addr string) (listenChoice, error) {
 		return s.protect(addr)
 	}
 	return listenChoice{Listen: addr, PlainTCP: true}, nil
+}
+
+// selfSigned makes the certificate of slice 47 in the tls directory next to the config, with
+// the same generator as netscribe cert generate, and returns the choice that uses it. A pair
+// that is there already is kept: a question of the wizard must not replace a certificate.
+func (s *session) selfSigned(addr string) (listenChoice, error) {
+	dir := filepath.Join(filepath.Dir(s.o.ConfigPath), "tls")
+	certPath, keyPath := filepath.Join(dir, certgen.CertName), filepath.Join(dir, certgen.KeyName)
+	if _, err := s.env.Stat(certPath); err == nil {
+		if err := s.checkKeyPair(certPath, keyPath); err != nil {
+			return listenChoice{}, fmt.Errorf("%s is there already and cannot be used (%w): remove it, or run netscribe cert generate --force", certPath, err)
+		}
+		s.ui.note("kept the certificate that is at %s", certPath)
+		return listenChoice{Listen: addr, TLSCert: certPath, TLSKey: keyPath}, nil
+	}
+	opts := certgen.Options{Names: certgen.DefaultNames(addr)}
+	if s.env.Now != nil {
+		opts.Now = s.env.Now()
+	}
+	certPEM, keyPEM, err := certgen.Generate(opts)
+	if err != nil {
+		return listenChoice{}, err
+	}
+	var owner *Account
+	if acc, err := s.env.LookupUser(s.o.ServiceUser); err == nil {
+		owner = &acc
+	}
+	if err := s.env.MkdirAll(dir, 0o750, owner); err != nil {
+		return listenChoice{}, err
+	}
+	// The key first: a certificate without its key would stop the service at its next start.
+	if err := s.env.WriteFile(keyPath, keyPEM, 0o600, owner); err != nil {
+		return listenChoice{}, err
+	}
+	if err := s.env.WriteFile(certPath, certPEM, 0o644, owner); err != nil {
+		return listenChoice{}, err
+	}
+	info, err := certgen.Describe(certPEM)
+	if err != nil {
+		return listenChoice{}, err
+	}
+	s.ui.note("made a self-signed certificate for %s, valid until %s", strings.Join(info.Names, ", "), info.NotAfter.UTC().Format(time.DateOnly))
+	s.ui.note("fingerprint SHA-256 %s: a browser warns about the certificate until you trust it, so compare this", info.Fingerprint)
+	return listenChoice{Listen: addr, TLSCert: certPath, TLSKey: keyPath}, nil
 }
 
 func (s *session) checkKeyPair(certPath, keyPath string) error {
