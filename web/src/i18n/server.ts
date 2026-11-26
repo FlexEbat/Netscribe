@@ -143,8 +143,9 @@ const rules: Rule[] = [
     (m) => `сертификат истекает через ${daysLeft(Number(m[1]))}`,
   ],
   [
-    /^the certificate is valid for (\d+) more days$/,
-    (m) => `сертификат действителен ещё ${daysLeft(Number(m[1]))}`,
+    /^the certificate is valid for (\d+) more days(, self-signed)?$/,
+    (m) =>
+      `сертификат действителен ещё ${daysLeft(Number(m[1]))}${m[2] ? ", самоподписанный" : ""}`,
   ],
 
   // The messages about a file of devices.

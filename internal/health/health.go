@@ -4,6 +4,7 @@
 package health
 
 import (
+	"bytes"
 	"context"
 	"crypto/x509"
 	"encoding/pem"
@@ -230,6 +231,9 @@ func tlsCert(p Probe, in Input) Check {
 		return Check{Status: Fail, Detail: "the certificate expired on " + cert.NotAfter.UTC().Format("2006-01-02"), Fix: "Renew the certificate and restart the service."}
 	case days < certWarnDays:
 		return Check{Status: Warn, Detail: fmt.Sprintf("the certificate expires in %d days", days), Fix: "Renew the certificate and restart the service."}
+	}
+	if bytes.Equal(cert.RawIssuer, cert.RawSubject) {
+		return ok(fmt.Sprintf("the certificate is valid for %d more days, self-signed", days))
 	}
 	return ok(fmt.Sprintf("the certificate is valid for %d more days", days))
 }
