@@ -765,6 +765,53 @@ export async function restoreBackup(file: File, password: string): Promise<Backu
   return (await response.json()) as BackupSummary
 }
 
+export interface TlsStatus {
+  enabled: boolean
+  selfSigned: boolean
+  subject: string
+  names: string[]
+  notBefore: string
+  notAfter: string
+  fingerprint: string
+}
+
+export interface TlsResult {
+  subject: string
+  names: string[]
+  notAfter: string
+  fingerprint: string
+  /** The running service does not serve https from these files yet. */
+  needRestart: boolean
+}
+
+export const getTls = () => api<TlsStatus>("GET", "/api/tls")
+
+/** Makes a self-signed certificate. The password is checked again by the server. */
+export async function makeSelfSigned(
+  body: { names: string[]; days: number; replace: boolean },
+  password: string,
+): Promise<TlsResult> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+    ...confirmHeaders(password),
+  }
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken
+  let response: Response
+  try {
+    response = await fetch("/api/tls/self-signed", {
+      method: "POST",
+      headers,
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    })
+  } catch {
+    throw new ApiError(0, "Cannot reach the server")
+  }
+  if (!response.ok) return failFrom(response)
+  return (await response.json()) as TlsResult
+}
+
 export type SettingType =
   "bool" | "int" | "duration" | "text" | "list" | "ports" | "enum" | "secrets"
 

@@ -15,6 +15,7 @@ import {
 } from "@/api/client"
 import { BackupCard } from "@/components/BackupCard"
 import { NotificationsCard } from "@/components/NotificationsCard"
+import { TlsCard } from "@/components/TlsCard"
 import { UpdateDialog } from "@/components/UpdateDialog"
 import { Alert } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -303,6 +304,8 @@ export function Settings() {
       ))}
 
       <NotificationsCard />
+
+      <TlsCard canRestart={info?.helper.available === true} />
 
       <BackupCard />
 
