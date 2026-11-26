@@ -354,11 +354,17 @@ The panel serves plain HTTP unless you set `tls.certFile` and `tls.keyFile`. Bey
 loopback interface use one of these:
 
 - Set `tls.certFile` and `tls.keyFile` and keep `listen` on the address you need.
+- Make a self-signed certificate: `sudo -u netscribe netscribe cert generate --set` writes
+  `tls.crt` and `tls.key` into the `tls` directory next to the config and sets both keys
+  (restart the service once). `netscribe cert show` prints the names, the dates and the
+  SHA-256 fingerprint, and `netscribe cert renew` makes a new one that a running service
+  serves without a restart. The Settings page has the same under HTTPS certificate. A browser
+  warns about such a certificate until you trust it: compare the fingerprint it shows.
 - Put a reverse proxy that terminates TLS in front of the panel, keep `listen` on
   `127.0.0.1`, and list the proxy in `trustedProxies` so Netscribe trusts its `X-Forwarded-*`
   headers.
 
-The setup asks which of the two you want when you choose an address beyond loopback.
+The setup asks how the traffic is protected when you choose an address beyond loopback, and offers a self-signed certificate when the panel serves TLS itself.
 
 ## Security
 

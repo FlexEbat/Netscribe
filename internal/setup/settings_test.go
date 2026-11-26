@@ -249,7 +249,7 @@ func TestConfigureAccessWritesTLSAndDropsTheProxyList(t *testing.T) {
 	f, o := installed(t)
 	cert, key := writeKeyPair(t)
 	// Panel access: every interface (3), TLS (2), the paths. The restart question is not asked: the service is stopped.
-	input := menu("1", "3", "2", cert, key, "y", "15")
+	input := menu("1", "3", "2", "n", cert, key, "y", "15")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
