@@ -48,7 +48,7 @@ func TestWriteFilesModesAndNoOverwrite(t *testing.T) {
 	if err := WriteFiles(dir, c2, k2, false, nil); !errors.Is(err, ErrExists) {
 		t.Fatalf("err = %v, want ErrExists", err)
 	}
-	got, _ := os.ReadFile(filepath.Join(dir, CertName))
+	got, _ := os.ReadFile(filepath.Join(dir, CertName)) //nolint:gosec // a path inside the test directory
 	if string(got) != string(c) {
 		t.Error("a refused write changed the certificate")
 	}
@@ -56,7 +56,7 @@ func TestWriteFilesModesAndNoOverwrite(t *testing.T) {
 
 func TestWriteFilesForceKeepsPrevious(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o750); err != nil {
+	if err := os.Chmod(dir, 0o750); err != nil { //nolint:gosec // the directory of the service needs the group bit
 		t.Fatal(err)
 	}
 	c, k := makePair(t, "a.lan")
@@ -73,7 +73,7 @@ func TestWriteFilesForceKeepsPrevious(t *testing.T) {
 		filepath.Join(dir, CertName+".previous"): c,
 		filepath.Join(dir, KeyName+".previous"):  k,
 	} {
-		got, err := os.ReadFile(path)
+		got, err := os.ReadFile(path) //nolint:gosec // a path inside the test directory
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +88,7 @@ func TestWriteFilesForceKeepsPrevious(t *testing.T) {
 
 func TestWriteFilesRefusesWorldWritableDir(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o777); err != nil {
+	if err := os.Chmod(dir, 0o777); err != nil { //nolint:gosec // the test makes the directory world-writable on purpose
 		t.Fatal(err)
 	}
 	c, k := makePair(t, "a.lan")
@@ -102,7 +102,7 @@ func TestWriteFilesRefusesWorldWritableDir(t *testing.T) {
 
 func TestWriteFilesLeavesNoTemporaryFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o750); err != nil {
+	if err := os.Chmod(dir, 0o750); err != nil { //nolint:gosec // the directory of the service needs the group bit
 		t.Fatal(err)
 	}
 	c, k := makePair(t, "a.lan")
@@ -122,13 +122,13 @@ func handshakeCN(t *testing.T, addr string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }() // the handshake result is what the test reads
 	return conn.ConnectionState().PeerCertificates[0].Subject.CommonName
 }
 
 func TestReloaderServesTheRenewedCertificate(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o750); err != nil {
+	if err := os.Chmod(dir, 0o750); err != nil { //nolint:gosec // a path inside the test directory
 		t.Fatal(err)
 	}
 	c, k := makePair(t, "first.lan")
@@ -147,7 +147,7 @@ func TestReloaderServesTheRenewedCertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }() // the listener only serves this test
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -155,8 +155,8 @@ func TestReloaderServesTheRenewedCertificate(t *testing.T) {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
-				_ = c.(*tls.Conn).Handshake() // the client reads the result
+				defer func() { _ = c.Close() }() // the client reads the handshake result
+				_ = c.(*tls.Conn).Handshake()    // the client reads the result
 			}(conn)
 		}
 	}()
@@ -190,7 +190,7 @@ func TestReloaderServesTheRenewedCertificate(t *testing.T) {
 
 func TestReloaderKeepsTheCertificateOnAFailedRead(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.Chmod(dir, 0o750); err != nil {
+	if err := os.Chmod(dir, 0o750); err != nil { //nolint:gosec // a path inside the test directory
 		t.Fatal(err)
 	}
 	c, k := makePair(t, "keep.lan")
@@ -205,7 +205,7 @@ func TestReloaderKeepsTheCertificateOnAFailedRead(t *testing.T) {
 	clock := time.Now()
 	r.now = func() time.Time { return clock }
 
-	if err := os.WriteFile(certFile, []byte("broken"), 0o644); err != nil {
+	if err := os.WriteFile(certFile, []byte("broken"), 0o644); err != nil { //nolint:gosec // the certificate file is public by design
 		t.Fatal(err)
 	}
 	future := time.Now().Add(time.Hour)

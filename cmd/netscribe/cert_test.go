@@ -32,7 +32,7 @@ func fileMode(t *testing.T, path string) os.FileMode {
 
 func TestCertGenerateWritesTheFilesAndKeepsTheConfig(t *testing.T) {
 	c := newCLI(t)
-	before, err := os.ReadFile(c.cfg)
+	before, err := os.ReadFile(c.cfg) //nolint:gosec // a path inside the test directory
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestCertGenerateWritesTheFilesAndKeepsTheConfig(t *testing.T) {
 	if strings.Contains(out, "PRIVATE KEY") {
 		t.Error("the output shows key material")
 	}
-	after, err := os.ReadFile(c.cfg)
+	after, err := os.ReadFile(c.cfg) //nolint:gosec // a path inside the test directory
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestCertSetShowAndRenew(t *testing.T) {
 		t.Fatalf("generate --set: %d %s", code, errOut)
 	}
 	first := fingerprintOf(t, out)
-	cfgText, err := os.ReadFile(c.cfg)
+	cfgText, err := os.ReadFile(c.cfg) //nolint:gosec // a path inside the test directory
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestCertSetShowAndRenew(t *testing.T) {
 	}
 	// The same length: 40 days.
 	dir := filepath.Join(filepath.Dir(c.cfg), "tls")
-	data, err := os.ReadFile(filepath.Join(dir, certgen.CertName))
+	data, err := os.ReadFile(filepath.Join(dir, certgen.CertName)) //nolint:gosec // a path inside the test directory
 	if err != nil {
 		t.Fatal(err)
 	}
