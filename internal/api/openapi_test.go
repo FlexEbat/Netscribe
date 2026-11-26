@@ -27,6 +27,7 @@ func fullServer() *server {
 		oidc:       struct{ OIDCService }{},
 		sealer:     &totp.Sealer{},
 		backup:     struct{ BackupService }{},
+		tls:        struct{ TLSService }{},
 		settings:   struct{ SettingsEditor }{},
 		notifier:   struct{ Notifications }{},
 		auditLog:   struct{ AuditReader }{},

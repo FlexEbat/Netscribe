@@ -48,6 +48,7 @@ const actions = [
   "device_import",
   "access_denied",
   "backup_create",
+  "tls_generate",
   "backup_restore",
   "session_revoke",
   "totp_enable",

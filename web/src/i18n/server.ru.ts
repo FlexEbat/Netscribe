@@ -91,6 +91,14 @@ export const serverRu: Record<string, string> = {
     "Скачивает резервную копию: базу данных и конфиг с секретами.",
   "A .tar.gz file. The password of the caller goes in the X-Confirm-Password header, UTF-8 and base64 encoded.":
     "Файл .tar.gz. Пароль вызывающего передаётся в заголовке X-Confirm-Password в UTF-8 и base64.",
+  "The certificate the panel is set to serve: its subject, names, dates and fingerprint, and whether it is self-signed. Never a key or a path.":
+    "Сертификат, который панель должна отдавать: субъект, имена, даты и отпечаток, и самоподписан ли он. Никогда не ключ и не путь.",
+  "Makes a self-signed certificate and sets tls.certFile and tls.keyFile. The password of the caller goes in the X-Confirm-Password header, UTF-8 and base64 encoded. 409 when a certificate is set and replace is not true.":
+    "Создаёт самоподписанный сертификат и задаёт tls.certFile и tls.keyFile. Пароль вызывающего передаётся в заголовке X-Confirm-Password в UTF-8 и base64. 409, если сертификат уже задан, а replace не равен true.",
+  '{"names":[],"days":365,"replace":false}; with no names the host name, localhost and the addresses of the host.':
+    '{"names":[],"days":365,"replace":false}; без имён берутся имя хоста, localhost и адреса хоста.',
+  '{"subject","names","notAfter","fingerprint","needRestart"}; the key is never sent.':
+    '{"subject","names","notAfter","fingerprint","needRestart"}; ключ никогда не отправляется.',
   "Checks a backup and asks the helper to put it in place.":
     "Проверяет копию и просит помощника развернуть её.",
   "The .tar.gz file itself, with the password in the X-Confirm-Password header.":

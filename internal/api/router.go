@@ -161,6 +161,9 @@ type Options struct {
 	// Backup makes and checks backups. Without it GET /api/backup and POST /api/backup/restore
 	// are not registered.
 	Backup BackupService
+	// TLS reads and makes the self-signed certificate. Without it GET /api/tls and
+	// POST /api/tls/self-signed are not registered.
+	TLS TLSService
 	// Auto serves the automatic update status and its resume route. Without it neither exists.
 	Auto AutoUpdates
 	// Helper takes the update and restart requests. Without it POST /api/update and
@@ -205,6 +208,8 @@ type server struct {
 	settings       SettingsEditor
 	notifier       Notifications
 	backup         BackupService
+	tls            TLSService
+	tlsMu          sync.Mutex // one certificate is made at a time
 	backupMu       sync.Mutex // one backup or restore at a time
 	metricsOn      func() bool
 	health         HealthRunner
@@ -296,6 +301,12 @@ func (s *server) routes() []Route {
 		table = append(table,
 			route(http.MethodGet, "/api/backup", model.PermSystemManage, s.getBackup),
 			route(http.MethodPost, "/api/backup/restore", model.PermSystemManage, s.restoreBackup),
+		)
+	}
+	if s.tls != nil {
+		table = append(table,
+			route(http.MethodGet, "/api/tls", model.PermSystemManage, s.getTLS),
+			route(http.MethodPost, "/api/tls/self-signed", model.PermSystemManage, s.postSelfSigned),
 		)
 	}
 	if s.settings != nil {
@@ -414,6 +425,7 @@ func newServer(opts Options) *server {
 		helper:         opts.Helper,
 		auto:           opts.Auto,
 		backup:         opts.Backup,
+		tls:            opts.TLS,
 		metricsOn:      opts.MetricsEnabled,
 		health:         opts.Health,
 		sessions:       opts.Sessions,
