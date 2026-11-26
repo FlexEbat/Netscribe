@@ -26,6 +26,7 @@ import (
 
 	"github.com/FlexEbat/Netscribe/internal/api"
 	"github.com/FlexEbat/Netscribe/internal/auth"
+	"github.com/FlexEbat/Netscribe/internal/certgen"
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/events"
@@ -54,6 +55,7 @@ commands:
   update    look for a newer release and install it (--check only looks)
   backup    write the database and the config to one archive: --out <file>
   restore   replace the data with a backup: restore <file> (as root)
+  cert      make or renew a self-signed https certificate: generate, show, renew
   version   print the version of this build
 
 run "netscribe <command> -h" for the flags of a command`
@@ -97,6 +99,7 @@ func run(args []string, e streams) int {
 		"helper":  runHelper,
 		"backup":  runBackup,
 		"restore": runRestore,
+		"cert":    runCert,
 	}
 	if cmd, ok := commands[args[0]]; ok {
 		if err := cmd(args[1:], e); err != nil {
@@ -171,9 +174,12 @@ func serve(args []string, e streams) error {
 		}
 		cfg.Listen = *listenFlag
 	}
+	var certs *certgen.Reloader
 	if cfg.TLS.CertFile != "" {
-		// A bad certificate would otherwise show only after the workers have started.
-		if _, err := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile); err != nil {
+		// A bad certificate would otherwise show only after the workers have started. The
+		// reloader also picks up a renewed certificate without a restart.
+		certs, err = certgen.NewReloader(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+		if err != nil {
 			return fmt.Errorf("load tls certificate: %w", err)
 		}
 	}
@@ -273,6 +279,9 @@ func serve(args []string, e streams) error {
 		TrustedProxies: proxies, Logger: logger,
 	})
 	srv := newServer(cfg, router)
+	if certs != nil {
+		srv.TLSConfig.GetCertificate = certs.GetCertificate
+	}
 	go maintain(ctx, db, cfg.Audit.KeepDays, func() int { return live.Current().History.KeepScans }, time.Hour, logger)
 	// The watcher asks for the targets at every connect, so a reload that changes
 	// scan.targets reaches it through Docker().Retarget, which SetConfig calls.
@@ -296,7 +305,7 @@ func serve(args []string, e streams) error {
 	go func() {
 		logger.Info("listening", "addr", cfg.Listen, "tls", cfg.TLS.CertFile != "")
 		if cfg.TLS.CertFile != "" {
-			errc <- srv.ServeTLS(ln, cfg.TLS.CertFile, cfg.TLS.KeyFile)
+			errc <- srv.ServeTLS(ln, "", "") // the certificate comes from TLSConfig.GetCertificate
 			return
 		}
 		errc <- srv.Serve(ln)

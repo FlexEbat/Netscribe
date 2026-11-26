@@ -400,6 +400,25 @@ func ConfigSet(ctx context.Context, env Env, o Options, key string, values []str
 	return s.commit(ctx, doc, st.hot)
 }
 
+// SetTLSFiles points tls.certFile and tls.keyFile at a pair that netscribe cert wrote. Like
+// every key that is not hot, it asks for the restart of a running service: the listener turns
+// from http to https only at start.
+func SetTLSFiles(ctx context.Context, env Env, o Options, certFile, keyFile string) error {
+	s := newSession(env, o)
+	s.p.yes = true // the only question is the restart, and the answer is yes
+	doc, err := s.openConfig()
+	if err != nil {
+		return err
+	}
+	if err := doc.set(p("tls.certFile"), strNode(certFile)); err != nil {
+		return err
+	}
+	if err := doc.set(p("tls.keyFile"), strNode(keyFile)); err != nil {
+		return err
+	}
+	return s.commit(ctx, doc, false)
+}
+
 // ConfigEdit opens the file in the editor of the person. The result is checked before it
 // replaces the file, and the person may go back and fix it.
 func ConfigEdit(ctx context.Context, env Env, o Options) error {

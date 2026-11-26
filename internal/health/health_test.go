@@ -2,13 +2,21 @@ package health
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"io/fs"
+	"math/big"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/FlexEbat/Netscribe/internal/certgen"
 	"github.com/FlexEbat/Netscribe/internal/config"
 	"github.com/FlexEbat/Netscribe/internal/model"
 )
@@ -138,5 +146,44 @@ func TestNoCheckPrintsASecret(t *testing.T) {
 func TestWorst(t *testing.T) {
 	if Worst([]Check{{Status: OK}, {Status: Warn}}) != Warn || Worst([]Check{{Status: Warn}, {Status: Fail}}) != Fail || Worst(nil) != OK {
 		t.Error("Worst")
+	}
+}
+
+func TestTLSCertSaysWhenTheCertificateIsSelfSigned(t *testing.T) {
+	certPEM, _, err := certgen.Generate(certgen.Options{Names: []string{"a.lan"}, Days: 90, Now: now})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, in := probe(), input()
+	p.ReadFile = func(string) ([]byte, error) { return certPEM, nil }
+	in.Config.TLS.CertFile = "/etc/netscribe/tls/tls.crt"
+	got := byID(Run(context.Background(), p, in), "tls.cert")
+	if got.Status != OK || !strings.HasSuffix(got.Detail, ", self-signed") {
+		t.Errorf("self-signed: %+v", got)
+	}
+}
+
+func TestTLSCertDoesNotCallAnIssuedCertificateSelfSigned(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ca := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Lab CA"},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(48 * time.Hour), IsCA: true, BasicConstraintsValid: true,
+		KeyUsage: x509.KeyUsageCertSign}
+	leaf := &x509.Certificate{SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "a.lan"},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(90 * 24 * time.Hour), DNSNames: []string{"a.lan"}}
+	der, err := x509.CreateCertificate(rand.Reader, leaf, ca, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, in := probe(), input()
+	p.ReadFile = func(string) ([]byte, error) {
+		return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), nil
+	}
+	in.Config.TLS.CertFile = "/etc/ssl/panel.crt"
+	got := byID(Run(context.Background(), p, in), "tls.cert")
+	if got.Status != OK || strings.Contains(got.Detail, "self-signed") {
+		t.Errorf("issued: %+v", got)
 	}
 }

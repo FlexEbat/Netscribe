@@ -105,6 +105,9 @@ describe("serverText", () => {
     expect(serverText("the certificate is valid for 21 more days")).toBe(
       "сертификат действителен ещё 21 день",
     )
+    expect(serverText("the certificate is valid for 21 more days, self-signed")).toBe(
+      "сертификат действителен ещё 21 день, самоподписанный",
+    )
     expect([1, 2, 5, 11, 21, 22].map((n) => pluralRu(n, "a", "b", "c"))).toEqual([
       "a",
       "b",
