@@ -284,6 +284,9 @@ export const serverRu: Record<string, string> = {
     "Строго: хост, которого нет в списке или у которого сменился ключ, пропускается. Заполните файл через ssh-keyscan и проверьте отпечаток.",
   Updates: "Обновления",
   "newer releases": "новые версии",
+  Notifications: "Уведомления",
+  "how alerts are kept steady (channels are in the panel)":
+    "как держать оповещения ровными (каналы настраиваются в панели)",
   "Look for new releases": "Искать новые версии",
   "Asks GitHub every few hours whether a newer release exists. Nothing about this host is sent. Off hides the update notice.":
     "Раз в несколько часов спрашивает GitHub, есть ли новая версия. Ничего об этом хосте не отправляется. Выключено: уведомление об обновлении скрыто.",
