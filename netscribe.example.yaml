@@ -98,7 +98,13 @@ metrics:
   enabled: false # serve /metrics for Prometheus; reading it needs an access token with the read scope
 
 notify: # messages about what a scan found, one summary per scan; applied without a restart
-  events: [device_added, scan_failed] # also: device_offline, port_opened, risky_service
+  events: [device_added, scan_failed] # also: device_offline, device_online, port_opened, risky_service, address_changed, link_down, tls_expiring, device_flapping
+  flapCount: 3 # online and offline changes of one device within an hour that make it flapping (device_flapping), 2 to 20
+  quietHours: "" # a daily local time range such as "22:00-07:00"; messages made inside it are sent as one summary when it ends
+  maintenance: [] # windows in which the changes of a group, or of every device, make no message
+  # - from: 2026-12-01T22:00 # local time
+  #   to: 2026-12-02T02:00 # at most 31 days after from
+  #   group: Lab # a group name; leave it out for the whole network
   channels: [] # an empty list turns notifications off
   # - name: ops
   #   type: webhook

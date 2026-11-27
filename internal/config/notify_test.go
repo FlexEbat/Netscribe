@@ -42,6 +42,37 @@ func TestNotifyBlockIsValidatedAsAWhole(t *testing.T) {
 		{"email from is not an address", func(n *NotifyConfig) { c := email; c.From = "nobody"; n.Channels = []ChannelConfig{c} }, "from is not an address"},
 		{"email without recipients", func(n *NotifyConfig) { c := email; c.To = nil; n.Channels = []ChannelConfig{c} }, "to needs"},
 		{"email recipient is not an address", func(n *NotifyConfig) { c := email; c.To = []string{"x"}; n.Channels = []ChannelConfig{c} }, "not an address"},
+		{"every new event", func(n *NotifyConfig) {
+			n.Events = []string{EventDeviceOnline, EventTLSExpiring, EventAddressChanged, EventLinkDown, EventDeviceFlapping}
+		}, ""},
+		{"flap count 1", func(n *NotifyConfig) { n.FlapCount = 1 }, "notify.flapCount"},
+		{"flap count 21", func(n *NotifyConfig) { n.FlapCount = 21 }, "notify.flapCount"},
+		{"flap count 2", func(n *NotifyConfig) { n.FlapCount = 2 }, ""},
+		{"flap count 20", func(n *NotifyConfig) { n.FlapCount = 20 }, ""},
+		{"quiet hours across midnight", func(n *NotifyConfig) { n.QuietHours = "22:00-07:00" }, ""},
+		{"quiet hours with the same times", func(n *NotifyConfig) { n.QuietHours = "22:00-22:00" }, "notify.quietHours"},
+		{"quiet hours that are not times", func(n *NotifyConfig) { n.QuietHours = "night" }, "notify.quietHours"},
+		{"a maintenance window", func(n *NotifyConfig) {
+			n.Maintenance = []MaintenanceWindow{{From: "2026-12-01T22:00", To: "2026-12-02T02:00", Group: "Lab"}}
+		}, ""},
+		{"a maintenance window of the whole network", func(n *NotifyConfig) {
+			n.Maintenance = []MaintenanceWindow{{From: "2026-12-01T22:00", To: "2026-12-02T02:00"}}
+		}, ""},
+		{"maintenance that ends before it starts", func(n *NotifyConfig) {
+			n.Maintenance = []MaintenanceWindow{{From: "2026-12-02T02:00", To: "2026-12-01T22:00"}}
+		}, "notify.maintenance[0]: to must be after from"},
+		{"maintenance with a bad time", func(n *NotifyConfig) {
+			n.Maintenance = []MaintenanceWindow{{From: "tomorrow", To: "2026-12-02T02:00"}}
+		}, "from must look like"},
+		{"maintenance for 32 days", func(n *NotifyConfig) {
+			n.Maintenance = []MaintenanceWindow{{From: "2026-12-01T00:00", To: "2027-01-02T00:01"}}
+		}, "31 days"},
+		{"maintenance for 31 days", func(n *NotifyConfig) {
+			n.Maintenance = []MaintenanceWindow{{From: "2026-12-01T00:00", To: "2027-01-01T00:00"}}
+		}, ""},
+		{"maintenance with a control character in the group", func(n *NotifyConfig) {
+			n.Maintenance = []MaintenanceWindow{{From: "2026-12-01T22:00", To: "2026-12-02T02:00", Group: "a\x07b"}}
+		}, "group must be"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -792,7 +792,10 @@ updates:
   check: true                    # slice 24: ask GitHub whether a newer release exists, applied without a restart
 
 notify:                          # slice 27: applied without a restart
-  events: [device_added, scan_failed]   # any of: device_added, device_offline, port_opened, risky_service, scan_failed
+  events: [device_added, scan_failed]   # any of: device_added, device_offline, port_opened, risky_service, scan_failed; slice 46 adds device_online, tls_expiring, address_changed, link_down, device_flapping
+  flapCount: 3                   # slice 46: changes within an hour that make a device flap, 2 to 20
+  quietHours: ""                 # slice 46: "22:00-07:00", local; messages wait and go out as one summary
+  maintenance: []                # slice 46: - {from: 2026-12-01T22:00, to: 2026-12-02T02:00, group: Lab}; no group means every device
   channels:                      # an empty list turns notifications off
     - name: ops                  # 1 to 32 characters, letters, digits, - and _, unique
       type: webhook              # webhook, telegram, email

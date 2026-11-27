@@ -273,7 +273,7 @@ func TestConsoleExportAsksBeforeItReplacesAFile(t *testing.T) {
 func TestConfigureAsksBeforeItSavesAndANoChangesNothing(t *testing.T) {
 	f, o := installed(t)
 	before := readFile(t, o.ConfigPath)
-	if err := Configure(context.Background(), f.env(menu("2", "2", "45m", "n", "10", "15")), o, "v"); err != nil {
+	if err := Configure(context.Background(), f.env(menu("2", "2", "45m", "n", "10", "16")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if readFile(t, o.ConfigPath) != before || exists(o.ConfigPath+".bak") {
@@ -289,7 +289,7 @@ func TestConfigureRestoresThePreviousConfig(t *testing.T) {
 	if err := ConfigSet(context.Background(), f.env(""), o, "scan.interval", []string{"45m"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Configure(context.Background(), f.env(menu("14", "y", "15")), o, "v"); err != nil {
+	if err := Configure(context.Background(), f.env(menu("15", "y", "16")), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
 	if cfg, _ := config.Load(o.ConfigPath, false); cfg.Scan.Interval.Std().Minutes() != 15 {
@@ -300,7 +300,7 @@ func TestConfigureRestoresThePreviousConfig(t *testing.T) {
 	}
 	// a no leaves it alone, and no backup is no error
 	f2, o2 := installed(t)
-	if err := Configure(context.Background(), f2.env(menu("14", "15")), o2, "v"); err != nil {
+	if err := Configure(context.Background(), f2.env(menu("15", "16")), o2, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f2.out.String(), "no previous config") {
@@ -310,7 +310,7 @@ func TestConfigureRestoresThePreviousConfig(t *testing.T) {
 
 func TestConfigureAddsAndRemovesSSHHosts(t *testing.T) {
 	f, o := installed(t)
-	add := menu("11", "1", "192.168.1.10", "audit", "/home/a/key", "y", "3", "15")
+	add := menu("12", "1", "192.168.1.10", "audit", "/home/a/key", "y", "3", "16")
 	if err := Configure(context.Background(), f.env(add), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -318,7 +318,7 @@ func TestConfigureAddsAndRemovesSSHHosts(t *testing.T) {
 	if err != nil || len(cfg.SSH.Hosts) != 1 || cfg.SSH.Hosts[0].Address != "192.168.1.10" || cfg.SSH.Hosts[0].User != "audit" {
 		t.Fatalf("hosts %+v, %v", cfg.SSH.Hosts, err)
 	}
-	remove := menu("11", "2", "1", "n", "2", "1", "y", "3", "15") // a no first, then a yes
+	remove := menu("12", "2", "1", "n", "2", "1", "y", "3", "16") // a no first, then a yes
 	if err := Configure(context.Background(), f.env(remove), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
@@ -329,7 +329,7 @@ func TestConfigureAddsAndRemovesSSHHosts(t *testing.T) {
 
 func TestConfigureRefusesABadSSHAddress(t *testing.T) {
 	f, o := installed(t)
-	if err := Configure(context.Background(), f.env(menu("11", "1", "not-an-ip", "192.168.1.11:2222", "audit", "/k", "y", "3", "15")), o, "v"); err != nil {
+	if err := Configure(context.Background(), f.env(menu("12", "1", "not-an-ip", "192.168.1.11:2222", "audit", "/k", "y", "3", "16")), o, "v"); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(f.out.String(), "use an IP address") {

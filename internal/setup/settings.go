@@ -131,6 +131,10 @@ var settingGroups = []group{
 		{path: p("updates.window"), label: "Window for automatic updates", kind: kText, hot: true, def: "03:00-05:00",
 			help: "Local time, from-to, for example 03:00-05:00. It may cross midnight. An update starts only inside the window, and never while a scan runs."},
 	}},
+	{name: "Notifications", hint: "how alerts are kept steady (channels are in the panel)", items: []setting{
+		{path: p("notify.flapCount"), label: "Changes that make a device flap", kind: kInt, hot: true, def: "3",
+			help: "A device that goes up and down this many times within an hour is reported once as flapping, and then not again until it has been steady for an hour. 2 to 20. It needs the event device_flapping. Quiet hours and maintenance windows are written in the config file."},
+	}},
 }
 
 func findSetting(key string) (setting, bool) {

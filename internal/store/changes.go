@@ -228,6 +228,11 @@ func deviceParts(was, now dbgen.Device) []string {
 			parts = append(parts, fmt.Sprintf("%s %s -> %s", f.name, dashIfEmpty(f.old), dashIfEmpty(f.new)))
 		}
 	}
+	// A device that had a MAC and shows another one is news (slice 46). Learning a MAC for a
+	// device that had none is not: that is the scan finding out more, not the address changing.
+	if was.Mac != "" && now.Mac != "" && was.Mac != now.Mac {
+		parts = append(parts, fmt.Sprintf("mac %s -> %s", was.Mac, now.Mac))
+	}
 	return parts
 }
 

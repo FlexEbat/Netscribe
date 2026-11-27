@@ -257,6 +257,7 @@ func serve(args []string, e streams) error {
 	go auto.Run(ctx, func(err error) { logger.Warn("automatic update", "err", err) })
 	notifier := notify.New(notifySource{db}, func() config.NotifyConfig { return live.Current().Notify }, logger)
 	go notifyOnScans(ctx, hub, notifier)
+	go notifier.Run(ctx)
 	// Single sign-on is read once here: a change of auth.oidc needs a restart. The provider
 	// is asked at the first sign-in, so one that is down now does not stop the service.
 	var sso api.OIDCService
