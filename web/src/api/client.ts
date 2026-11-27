@@ -388,6 +388,10 @@ export interface Service {
 export interface Risk {
   severity: "medium" | "high"
   message: string
+  /** Stable id of the rule, for example "telnet". */
+  code: string
+  /** One sentence: what an attacker gains. */
+  why: string
 }
 
 export interface DeviceDetail {

@@ -391,6 +391,7 @@ Netscribe хранит карту вашей сети: относитесь к �
   фильтрующий прокси, который пропускает только `containers`, `networks` и `events`, и
   направьте `docker.socket` на его unix-сокет ([docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy)
   слушает TCP и требует моста в unix-сокет).
+- **Рискованные службы.** Открытая служба на порту из фиксированного списка (Telnet, TFTP, VNC, API Docker без TLS, Redis, MongoDB, Elasticsearch, Memcached, FTP, SMB, RDP, SNMP, популярные базы данных, NFS, rpcbind, rsync, MQTT и сопоставитель RPC Windows), просроченный сертификат TLS и баннер SSH-1 получают пометку с объяснением, чем это опасно. Список зашит в код намеренно. Netscribe никогда не подбирает имя и пароль на устройстве, поэтому пароли по умолчанию он не проверяет.
 - **Сообщения об ошибках безопасности.** Отправляйте так, как описано в [SECURITY.md](SECURITY.md).
 
 ## Документация

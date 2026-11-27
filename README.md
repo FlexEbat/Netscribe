@@ -391,6 +391,7 @@ Netscribe holds a map of your network: treat its database and config as sensitiv
   `events` in front of the daemon and point `docker.socket` at its unix socket
   ([docker-socket-proxy](https://github.com/Tecnativa/docker-socket-proxy) listens on TCP and
   needs a unix socket bridge).
+- **Risky services.** An open service on a fixed list of ports (Telnet, TFTP, VNC, the Docker API without TLS, Redis, MongoDB, Elasticsearch, Memcached, FTP, SMB, RDP, SNMP, the common databases, NFS, rpcbind, rsync, MQTT and the Windows RPC mapper), an expired TLS certificate and an SSH-1 banner each get a note that says why it matters. The list is fixed in code on purpose. Netscribe never tries a user name or a password on a device, so it does not check for default credentials.
 - **Reports.** Send security reports as described in [SECURITY.md](SECURITY.md).
 
 ## Documentation
