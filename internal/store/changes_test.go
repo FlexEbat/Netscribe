@@ -7,6 +7,7 @@ import (
 
 	"github.com/FlexEbat/Netscribe/internal/collector"
 	"github.com/FlexEbat/Netscribe/internal/model"
+	dbgen "github.com/FlexEbat/Netscribe/internal/store/db"
 )
 
 // scanWith runs a complete scan of 192.168.1.0/24 with the given result.
@@ -324,5 +325,19 @@ func TestPruneScansNeverDeletesARunningScan(t *testing.T) {
 	}
 	if _, err := s.GetScan(ctx, running.ID); err != nil {
 		t.Errorf("the running scan was deleted: %v", err)
+	}
+}
+
+func TestDevicePartsTellsAChangedMACButNotALearnedOne(t *testing.T) {
+	was := dbgen.Device{Mac: "aa:aa:aa:aa:aa:01", Ip: "192.168.1.1"}
+	now := dbgen.Device{Mac: "bb:bb:bb:bb:bb:02", Ip: "192.168.1.1"}
+	if got := strings.Join(deviceParts(was, now), "; "); got != "mac aa:aa:aa:aa:aa:01 -> bb:bb:bb:bb:bb:02" {
+		t.Errorf("a changed MAC: %q", got)
+	}
+	if got := deviceParts(dbgen.Device{Ip: "192.168.1.1"}, now); len(got) != 0 {
+		t.Errorf("a MAC that was learned for a device without one is no change: %v", got)
+	}
+	if got := deviceParts(was, was); len(got) != 0 {
+		t.Errorf("no change: %v", got)
 	}
 }

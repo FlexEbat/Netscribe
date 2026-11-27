@@ -186,6 +186,9 @@ export const serverRu: Record<string, string> = {
   "Connections at once": "Одновременных соединений",
   "How many TCP connections the port scan holds open together, 1 to 512. Lower it on a small host or a weak link.":
     "Сколько TCP-соединений сканер портов держит открытыми одновременно: от 1 до 512. Уменьшите на слабом хосте или канале.",
+  "Changes that make a device flap": "Сколько смен состояния считать мерцанием",
+  "A device that goes up and down this many times within an hour is reported once as flapping, and then not again until it has been steady for an hour. 2 to 20. It needs the event device_flapping. Quiet hours and maintenance windows are written in the config file.":
+    "Устройство, которое за час сменило состояние столько раз, считается мерцающим: о нём сообщают один раз и больше не сообщают, пока оно не простоит спокойно час. От 2 до 20. Нужно событие device_flapping. Тихие часы и окна работ задаются в файле конфигурации.",
   "Scans that must miss a device": "Сколько сканирований должны не увидеть устройство",
   "A device goes offline after this many scans in a row did not see it, 1 to 20. 1 is the first miss. A higher number hides one lost reply.":
     "Устройство уходит в офлайн, когда его не увидели столько сканирований подряд, от 1 до 20. 1 — первый пропуск. Большее число скрывает один потерянный ответ.",

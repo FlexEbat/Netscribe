@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -425,6 +426,13 @@ const (
 	EventPortOpened    = "port_opened"
 	EventRiskyService  = "risky_service"
 	EventScanFailed    = "scan_failed"
+
+	// Slice 46.
+	EventDeviceOnline   = "device_online"
+	EventTLSExpiring    = "tls_expiring"
+	EventAddressChanged = "address_changed"
+	EventLinkDown       = "link_down"
+	EventDeviceFlapping = "device_flapping"
 )
 
 // The kinds of notification channel.
@@ -439,6 +447,43 @@ const (
 type NotifyConfig struct {
 	Events   []string        `yaml:"events"`
 	Channels []ChannelConfig `yaml:"channels"`
+
+	// FlapCount is how many online and offline changes of one device within an hour make it
+	// flapping: one device_flapping message, then silence about the device until it has been
+	// steady for an hour.
+	FlapCount int `yaml:"flapCount"`
+	// QuietHours is a daily local time range, "22:00-07:00". Messages made inside it are kept
+	// and sent as one summary when it ends. Empty means no quiet hours.
+	QuietHours string `yaml:"quietHours"`
+	// Maintenance lists windows in which the changes of a group, or of the whole network,
+	// make no message.
+	Maintenance []MaintenanceWindow `yaml:"maintenance"`
+}
+
+// MaintenanceLayout is the form of the times of a maintenance window, in local time.
+const MaintenanceLayout = "2006-01-02T15:04"
+
+// MaxMaintenance is the longest maintenance window, so a forgotten one cannot mute a network
+// for good.
+const MaxMaintenance = 31 * 24 * time.Hour
+
+// MaintenanceWindow mutes the changes of one group, or of every device when Group is empty,
+// from From until To. A window that has ended does nothing and may stay in the file.
+type MaintenanceWindow struct {
+	From  string `yaml:"from"`
+	To    string `yaml:"to"`
+	Group string `yaml:"group"`
+}
+
+// Range returns the two times in the local zone.
+func (m MaintenanceWindow) Range() (from, to time.Time, err error) {
+	if from, err = time.ParseInLocation(MaintenanceLayout, strings.TrimSpace(m.From), time.Local); err != nil {
+		return time.Time{}, time.Time{}, errors.New("from must look like 2026-12-01T22:00")
+	}
+	if to, err = time.ParseInLocation(MaintenanceLayout, strings.TrimSpace(m.To), time.Local); err != nil {
+		return time.Time{}, time.Time{}, errors.New("to must look like 2026-12-01T22:00")
+	}
+	return from, to, nil
 }
 
 // ChannelConfig is one place to send messages to. Which fields count depends on Type.
@@ -464,7 +509,33 @@ var channelName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
 // validate checks the notify block. A single problem refuses the whole config, so a typo
 // never silently turns an alert off.
 func (n NotifyConfig) validate(fail func(where string, err error)) {
-	known := map[string]bool{EventDeviceAdded: true, EventDeviceOffline: true, EventPortOpened: true, EventRiskyService: true, EventScanFailed: true}
+	known := map[string]bool{
+		EventDeviceAdded: true, EventDeviceOffline: true, EventPortOpened: true, EventRiskyService: true, EventScanFailed: true,
+		EventDeviceOnline: true, EventTLSExpiring: true, EventAddressChanged: true, EventLinkDown: true, EventDeviceFlapping: true,
+	}
+	if n.FlapCount < 2 || n.FlapCount > 20 {
+		fail("notify.flapCount", errors.New("must be between 2 and 20"))
+	}
+	if strings.TrimSpace(n.QuietHours) != "" {
+		if _, _, err := ParseWindow(n.QuietHours); err != nil {
+			fail("notify.quietHours", err)
+		}
+	}
+	for i, m := range n.Maintenance {
+		where := fmt.Sprintf("notify.maintenance[%d]", i)
+		from, to, err := m.Range()
+		switch {
+		case err != nil:
+			fail(where, err)
+		case !to.After(from):
+			fail(where, errors.New("to must be after from"))
+		case to.Sub(from) > MaxMaintenance:
+			fail(where, errors.New("a window may last 31 days at most"))
+		}
+		if len(m.Group) > 64 || strings.ContainsFunc(m.Group, unicode.IsControl) {
+			fail(where, errors.New("group must be a group name of 64 characters at most"))
+		}
+	}
 	seenEvent := map[string]bool{}
 	for i, e := range n.Events {
 		where := fmt.Sprintf("notify.events[%d]", i)
@@ -551,7 +622,7 @@ func defaults() Config {
 		},
 		Discovery: DiscoveryConfig{RouterTables: true, HTTPHeaders: true, MDNS: true, SSDP: true, NmapScope: "untyped"},
 		Updates:   UpdatesConfig{Check: true},
-		Notify:    NotifyConfig{Events: []string{EventDeviceAdded, EventScanFailed}},
+		Notify:    NotifyConfig{Events: []string{EventDeviceAdded, EventScanFailed}, FlapCount: 3},
 	}
 }
 

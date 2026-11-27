@@ -65,6 +65,9 @@ type Notifier struct {
 
 	mu       sync.Mutex
 	lastTest map[string]time.Time
+	held     held // what quiet hours kept back, sent when they end
+
+	flaps *flaps
 }
 
 // New returns a notifier that reads the live notify block through cfg on every scan, so a
@@ -74,6 +77,7 @@ func New(src Source, cfg func() config.NotifyConfig, log *slog.Logger) *Notifier
 		src: src, cfg: cfg, log: log,
 		build: newSender, now: time.Now, retryDelay: retryDelay,
 		lastTest: map[string]time.Time{},
+		flaps:    newFlaps(),
 	}
 }
 
@@ -93,6 +97,7 @@ func (n *Notifier) Channels() []ChannelInfo {
 // webhook must not break a scan.
 func (n *Notifier) Handle(ctx context.Context, scan model.Scan) {
 	c := n.cfg()
+	n.flush(ctx, c) // quiet hours may have ended since the last scan
 	if len(c.Channels) == 0 || len(c.Events) == 0 || scan.Status == "running" {
 		return
 	}
@@ -113,13 +118,69 @@ func (n *Notifier) Handle(ctx context.Context, scan model.Scan) {
 			return
 		}
 	}
-	lines := compose(scan, enabled, in)
+	now := n.now()
+	n.flaps.forget()
+	items := compose(scan, enabled, in, n.flaps, c.FlapCount)
+	groups := map[int64]string{}
+	for _, d := range in.devices {
+		if d.Group != nil {
+			groups[d.ID] = d.Group.Name
+		}
+	}
+	var lines []string
+	for _, it := range items {
+		if !muted(c.Maintenance, now, it, groups) {
+			lines = append(lines, it.line)
+		}
+	}
 	if len(lines) == 0 {
+		return
+	}
+	if inQuiet(c.QuietHours, now) {
+		n.mu.Lock()
+		n.held.add(lines)
+		n.mu.Unlock()
 		return
 	}
 	body := body(lines)
 	for _, ch := range c.Channels {
 		if err := n.deliver(ctx, ch, subject, body); err != nil {
+			n.log.Warn("notify: delivery failed", "channel", ch.Name, "type", ch.Type, "reason", err.Error())
+		}
+	}
+}
+
+// Run sends the summary of the quiet hours when they end, even when no scan comes by. It
+// returns when ctx ends.
+func (n *Notifier) Run(ctx context.Context) {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			n.flush(ctx, n.cfg())
+		}
+	}
+}
+
+// flush sends what quiet hours kept, as one message, once they are over. With no channel left
+// the lines are dropped: there is nobody to tell.
+func (n *Notifier) flush(ctx context.Context, c config.NotifyConfig) {
+	if inQuiet(c.QuietHours, n.now()) {
+		return
+	}
+	n.mu.Lock()
+	h := n.held
+	n.held = held{}
+	n.mu.Unlock()
+	if len(h.lines) == 0 {
+		return
+	}
+	body := h.summary()
+	for _, ch := range c.Channels {
+		if err := n.deliver(ctx, ch, quietSubject, body); err != nil {
 			n.log.Warn("notify: delivery failed", "channel", ch.Name, "type", ch.Type, "reason", err.Error())
 		}
 	}
@@ -187,26 +248,27 @@ func (n *Notifier) read(ctx context.Context, scan model.Scan) (input, error) {
 	return in, nil
 }
 
-// compose is the whole decision of what is worth a message. It returns one line per event.
-func compose(scan model.Scan, enabled map[string]bool, in input) []string {
-	var lines []string
-	add := func(format string, args ...any) { lines = append(lines, clean(fmt.Sprintf(format, args...))) }
+// item is one line of a message with what the filters need to know about it.
+type item struct {
+	event  string // the name in notify.events that allowed it
+	device int64  // the device it is about, 0 when it is about none
+	line   string
+}
+
+// compose is the whole decision of what is worth a message. It returns one item per event.
+// flap and flapCount turn the device_flapping event on; flap may be nil.
+func compose(scan model.Scan, enabled map[string]bool, in input, flap *flaps, flapCount int) []item {
+	var items []item
+	add := func(event string, device int64, format string, args ...any) {
+		items = append(items, item{event: event, device: device, line: clean(fmt.Sprintf(format, args...))})
+	}
 
 	if scan.Status == "failed" {
 		// A scan that a person canceled is not news.
 		if enabled[config.EventScanFailed] && scan.Error != "canceled" {
-			add("Scan of %s failed: %s", scan.Target, scan.Error)
+			add(config.EventScanFailed, 0, "Scan of %s failed: %s", scan.Target, scan.Error)
 		}
-		return lines
-	}
-
-	for _, c := range in.changes {
-		switch {
-		case c.Kind == "device_added" && enabled[config.EventDeviceAdded]:
-			add("%s", c.Summary)
-		case c.Kind == "device_offline" && enabled[config.EventDeviceOffline]:
-			add("%s", c.Summary)
-		}
+		return items
 	}
 
 	names := map[int64]string{}
@@ -217,6 +279,44 @@ func compose(scan model.Scan, enabled map[string]bool, in input) []string {
 			created[d.ID] = true
 		}
 	}
+
+	for _, c := range in.changes {
+		dev := entityDevice(c)
+		switch {
+		case c.Kind == "device_added" && enabled[config.EventDeviceAdded]:
+			add(config.EventDeviceAdded, dev, "%s", c.Summary)
+		case c.Kind == "device_offline" || c.Kind == "device_online":
+			event := config.EventDeviceOffline
+			if c.Kind == "device_online" {
+				event = config.EventDeviceOnline
+			}
+			// Flapping is looked at for every change, whether or not the plain event is
+			// wanted, so a device that flaps is reported even by a person who wants only that.
+			if enabled[config.EventDeviceFlapping] && flap != nil {
+				switch flap.observe(c.EntityID, c.At, flapCount) {
+				case flapStarted:
+					name := names[dev]
+					if name == "" {
+						name = "device " + c.EntityID
+					}
+					add(config.EventDeviceFlapping, dev, "%s is flapping: it went up and down %d times within an hour. No more messages about it until it is steady for an hour.", name, flapCount)
+					continue
+				case flapHeld:
+					continue
+				}
+			}
+			if enabled[event] {
+				add(event, dev, "%s", c.Summary)
+			}
+		case c.Kind == "device_changed" && enabled[config.EventAddressChanged] && addressChanged(c.Summary):
+			add(config.EventAddressChanged, dev, "%s", c.Summary)
+		case c.Kind == "link_removed" && enabled[config.EventLinkDown]:
+			add(config.EventLinkDown, 0, "%s", c.Summary)
+		case c.Kind == "tls_expiring" && enabled[config.EventTLSExpiring]:
+			add(config.EventTLSExpiring, 0, "%s", c.Summary)
+		}
+	}
+
 	for _, sv := range in.services {
 		if sv.FirstSeenAt.Before(scan.StartedAt) {
 			continue
@@ -227,12 +327,12 @@ func compose(scan model.Scan, enabled map[string]bool, in input) []string {
 		}
 		switch {
 		case sv.Risk != nil && enabled[config.EventRiskyService]:
-			add("Risky service on %s: %d/%s %s (%s) - %s", host, sv.Port, sv.Proto, sv.Name, sv.Risk.Severity, sv.Risk.Message)
+			add(config.EventRiskyService, sv.DeviceID, "Risky service on %s: %d/%s %s (%s) - %s", host, sv.Port, sv.Proto, sv.Name, sv.Risk.Severity, sv.Risk.Message)
 		case enabled[config.EventPortOpened] && !created[sv.DeviceID]:
-			add("New open port on %s: %d/%s %s", host, sv.Port, sv.Proto, sv.Name)
+			add(config.EventPortOpened, sv.DeviceID, "New open port on %s: %d/%s %s", host, sv.Port, sv.Proto, sv.Name)
 		}
 	}
-	return lines
+	return items
 }
 
 func deviceName(d model.Device) string {

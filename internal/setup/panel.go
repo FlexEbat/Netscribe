@@ -63,6 +63,7 @@ var panelGetters = map[string]func(c config.Config) any{
 	"scan.concurrency":             func(c config.Config) any { return c.Scan.Concurrency },
 	"scan.retryAfter":              func(c config.Config) any { return shortDuration(c.Scan.RetryAfter.Std()) },
 	"scan.offlineAfter":            func(c config.Config) any { return c.Scan.OfflineAfter },
+	"notify.flapCount":             func(c config.Config) any { return c.Notify.FlapCount },
 	"allowPublicTargets":           func(c config.Config) any { return c.AllowPublicTargets },
 	"discovery.probeRoutedTargets": func(c config.Config) any { return c.Discovery.ProbeRoutedTargets },
 	"discovery.nmap":               func(c config.Config) any { return c.Discovery.Nmap },
