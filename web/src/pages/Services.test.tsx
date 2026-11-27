@@ -129,7 +129,12 @@ describe("Services banner", () => {
   it("marks a risky service and leaves the others alone", async () => {
     const telnet = {
       ...service(1, 1, 23, "telnet"),
-      risk: { severity: "high" as const, message: "Telnet sends passwords in clear text" },
+      risk: {
+        severity: "high" as const,
+        message: "Telnet sends passwords in clear text",
+        code: "telnet",
+        why: "Anyone on the path reads the password and the session.",
+      },
     }
     setup([telnet, service(2, 1, 22, "ssh")], [device(1, "192.168.1.1", "gateway")])
     const rows = within(await screen.findByRole("table")).getAllByRole("row")
@@ -137,7 +142,7 @@ describe("Services banner", () => {
     const sshRow = rows.find((r) => within(r).queryByText("ssh"))!
     expect(within(telnetRow).getByText("high risk")).toHaveAttribute(
       "title",
-      "Telnet sends passwords in clear text",
+      "Telnet sends passwords in clear text. Anyone on the path reads the password and the session.",
     )
     expect(within(sshRow).queryByText(/risk/)).not.toBeInTheDocument()
   })

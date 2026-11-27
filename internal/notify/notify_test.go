@@ -140,10 +140,10 @@ func TestPortsAndRiskyServices(t *testing.T) {
 			{ID: 2, IP: "192.168.1.2", Hostname: "fresh", FirstSeenAt: t0.Add(time.Second)},
 		},
 		services: []model.Service{
-			{DeviceID: 1, Port: 22, Proto: "tcp", Name: "ssh", FirstSeenAt: old},                                                        // not new
-			{DeviceID: 1, Port: 8080, Proto: "tcp", Name: "http-alt", FirstSeenAt: t0.Add(time.Second)},                                 // new port on an old device
-			{DeviceID: 1, Port: 23, Proto: "tcp", Name: "telnet", FirstSeenAt: t0.Add(time.Second), Risk: model.RateService(23, "tcp")}, // risky
-			{DeviceID: 2, Port: 80, Proto: "tcp", Name: "http", FirstSeenAt: t0.Add(time.Second)},                                       // new device, not a "port opened"
+			{DeviceID: 1, Port: 22, Proto: "tcp", Name: "ssh", FirstSeenAt: old},                        // not new
+			{DeviceID: 1, Port: 8080, Proto: "tcp", Name: "http-alt", FirstSeenAt: t0.Add(time.Second)}, // new port on an old device
+			{DeviceID: 1, Port: 23, Proto: "tcp", Name: "telnet", FirstSeenAt: t0.Add(time.Second), Risk: model.RateService(model.Service{Port: 23, Proto: "tcp"})},
+			{DeviceID: 2, Port: 80, Proto: "tcp", Name: "http", FirstSeenAt: t0.Add(time.Second)}, // new device, not a "port opened"
 		},
 	}
 	r := &recorder{}
@@ -153,7 +153,7 @@ func TestPortsAndRiskyServices(t *testing.T) {
 		t.Fatalf("got %v", r.got)
 	}
 	m := r.got[0]
-	for _, want := range []string{"New open port on gw (192.168.1.1): 8080/tcp http-alt", "Risky service on gw (192.168.1.1): 23/tcp telnet (high)"} {
+	for _, want := range []string{"New open port on gw (192.168.1.1): 8080/tcp http-alt", "Risky service on gw (192.168.1.1): 23/tcp telnet (high, telnet)"} {
 		if !strings.Contains(m, want) {
 			t.Errorf("message lacks %q:\n%s", want, m)
 		}

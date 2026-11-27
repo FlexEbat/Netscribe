@@ -352,7 +352,7 @@ func compose(scan model.Scan, enabled map[string]bool, in input, flap *flaps, fl
 		}
 		switch {
 		case sv.Risk != nil && enabled[config.EventRiskyService]:
-			add(config.EventRiskyService, sv.DeviceID, "Risky service on %s: %d/%s %s (%s) - %s", host, sv.Port, sv.Proto, sv.Name, sv.Risk.Severity, sv.Risk.Message)
+			add(config.EventRiskyService, sv.DeviceID, "Risky service on %s: %d/%s %s (%s, %s) - %s", host, sv.Port, sv.Proto, sv.Name, sv.Risk.Severity, sv.Risk.Code, sv.Risk.Message)
 		case enabled[config.EventPortOpened] && !created[sv.DeviceID]:
 			add(config.EventPortOpened, sv.DeviceID, "New open port on %s: %d/%s %s", host, sv.Port, sv.Proto, sv.Name)
 		}

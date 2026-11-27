@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { getLang, setLang } from "@/i18n"
+import { getLang, setLang, type Key } from "@/i18n"
+import { en } from "@/i18n/en"
+import { ru } from "@/i18n/ru"
 import { serverRu } from "@/i18n/server.ru"
 import { apiGroupName, healthTitle, pluralRu, serverText } from "@/i18n/server"
 
@@ -32,11 +34,21 @@ describe("the Russian text of the sentences the server writes", () => {
     expect(missing).toEqual([])
   })
 
-  it("covers the notes of the risk rules", () => {
+  it("has a note and a reason in both dictionaries for every risk rule", () => {
     const code = read("internal/model/risk.go")
-    const notes = literals(code, new RegExp(`\\{Risk(?:High|Medium), ${quoted}\\}`, "g"))
-    expect(notes.length).toBeGreaterThan(0)
-    expect(notes.filter((s) => serverRu[s] === undefined)).toEqual([])
+    const rules = [
+      ...code.matchAll(
+        new RegExp(`Risk\\{Risk(?:High|Medium), ${quoted}, ${quoted}, ${quoted}\\}`, "g"),
+      ),
+    ]
+    expect(rules.length).toBeGreaterThan(20)
+    for (const m of rules) {
+      const [message, id, why] = [m[1], m[2], m[3]].map((x) => JSON.parse(`"${x}"`) as string)
+      expect(en[`risk.${id}` as Key], `en risk.${id}`).toBe(message)
+      expect(en[`riskWhy.${id}` as Key], `en riskWhy.${id}`).toBe(why)
+      expect(ru[`risk.${id}` as Key], `ru risk.${id}`).toBeTruthy()
+      expect(ru[`riskWhy.${id}` as Key], `ru riskWhy.${id}`).toBeTruthy()
+    }
   })
 
   it("covers the fixed sentences of the health checks", () => {
