@@ -207,7 +207,7 @@ func menu(lines ...string) string { return strings.Join(lines, "\n") + "\n" }
 func TestConfigureChangesASettingThroughTheMenu(t *testing.T) {
 	f, o := installed(t)
 	// Scanning, "Scan every", the new value, Back, Back
-	input := menu("2", "2", "45m", "y", "9", "15")
+	input := menu("2", "2", "45m", "y", "10", "15")
 	if err := Configure(context.Background(), f.env(input), o, "v"); err != nil {
 		t.Fatalf("%v\n%s", err, f.out.String())
 	}
