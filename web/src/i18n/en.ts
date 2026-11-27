@@ -668,7 +668,8 @@ export const en = {
   "riskWhy.rsync": "An open module lets anyone read, and sometimes write, its files.",
   "riskWhy.mqtt": "Messages and passwords cross the network in clear text.",
   "riskWhy.msrpc": "It lists the RPC services of the host and is a path for remote attacks.",
-  "riskWhy.tls_expired": "Clients cannot trust the service, and people learn to click through warnings.",
+  "riskWhy.tls_expired":
+    "Clients cannot trust the service, and people learn to click through warnings.",
   "riskWhy.ssh_protocol_1": "Protocol 1 has known flaws that allow session hijacking.",
   "role.admin": "Administrator",
   "role.operator": "Operator",
