@@ -18,8 +18,9 @@ import (
 //
 // A device is identified by its MAC, or by its IP when it has none. A known MAC with
 // a new IP updates the row. A device found by IP that has no MAC yet gets the MAC.
-// Devices whose IP lies inside the scan targets and that the scan did not see go
-// offline and stay in the database. Devices outside the targets are left alone,
+// Devices whose IP lies inside the scan targets and that the scan did not see are counted
+// as missed and go offline when they have missed Result.OfflineAfter scans in a row. They
+// stay in the database. Devices outside the targets are left alone,
 // so scanning one subnet never marks the others offline.
 func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Result) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -80,6 +81,8 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		return fmt.Errorf("apply result: %w", err)
 	}
 
+	// A result that does not say (a test, the seed) keeps the old rule: gone at the first miss.
+	offlineAfter := int64(max(r.OfflineAfter, 1))
 	online, err := q.ListOnlineDeviceAddrs(ctx)
 	if err != nil {
 		return fmt.Errorf("apply result: %w", err)
@@ -88,8 +91,17 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		if _, ok := seen[d.ID]; ok || (!inTargets(targets, d.Ip) && !inTargets(targets, d.Ip6)) {
 			continue
 		}
-		if err := q.SetDeviceOffline(ctx, d.ID); err != nil {
+		// A device that a scan misses counts as missed. It goes offline when the count reaches
+		// scan.offlineAfter, so one lost packet writes no offline change. A scan that failed
+		// never gets here, so it counts for no device. A manual device is not in this list.
+		missed, err := q.MissDevice(ctx, d.ID)
+		if err != nil {
 			return fmt.Errorf("apply result: %w", err)
+		}
+		if missed >= offlineAfter {
+			if err := q.SetDeviceOffline(ctx, d.ID); err != nil {
+				return fmt.Errorf("apply result: %w", err)
+			}
 		}
 	}
 
@@ -103,7 +115,13 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		if _, was := seen[d.ID]; d.Manual != 0 || (!was && !inTargets(targets, d.Ip) && !inTargets(targets, d.Ip6)) {
 			continue
 		}
-		if err := q.InsertPresence(ctx, dbgen.InsertPresenceParams{ScanID: scanID, DeviceID: d.ID, Online: d.Online, Ip: d.Ip}); err != nil {
+		// Presence says whether this scan saw the device. A device that is still online because
+		// it has not missed enough scans was not there, and the history must say so.
+		var seenNow int64
+		if was {
+			seenNow = 1
+		}
+		if err := q.InsertPresence(ctx, dbgen.InsertPresenceParams{ScanID: scanID, DeviceID: d.ID, Online: seenNow, Ip: d.Ip}); err != nil {
 			return fmt.Errorf("apply result: %w", err)
 		}
 	}

@@ -91,6 +91,9 @@ type ScanConfig struct {
 	Concurrency int `yaml:"concurrency"`
 	// RetryAfter is the wait before a scheduled scan that failed is tried again. 0 turns the retry off.
 	RetryAfter Duration `yaml:"retryAfter"`
+	// OfflineAfter is how many completed scans in a row must miss a device before it goes
+	// offline. 1 is the old rule, the first miss.
+	OfflineAfter int `yaml:"offlineAfter"`
 }
 
 type SNMPConfig struct {
@@ -529,6 +532,8 @@ func defaults() Config {
 
 			PortTimeout: Duration(500 * time.Millisecond),
 			Concurrency: 256,
+
+			OfflineAfter: 3,
 		},
 		SNMP:    SNMPConfig{Timeout: Duration(2 * time.Second)},
 		SSH:     SSHConfig{KnownHosts: "~/.ssh/known_hosts"},
@@ -610,6 +615,7 @@ var (
 	errPortTimeout    = errors.New("scan.portTimeout must be between 100ms and 10s")
 	errConcurrency    = errors.New("scan.concurrency must be between 1 and 512")
 	errRetryAfter     = errors.New("scan.retryAfter must be 0 or between 1m and 24h")
+	errOfflineAfter   = errors.New("scan.offlineAfter must be between 1 and 20")
 	errSSHKey         = errors.New("ssh host has no key file")
 	errSession        = errors.New("session timeout is out of range")
 	errArgon2         = errors.New("argon2 parameters are below the minimum")
@@ -679,6 +685,9 @@ func (c Config) Validate() error {
 	}
 	if r := c.Scan.RetryAfter.Std(); r != 0 && (r < time.Minute || r > 24*time.Hour) {
 		fail("scan.retryAfter", errRetryAfter)
+	}
+	if n := c.Scan.OfflineAfter; n < 1 || n > 20 {
+		fail("scan.offlineAfter", errOfflineAfter)
 	}
 	if t := c.SNMP.Timeout.Std(); t < time.Second || t > 30*time.Second {
 		fail("snmp.timeout", errSNMPTimeout)

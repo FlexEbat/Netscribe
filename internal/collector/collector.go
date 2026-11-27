@@ -37,6 +37,9 @@ type Result struct {
 	// ContainersPolled lists the hosts whose Docker daemon was read completely. A
 	// container of such a host that the daemon no longer lists is removed.
 	ContainersPolled []model.DeviceKey
+	// OfflineAfter is how many scans in a row must miss a device before it goes offline
+	// (scan.offlineAfter). 0 means 1: the first miss.
+	OfflineAfter int
 }
 
 // Collector is one source of facts. Collect must return when ctx is canceled.

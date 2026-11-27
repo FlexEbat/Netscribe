@@ -82,6 +82,7 @@ type Device struct {
 	Ip6         string
 	KindScore   int64
 	KindReasons string
+	MissedScans int64
 }
 
 type DeviceGroup struct {
