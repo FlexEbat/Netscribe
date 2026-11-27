@@ -112,7 +112,8 @@ func (s *Store) ApplyResult(ctx context.Context, scanID int64, r collector.Resul
 		return fmt.Errorf("apply result: %w", err)
 	}
 	for _, d := range all {
-		if _, was := seen[d.ID]; d.Manual != 0 || (!was && !inTargets(targets, d.Ip) && !inTargets(targets, d.Ip6)) {
+		_, was := seen[d.ID]
+		if d.Manual != 0 || (!was && !inTargets(targets, d.Ip) && !inTargets(targets, d.Ip6)) {
 			continue
 		}
 		// Presence says whether this scan saw the device. A device that is still online because
