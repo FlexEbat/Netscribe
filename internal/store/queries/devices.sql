@@ -24,7 +24,7 @@ RETURNING id;
 
 -- name: UpdateDeviceFromScan :exec
 UPDATE devices
-SET mac = ?, ip = ?, ip6 = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, os_guess = ?, online = 1, last_seen_at = ?
+SET mac = ?, ip = ?, ip6 = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, os_guess = ?, online = 1, missed_scans = 0, last_seen_at = ?
 WHERE id = ?;
 
 -- name: ListDevices :many
@@ -32,6 +32,9 @@ SELECT * FROM devices;
 
 -- name: ListOnlineDeviceAddrs :many
 SELECT id, ip, ip6 FROM devices WHERE online = 1 AND manual = 0;
+
+-- name: MissDevice :one
+UPDATE devices SET missed_scans = missed_scans + 1 WHERE id = ? RETURNING missed_scans;
 
 -- name: SetDeviceOffline :exec
 UPDATE devices SET online = 0 WHERE id = ?;

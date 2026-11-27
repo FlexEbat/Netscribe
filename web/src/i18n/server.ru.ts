@@ -186,6 +186,9 @@ export const serverRu: Record<string, string> = {
   "Connections at once": "Одновременных соединений",
   "How many TCP connections the port scan holds open together, 1 to 512. Lower it on a small host or a weak link.":
     "Сколько TCP-соединений сканер портов держит открытыми одновременно: от 1 до 512. Уменьшите на слабом хосте или канале.",
+  "Scans that must miss a device": "Сколько сканирований должны не увидеть устройство",
+  "A device goes offline after this many scans in a row did not see it, 1 to 20. 1 is the first miss. A higher number hides one lost reply.":
+    "Устройство уходит в офлайн, когда его не увидели столько сканирований подряд, от 1 до 20. 1 — первый пропуск. Большее число скрывает один потерянный ответ.",
   "Try again after a failed scheduled scan": "Повтор после неудачного сканирования по расписанию",
   "Wait this long, 1m to 24h, then run the scheduled scan again until it succeeds. 0 turns the retry off.":
     "Подождать столько (от 1m до 24h) и повторять сканирование по расписанию, пока оно не удастся. 0 отключает повтор.",

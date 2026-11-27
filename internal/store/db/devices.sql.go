@@ -63,7 +63,7 @@ func (q *Queries) DeleteDevice(ctx context.Context, id int64) (int64, error) {
 }
 
 const getDeviceByID = `-- name: GetDeviceByID :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons FROM devices WHERE id = ?
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons, missed_scans FROM devices WHERE id = ?
 `
 
 func (q *Queries) GetDeviceByID(ctx context.Context, id int64) (Device, error) {
@@ -95,12 +95,13 @@ func (q *Queries) GetDeviceByID(ctx context.Context, id int64) (Device, error) {
 		&i.Ip6,
 		&i.KindScore,
 		&i.KindReasons,
+		&i.MissedScans,
 	)
 	return i, err
 }
 
 const getDeviceByIP = `-- name: GetDeviceByIP :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons FROM devices WHERE ip = ? ORDER BY online DESC, last_seen_at DESC, id DESC LIMIT 1
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons, missed_scans FROM devices WHERE ip = ? ORDER BY online DESC, last_seen_at DESC, id DESC LIMIT 1
 `
 
 func (q *Queries) GetDeviceByIP(ctx context.Context, ip string) (Device, error) {
@@ -132,12 +133,13 @@ func (q *Queries) GetDeviceByIP(ctx context.Context, ip string) (Device, error) 
 		&i.Ip6,
 		&i.KindScore,
 		&i.KindReasons,
+		&i.MissedScans,
 	)
 	return i, err
 }
 
 const getDeviceByIP6 = `-- name: GetDeviceByIP6 :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons FROM devices WHERE ip6 = ?
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons, missed_scans FROM devices WHERE ip6 = ?
 `
 
 func (q *Queries) GetDeviceByIP6(ctx context.Context, ip6 string) (Device, error) {
@@ -169,12 +171,13 @@ func (q *Queries) GetDeviceByIP6(ctx context.Context, ip6 string) (Device, error
 		&i.Ip6,
 		&i.KindScore,
 		&i.KindReasons,
+		&i.MissedScans,
 	)
 	return i, err
 }
 
 const getDeviceByIPWithoutMAC = `-- name: GetDeviceByIPWithoutMAC :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons FROM devices WHERE mac = '' AND ip = ?
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons, missed_scans FROM devices WHERE mac = '' AND ip = ?
 `
 
 func (q *Queries) GetDeviceByIPWithoutMAC(ctx context.Context, ip string) (Device, error) {
@@ -206,12 +209,13 @@ func (q *Queries) GetDeviceByIPWithoutMAC(ctx context.Context, ip string) (Devic
 		&i.Ip6,
 		&i.KindScore,
 		&i.KindReasons,
+		&i.MissedScans,
 	)
 	return i, err
 }
 
 const getDeviceByMAC = `-- name: GetDeviceByMAC :one
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons FROM devices WHERE mac = ?
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons, missed_scans FROM devices WHERE mac = ?
 `
 
 func (q *Queries) GetDeviceByMAC(ctx context.Context, mac string) (Device, error) {
@@ -243,6 +247,7 @@ func (q *Queries) GetDeviceByMAC(ctx context.Context, mac string) (Device, error
 		&i.Ip6,
 		&i.KindScore,
 		&i.KindReasons,
+		&i.MissedScans,
 	)
 	return i, err
 }
@@ -289,7 +294,7 @@ func (q *Queries) InsertDevice(ctx context.Context, arg InsertDeviceParams) (int
 const insertManualDevice = `-- name: InsertManualDevice :one
 INSERT INTO devices (mac, ip, ip6, hostname, vendor, kind, description, source, online, manual, trusted, label, notes, kind_locked, updated_by, first_seen_at, last_seen_at, group_id)
 VALUES (?, ?, ?, ?, '', ?, '', 'manual', 1, 1, 1, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons
+RETURNING id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons, missed_scans
 `
 
 type InsertManualDeviceParams struct {
@@ -349,12 +354,13 @@ func (q *Queries) InsertManualDevice(ctx context.Context, arg InsertManualDevice
 		&i.Ip6,
 		&i.KindScore,
 		&i.KindReasons,
+		&i.MissedScans,
 	)
 	return i, err
 }
 
 const listDevices = `-- name: ListDevices :many
-SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons FROM devices
+SELECT id, mac, ip, hostname, vendor, kind, description, source, online, first_seen_at, last_seen_at, x, y, manual, label, notes, kind_locked, version, updated_by, os_guess, trusted, group_id, ip6, kind_score, kind_reasons, missed_scans FROM devices
 `
 
 func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
@@ -392,6 +398,7 @@ func (q *Queries) ListDevices(ctx context.Context) ([]Device, error) {
 			&i.Ip6,
 			&i.KindScore,
 			&i.KindReasons,
+			&i.MissedScans,
 		); err != nil {
 			return nil, err
 		}
@@ -437,6 +444,17 @@ func (q *Queries) ListOnlineDeviceAddrs(ctx context.Context) ([]ListOnlineDevice
 		return nil, err
 	}
 	return items, nil
+}
+
+const missDevice = `-- name: MissDevice :one
+UPDATE devices SET missed_scans = missed_scans + 1 WHERE id = ? RETURNING missed_scans
+`
+
+func (q *Queries) MissDevice(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, missDevice, id)
+	var missed_scans int64
+	err := row.Scan(&missed_scans)
+	return missed_scans, err
 }
 
 const setDeviceOffline = `-- name: SetDeviceOffline :exec
@@ -519,7 +537,7 @@ func (q *Queries) UpdateDeviceEdit(ctx context.Context, arg UpdateDeviceEditPara
 
 const updateDeviceFromScan = `-- name: UpdateDeviceFromScan :exec
 UPDATE devices
-SET mac = ?, ip = ?, ip6 = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, os_guess = ?, online = 1, last_seen_at = ?
+SET mac = ?, ip = ?, ip6 = ?, hostname = ?, vendor = ?, kind = ?, source = ?, description = ?, os_guess = ?, online = 1, missed_scans = 0, last_seen_at = ?
 WHERE id = ?
 `
 

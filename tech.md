@@ -736,6 +736,7 @@ scan:
   portTimeout: 500ms             # slice 25: one TCP connection of the port scan, 100ms to 10s
   concurrency: 256               # slice 25: connections held open at once, 1 to 512
   retryAfter: 0                  # slice 25: wait before a failed scheduled scan is retried, 0 = off, else 1m to 24h
+  offlineAfter: 3                # slice 46: scans in a row that must miss a device before it goes offline, 1 to 20
 
 snmp:
   communities: [public]          # Secret

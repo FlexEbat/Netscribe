@@ -370,6 +370,7 @@ func (s *Scanner) execute(ctx context.Context, scan model.Scan, targets []netip.
 		}
 		s.progress(scan.ID, "snmp", 3)
 	}
+	res.OfflineAfter = s.scanCfg.Scan.OfflineAfter
 	if err := s.store.ApplyResult(ctx, scan.ID, res); err != nil {
 		return s.fail(ctx, scan.ID, fmt.Errorf("store result: %w", err))
 	}

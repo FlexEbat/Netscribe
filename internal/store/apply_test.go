@@ -507,3 +507,120 @@ func TestCleanTextDropsBidiOverrides(t *testing.T) {
 		t.Errorf("cleanText = %q, want %q", got, "abcd")
 	}
 }
+
+// scanWithAfter runs a complete scan in which a device must miss n scans to go offline.
+func scanWithAfter(t *testing.T, s *Store, n int, devs ...model.DeviceInput) {
+	t.Helper()
+	ctx := context.Background()
+	sc, err := s.StartScan(ctx, lan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ApplyResult(ctx, sc.ID, collector.Result{Devices: devs, OfflineAfter: n}); err != nil {
+		t.Fatalf("ApplyResult: %v", err)
+	}
+	if err := s.FinishScan(ctx, sc.ID, "done", ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDeviceGoesOfflineAfterTheConfiguredNumberOfMissedScans(t *testing.T) {
+	s := newTestStore(t)
+	a, b := dev("aa:aa:aa:aa:aa:01", "192.168.1.1"), dev("aa:aa:aa:aa:aa:02", "192.168.1.2")
+	scanWithAfter(t, s, 3, a, b)
+	scanWithAfter(t, s, 3, a) // missed once
+	scanWithAfter(t, s, 3, a) // missed twice
+	if !byMAC(t, s, b.Key.MAC).Online {
+		t.Fatal("the device went offline after two missed scans, three are needed")
+	}
+	scanWithAfter(t, s, 3, a) // missed three times
+	if byMAC(t, s, b.Key.MAC).Online {
+		t.Error("the device is still online after three missed scans")
+	}
+	if !byMAC(t, s, a.Key.MAC).Online {
+		t.Error("the seen device went offline")
+	}
+}
+
+func TestASeenDeviceStartsTheCountAgain(t *testing.T) {
+	s := newTestStore(t)
+	a, b := dev("aa:aa:aa:aa:aa:01", "192.168.1.1"), dev("aa:aa:aa:aa:aa:02", "192.168.1.2")
+	scanWithAfter(t, s, 3, a, b)
+	scanWithAfter(t, s, 3, a)    // 1
+	scanWithAfter(t, s, 3, a)    // 2
+	scanWithAfter(t, s, 3, a, b) // seen: back to 0
+	scanWithAfter(t, s, 3, a)    // 1
+	scanWithAfter(t, s, 3, a)    // 2
+	if !byMAC(t, s, b.Key.MAC).Online {
+		t.Error("the count was not reset by a scan that saw the device")
+	}
+	scanWithAfter(t, s, 3, a) // 3
+	if byMAC(t, s, b.Key.MAC).Online {
+		t.Error("the device is still online after three misses in a row")
+	}
+}
+
+func TestOfflineAfterOneIsTheOldRule(t *testing.T) {
+	s := newTestStore(t)
+	a, b := dev("aa:aa:aa:aa:aa:01", "192.168.1.1"), dev("aa:aa:aa:aa:aa:02", "192.168.1.2")
+	scanWithAfter(t, s, 1, a, b)
+	scanWithAfter(t, s, 1, a)
+	if byMAC(t, s, b.Key.MAC).Online {
+		t.Error("offlineAfter 1 must mark the device offline at the first miss")
+	}
+}
+
+func TestAMissedScanBelowTheLimitWritesNoChange(t *testing.T) {
+	s := newTestStore(t)
+	a, b := dev("aa:aa:aa:aa:aa:01", "192.168.1.1"), dev("aa:aa:aa:aa:aa:02", "192.168.1.2")
+	scanWithAfter(t, s, 2, a, b) // the baseline
+	scanWithAfter(t, s, 2, a, b) // a second scan, nothing changes
+	scanWithAfter(t, s, 2, a)    // b missed once
+	wantKinds(t, feed(t, s))
+	scanWithAfter(t, s, 2, a) // b missed twice: offline
+	wantKinds(t, feed(t, s), ChangeDeviceOffline)
+}
+
+func TestPresenceRecordsWhatTheScanSaw(t *testing.T) {
+	s := newTestStore(t)
+	a, b := dev("aa:aa:aa:aa:aa:01", "192.168.1.1"), dev("aa:aa:aa:aa:aa:02", "192.168.1.2")
+	scanWithAfter(t, s, 3, a, b)
+	scanWithAfter(t, s, 3, a) // b is still online, but this scan did not see it
+	id := byMAC(t, s, b.Key.MAC).ID
+	var seen, total int
+	rows, err := s.db.QueryContext(context.Background(), `SELECT online FROM device_presence WHERE device_id = ? ORDER BY scan_id`, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var o int
+		if err := rows.Scan(&o); err != nil {
+			t.Fatal(err)
+		}
+		total++
+		seen += o
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || seen != 1 {
+		t.Errorf("presence rows = %d, seen = %d, want 2 and 1", total, seen)
+	}
+}
+
+func TestAManualDeviceNeverCountsAsMissed(t *testing.T) {
+	s := newTestStore(t)
+	a := dev("aa:aa:aa:aa:aa:01", "192.168.1.1")
+	scanWithAfter(t, s, 1, a)
+	if _, err := s.CreateDevice(context.Background(), model.ManualDevice{IP: "192.168.1.50", Label: "printer", Kind: model.KindUnknown}, 0); err != nil {
+		t.Fatalf("manual device: %v", err)
+	}
+	scanWithAfter(t, s, 1, a)
+	scanWithAfter(t, s, 1, a)
+	for _, d := range list(t, s, DeviceFilter{}) {
+		if d.IP == "192.168.1.50" && !d.Online {
+			t.Error("a manual device went offline")
+		}
+	}
+}
