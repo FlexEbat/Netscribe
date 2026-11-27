@@ -852,15 +852,30 @@ export function saveSettings(changes: Record<string, unknown>): Promise<Settings
 
 export interface NotificationChannel {
   name: string
-  type: "webhook" | "telegram" | "email"
+  type: "webhook" | "telegram" | "email" | "ntfy" | "gotify"
   /** The events the channel is sent. */
   events: string[]
 }
 
+/** What keeps alerts steady. It is written in the config file and only shown here. */
+export interface NotificationRules {
+  flapCount: number
+  quietHours: string
+  maintenance: { from: string; to: string; group: string }[]
+}
+
+export interface Notifications {
+  channels: NotificationChannel[]
+  rules: NotificationRules | null
+}
+
 /** The channels of the config. Addresses, tokens and passwords never come with them. */
-export async function listNotifications(): Promise<NotificationChannel[]> {
-  const body = await api<{ channels: NotificationChannel[] }>("GET", "/api/notifications")
-  return body.channels
+export async function listNotifications(): Promise<Notifications> {
+  const body = await api<{ channels: NotificationChannel[]; rules?: NotificationRules }>(
+    "GET",
+    "/api/notifications",
+  )
+  return { channels: body.channels, rules: body.rules ?? null }
 }
 
 export function testNotification(channel: string): Promise<void> {

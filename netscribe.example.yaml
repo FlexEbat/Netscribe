@@ -109,6 +109,16 @@ notify: # messages about what a scan found, one summary per scan; applied withou
   # - name: ops
   #   type: webhook
   #   url: https://example.org/hook # a secret, it stays in this file
+  #   format: json # json (the default), slack, discord or teams: one text field in the shape the service expects
+  # - name: push
+  #   type: ntfy
+  #   url: https://ntfy.sh # or your own server
+  #   topic: my-lan-alerts # a secret: on a public server whoever knows the topic can read it
+  #   token: "" # a secret, optional
+  # - name: gotify
+  #   type: gotify
+  #   url: https://gotify.example.org
+  #   token: "" # a secret, the key of the application
   # - name: phone
   #   type: telegram
   #   botToken: "" # a secret

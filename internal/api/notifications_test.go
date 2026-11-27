@@ -20,6 +20,10 @@ func (f *fakeNotifier) Channels() []notify.ChannelInfo {
 	return []notify.ChannelInfo{{Name: "ops", Type: "webhook", Events: []string{"scan_failed"}}}
 }
 
+func (f *fakeNotifier) Rules() notify.Rules {
+	return notify.Rules{FlapCount: 3, QuietHours: "22:00-07:00", Maintenance: []notify.MaintenanceInfo{{From: "2026-12-01T22:00", To: "2026-12-02T02:00", Group: "Lab"}}}
+}
+
 func (f *fakeNotifier) Test(_ context.Context, name string) error {
 	f.tested = append(f.tested, name)
 	return f.err
@@ -35,7 +39,7 @@ func TestAdminListsTheChannelsWithoutSecrets(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET: %d %s", rec.Code, rec.Body)
 	}
-	if got := strings.TrimSpace(rec.Body.String()); got != `{"channels":[{"name":"ops","type":"webhook","events":["scan_failed"]}]}` {
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"channels":[{"name":"ops","type":"webhook","events":["scan_failed"]}],"rules":{"flapCount":3,"quietHours":"22:00-07:00","maintenance":[{"from":"2026-12-01T22:00","to":"2026-12-02T02:00","group":"Lab"}]}}` {
 		t.Errorf("body = %s", got)
 	}
 }

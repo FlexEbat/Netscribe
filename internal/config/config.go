@@ -440,6 +440,16 @@ const (
 	ChannelWebhook  = "webhook"
 	ChannelTelegram = "telegram"
 	ChannelEmail    = "email"
+	ChannelNtfy     = "ntfy"
+	ChannelGotify   = "gotify"
+)
+
+// The bodies a webhook can send (slice 46). json is the body of every version before.
+const (
+	FormatJSON    = "json"
+	FormatSlack   = "slack"
+	FormatDiscord = "discord"
+	FormatTeams   = "teams"
 )
 
 // NotifyConfig says which events are sent and where. Every address, token and password in
@@ -491,7 +501,11 @@ type ChannelConfig struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
 
-	URL Secret `yaml:"url"` // webhook
+	URL    Secret `yaml:"url"`    // webhook, ntfy and gotify
+	Format string `yaml:"format"` // webhook: json (the default), slack, discord or teams
+
+	Topic Secret `yaml:"topic"` // ntfy: on a public server the name of the topic is the password
+	Token Secret `yaml:"token"` // ntfy (optional) and gotify (required)
 
 	BotToken Secret `yaml:"botToken"` // telegram
 	ChatID   Secret `yaml:"chatId"`
@@ -505,6 +519,18 @@ type ChannelConfig struct {
 }
 
 var channelName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,32}$`)
+
+// ntfyTopic is what ntfy allows in a topic that is a path segment.
+var ntfyTopic = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// checkURL refuses an address that is not http or https: no file:, no gopher:, nothing that
+// a channel could use to read something instead of to send.
+func checkURL(where string, raw Secret, fail func(where string, err error)) {
+	u, err := url.Parse(string(raw))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		fail(where, errors.New("url must be an http or https address"))
+	}
+}
 
 // validate checks the notify block. A single problem refuses the whole config, so a typo
 // never silently turns an alert off.
@@ -558,9 +584,21 @@ func (n NotifyConfig) validate(fail func(where string, err error)) {
 		seenName[ch.Name] = true
 		switch ch.Type {
 		case ChannelWebhook:
-			u, err := url.Parse(string(ch.URL))
-			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-				fail(where, errors.New("url must be an http or https address"))
+			checkURL(where, ch.URL, fail)
+			switch ch.Format {
+			case "", FormatJSON, FormatSlack, FormatDiscord, FormatTeams:
+			default:
+				fail(where, errors.New("format must be json, slack, discord or teams"))
+			}
+		case ChannelNtfy:
+			checkURL(where, ch.URL, fail)
+			if !ntfyTopic.MatchString(string(ch.Topic)) {
+				fail(where, errors.New("topic must be 1 to 64 letters, digits, - or _"))
+			}
+		case ChannelGotify:
+			checkURL(where, ch.URL, fail)
+			if ch.Token == "" {
+				fail(where, errors.New("token is required"))
 			}
 		case ChannelTelegram:
 			if ch.BotToken == "" || ch.ChatID == "" {
@@ -586,7 +624,7 @@ func (n NotifyConfig) validate(fail func(where string, err error)) {
 				}
 			}
 		default:
-			fail(where, errors.New("type must be webhook, telegram or email"))
+			fail(where, errors.New("type must be webhook, telegram, email, ntfy or gotify"))
 		}
 	}
 }

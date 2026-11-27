@@ -310,3 +310,20 @@ func TestAddressChangedReadsTheSummary(t *testing.T) {
 		}
 	}
 }
+
+func TestRulesShowWhatKeepsAlertsSteady(t *testing.T) {
+	c := cfg(nil, "a")
+	c.FlapCount = 4
+	c.QuietHours = " 22:00-07:00 "
+	c.Maintenance = []config.MaintenanceWindow{{From: "2026-12-01T22:00", To: "2026-12-02T02:00", Group: "Lab"}}
+	n, _ := newTest(fakeSource{}, c, map[string]*recorder{"a": {}})
+	got := n.Rules()
+	if got.FlapCount != 4 || got.QuietHours != "22:00-07:00" || len(got.Maintenance) != 1 || got.Maintenance[0].Group != "Lab" {
+		t.Errorf("rules = %+v", got)
+	}
+	c.Maintenance = nil
+	n, _ = newTest(fakeSource{}, c, map[string]*recorder{"a": {}})
+	if m := n.Rules().Maintenance; m == nil || len(m) != 0 {
+		t.Errorf("no windows must be an empty list and not null: %#v", m)
+	}
+}

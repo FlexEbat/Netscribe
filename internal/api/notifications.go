@@ -12,17 +12,22 @@ import (
 // implementation.
 type Notifications interface {
 	Channels() []notify.ChannelInfo
+	Rules() notify.Rules
 	Test(ctx context.Context, name string) error
 }
 
-// listNotifications answers GET /api/notifications with {"channels": [...]}. A channel
-// shows its name, its type and the events it is sent, never an address or a secret.
+// listNotifications answers GET /api/notifications with {"channels": [...], "rules": {...}}. A
+// channel shows its name, its type and the events it is sent, never an address or a secret.
+// The rules are the flap count, the quiet hours and the maintenance windows, read only.
 func (s *server) listNotifications(w http.ResponseWriter, _ *http.Request) {
 	channels := s.notifier.Channels()
 	if channels == nil {
 		channels = []notify.ChannelInfo{}
 	}
-	writeJSON(w, http.StatusOK, map[string][]notify.ChannelInfo{"channels": channels})
+	writeJSON(w, http.StatusOK, struct {
+		Channels []notify.ChannelInfo `json:"channels"`
+		Rules    notify.Rules         `json:"rules"`
+	}{channels, s.notifier.Rules()})
 }
 
 type testNotificationBody struct {

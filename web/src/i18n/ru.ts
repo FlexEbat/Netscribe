@@ -581,18 +581,28 @@ export const ru: Record<Key, Entry> = {
   "notificationsCard.channelGone": "Этого канала больше нет в конфигурации.",
   "notificationsCard.description":
     "Сообщения о новых устройствах, устройствах, ушедших из сети, новых открытых портах и неудачных сканированиях. Каналы содержат адреса и токены, поэтому они задаются в разделе {notify} файла конфигурации.",
+  "notificationsCard.editInTheFile": "Меняйте это в файле конфигурации.",
+  "notificationsCard.flapRule":
+    "Устройство, которое сменило состояние {count} раз за час, считается мерцающим: о нём сообщают один раз (событие device_flapping).",
   "notificationsCard.loadingTheChannels": "Загрузка каналов",
   "notificationsCard.noChannelIsConfigured": "Ни один канал не настроен.",
   "notificationsCard.noEvents": "события не выбраны",
+  "notificationsCard.noMaintenance": "Окон работ нет.",
+  "notificationsCard.noQuietHours": "Тихих часов нет.",
   "notificationsCard.notifications": "Уведомления",
   "notificationsCard.notify": "notify",
+  "notificationsCard.quietHoursAre": "Тихие часы {range}: сообщения ждут и уходят одной сводкой.",
   "notificationsCard.sendTest": "Отправить тест",
   "notificationsCard.sendTestTo": "Отправить тестовое сообщение в {name}",
+  "notificationsCard.steadyAlerts": "Ровные оповещения",
   "notificationsCard.testFailed": "Не удалось отправить тестовое сообщение.",
   "notificationsCard.testRecent":
     "Тестовое сообщение отправляли только что. Подождите несколько секунд.",
   "notificationsCard.testSent": "Тестовое сообщение отправлено.",
   "notificationsCard.theChannelsCouldNotBe": "Не удалось загрузить каналы.",
+  "notificationsCard.wholeNetwork": "вся сеть",
+  "notificationsCard.window": "Работы с {from} по {to}: {group}",
+  "notificationsCard.windowOver": "закончились",
   "overview.allChanges": "Все изменения",
   "overview.allFinished": {
     one: "Последнее сканирование завершилось.",

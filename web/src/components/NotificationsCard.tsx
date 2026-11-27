@@ -4,6 +4,7 @@ import {
   listNotifications,
   testNotification,
   type NotificationChannel,
+  type NotificationRules,
 } from "@/api/client"
 import { Alert } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +16,7 @@ import { tRich } from "@/i18n/rich"
 type State =
   | { status: "loading" }
   | { status: "failed" }
-  | { status: "ready"; channels: NotificationChannel[] }
+  | { status: "ready"; channels: NotificationChannel[]; rules: NotificationRules | null }
 
 /** What the answer to "Send test" tells a person. */
 function testMessage(error: unknown): string {
@@ -36,7 +37,7 @@ export function NotificationsCard() {
   useEffect(() => {
     let cancelled = false
     listNotifications()
-      .then((channels) => !cancelled && setState({ status: "ready", channels }))
+      .then(({ channels, rules }) => !cancelled && setState({ status: "ready", channels, rules }))
       .catch(() => !cancelled && setState({ status: "failed" }))
     return () => {
       cancelled = true
@@ -104,7 +105,45 @@ export function NotificationsCard() {
               </div>
             ))
           : null}
+        {state.status === "ready" ? <Rules rules={state.rules} /> : null}
       </CardContent>
     </Card>
+  )
+}
+
+/** Flapping, quiet hours and maintenance windows, read only: they are edited in the file. */
+function Rules({ rules }: { rules: NotificationRules | null }) {
+  // The clock is read once when the card opens: a window is "over" by that time.
+  const [now] = useState(() => Date.now())
+  if (!rules) return null
+  return (
+    <div className="flex flex-col gap-1 border-t pt-4 text-sm">
+      <h3 className="font-medium">{t("notificationsCard.steadyAlerts")}</h3>
+      <p className="text-muted-foreground">
+        {t("notificationsCard.flapRule", { count: String(rules.flapCount) })}
+      </p>
+      <p className="text-muted-foreground">
+        {rules.quietHours
+          ? t("notificationsCard.quietHoursAre", { range: rules.quietHours })
+          : t("notificationsCard.noQuietHours")}
+      </p>
+      {rules.maintenance.length === 0 ? (
+        <p className="text-muted-foreground">{t("notificationsCard.noMaintenance")}</p>
+      ) : (
+        <ul className="text-muted-foreground">
+          {rules.maintenance.map((m) => (
+            <li key={`${m.from}|${m.to}|${m.group}`}>
+              {t("notificationsCard.window", {
+                from: m.from.replace("T", " "),
+                to: m.to.replace("T", " "),
+                group: m.group || t("notificationsCard.wholeNetwork"),
+              })}
+              {Date.parse(m.to) < now ? ` (${t("notificationsCard.windowOver")})` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="text-muted-foreground text-xs">{t("notificationsCard.editInTheFile")}</p>
+    </div>
   )
 }
