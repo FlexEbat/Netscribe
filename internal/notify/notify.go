@@ -81,6 +81,31 @@ func New(src Source, cfg func() config.NotifyConfig, log *slog.Logger) *Notifier
 	}
 }
 
+// Rules is what keeps alerts steady, for the panel to show. It is read only there: the
+// windows are written in the config file.
+type Rules struct {
+	FlapCount   int               `json:"flapCount"`
+	QuietHours  string            `json:"quietHours"`
+	Maintenance []MaintenanceInfo `json:"maintenance"`
+}
+
+// MaintenanceInfo is one maintenance window as the config has it.
+type MaintenanceInfo struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Group string `json:"group"`
+}
+
+// Rules returns the flap count, the quiet hours and the maintenance windows of the config.
+func (n *Notifier) Rules() Rules {
+	c := n.cfg()
+	out := Rules{FlapCount: c.FlapCount, QuietHours: strings.TrimSpace(c.QuietHours), Maintenance: make([]MaintenanceInfo, 0, len(c.Maintenance))}
+	for _, m := range c.Maintenance {
+		out.Maintenance = append(out.Maintenance, MaintenanceInfo{From: m.From, To: m.To, Group: m.Group})
+	}
+	return out
+}
+
 // Channels lists the configured channels with the events they are sent.
 func (n *Notifier) Channels() []ChannelInfo {
 	c := n.cfg()

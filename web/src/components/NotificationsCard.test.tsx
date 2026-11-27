@@ -20,6 +20,15 @@ function open(test: () => Response = () => json(200, { status: "sent" })) {
   return mock
 }
 
+const rules = {
+  flapCount: 3,
+  quietHours: "22:00-07:00",
+  maintenance: [
+    { from: "2099-12-01T22:00", to: "2099-12-02T02:00", group: "Lab" },
+    { from: "2020-01-01T00:00", to: "2020-01-01T02:00", group: "" },
+  ],
+}
+
 describe("NotificationsCard", () => {
   it("lists the channels with their type and events", async () => {
     open()
@@ -70,5 +79,35 @@ describe("NotificationsCard", () => {
     await waitFor(() =>
       expect(screen.getByText("the message was not delivered: timeout")).toBeInTheDocument(),
     )
+  })
+
+  it("shows the steady alert rules read only", async () => {
+    mockFetch({ "GET /api/notifications": () => json(200, { channels, rules }) })
+    render(<NotificationsCard />)
+    expect(await screen.findByText("Steady alerts")).toBeInTheDocument()
+    expect(screen.getByText(/changes state 3 times within an hour/)).toBeInTheDocument()
+    expect(screen.getByText(/Quiet hours 22:00-07:00/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Maintenance 2099-12-01 22:00 to 2099-12-02 02:00: Lab/),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/the whole network \(over\)/)).toBeInTheDocument()
+    expect(screen.getByText("Edit these in the config file.")).toBeInTheDocument()
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument()
+  })
+
+  it("says there are no quiet hours and no windows", async () => {
+    mockFetch({
+      "GET /api/notifications": () =>
+        json(200, { channels, rules: { flapCount: 3, quietHours: "", maintenance: [] } }),
+    })
+    render(<NotificationsCard />)
+    expect(await screen.findByText("No quiet hours.")).toBeInTheDocument()
+    expect(screen.getByText("No maintenance window.")).toBeInTheDocument()
+  })
+
+  it("shows no rules when the server does not send them", async () => {
+    open()
+    await screen.findByText("ops")
+    expect(screen.queryByText("Steady alerts")).not.toBeInTheDocument()
   })
 })

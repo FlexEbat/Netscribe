@@ -42,6 +42,43 @@ func TestNotifyBlockIsValidatedAsAWhole(t *testing.T) {
 		{"email from is not an address", func(n *NotifyConfig) { c := email; c.From = "nobody"; n.Channels = []ChannelConfig{c} }, "from is not an address"},
 		{"email without recipients", func(n *NotifyConfig) { c := email; c.To = nil; n.Channels = []ChannelConfig{c} }, "to needs"},
 		{"email recipient is not an address", func(n *NotifyConfig) { c := email; c.To = []string{"x"}; n.Channels = []ChannelConfig{c} }, "not an address"},
+		{"ntfy", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "p", Type: ChannelNtfy, URL: "https://ntfy.sh", Topic: "my_topic-1"}}
+		}, ""},
+		{"ntfy with a token", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "p", Type: ChannelNtfy, URL: "http://ntfy.lan:8080", Topic: "t", Token: "tk_abc"}}
+		}, ""},
+		{"ntfy without a topic", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "p", Type: ChannelNtfy, URL: "https://ntfy.sh"}}
+		}, "topic must be"},
+		{"ntfy topic with a slash", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "p", Type: ChannelNtfy, URL: "https://ntfy.sh", Topic: "a/b"}}
+		}, "topic must be"},
+		{"ntfy with a file url", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "p", Type: ChannelNtfy, URL: "file:///etc/passwd", Topic: "t"}}
+		}, "url must be"},
+		{"gotify", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "g", Type: ChannelGotify, URL: "https://gotify.lan", Token: "AbC"}}
+		}, ""},
+		{"gotify without a token", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "g", Type: ChannelGotify, URL: "https://gotify.lan"}}
+		}, "token is required"},
+		{"gotify with a gopher url", func(n *NotifyConfig) {
+			n.Channels = []ChannelConfig{{Name: "g", Type: ChannelGotify, URL: "gopher://gotify.lan", Token: "t"}}
+		}, "url must be"},
+		{"webhook formats", func(n *NotifyConfig) {
+			for _, f := range []string{"", FormatJSON, FormatSlack, FormatDiscord, FormatTeams} {
+				c := webhook("h" + f)
+				c.Format = f
+				n.Channels = append(n.Channels, c)
+			}
+		}, ""},
+		{"webhook with an unknown format", func(n *NotifyConfig) {
+			c := webhook("h")
+			c.Format = "mattermost"
+			n.Channels = []ChannelConfig{c}
+		}, "format must be"},
+		{"unknown type now lists the new ones", func(n *NotifyConfig) { n.Channels = []ChannelConfig{{Name: "x", Type: "sms"}} }, "ntfy or gotify"},
 		{"every new event", func(n *NotifyConfig) {
 			n.Events = []string{EventDeviceOnline, EventTLSExpiring, EventAddressChanged, EventLinkDown, EventDeviceFlapping}
 		}, ""},
@@ -95,13 +132,15 @@ func TestNotifySecretsNeverShowUp(t *testing.T) {
 		{Name: "ops", Type: ChannelWebhook, URL: "https://example.org/hook-secret-path"},
 		{Name: "phone", Type: ChannelTelegram, BotToken: "bot-secret", ChatID: "chat-secret"},
 		{Name: "mail", Type: ChannelEmail, Host: "h", Port: 25, User: "u", Password: "pw-secret", From: "a@b.c", To: []string{"d@e.f"}},
+		{Name: "push", Type: ChannelNtfy, URL: "https://ntfy-secret.example.org", Topic: "topic-secret", Token: "ntfy-token-secret"},
+		{Name: "gotify", Type: ChannelGotify, URL: "https://gotify-secret.example.org", Token: "gotify-token-secret"},
 	}
 	raw, err := json.Marshal(c.Notify)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, s := range []string{string(raw), fmt.Sprintf("%#v|%+v|%v", c.Notify, c.Notify, c.Notify)} {
-		for _, secret := range []string{"hook-secret-path", "bot-secret", "chat-secret", "pw-secret"} {
+		for _, secret := range []string{"hook-secret-path", "bot-secret", "chat-secret", "pw-secret", "ntfy-secret", "topic-secret", "ntfy-token-secret", "gotify-secret", "gotify-token-secret"} {
 			if strings.Contains(s, secret) {
 				t.Errorf("%q leaked into %s", secret, s)
 			}

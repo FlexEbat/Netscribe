@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -174,4 +175,161 @@ func TestMessageHasSafeHeaders(t *testing.T) {
 
 func cfgChannel(url string) config.ChannelConfig {
 	return config.ChannelConfig{Name: "x", Type: config.ChannelWebhook, URL: config.Secret(url)}
+}
+
+// captured is what an in-process server saw.
+type captured struct {
+	path, auth, gotifyKey, contentType string
+	body                               map[string]any
+	query                              string
+}
+
+func capture(t *testing.T) (*httptest.Server, *captured) {
+	t.Helper()
+	c := &captured{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c.path, c.query = r.URL.Path, r.URL.RawQuery
+		c.auth, c.gotifyKey, c.contentType = r.Header.Get("Authorization"), r.Header.Get("X-Gotify-Key"), r.Header.Get("Content-Type")
+		_ = json.NewDecoder(r.Body).Decode(&c.body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+	return srv, c
+}
+
+func TestNtfyPublishesJSONWithTheTopicInTheBody(t *testing.T) {
+	srv, got := capture(t)
+	n := ntfy{url: srv.URL, topic: "lan-alerts", token: "tk_secret", client: newClient(time.Second)}
+	if err := n.Send(context.Background(), "Subject", "line one\nline two"); err != nil {
+		t.Fatal(err)
+	}
+	if got.path != "/" || got.query != "" {
+		t.Errorf("the topic or a token is in the URL: %q?%q", got.path, got.query)
+	}
+	if got.body["topic"] != "lan-alerts" || got.body["title"] != "Subject" || got.body["message"] != "line one\nline two" {
+		t.Errorf("body = %v", got.body)
+	}
+	if got.auth != "Bearer tk_secret" || got.contentType != "application/json" {
+		t.Errorf("auth %q, content type %q", got.auth, got.contentType)
+	}
+}
+
+func TestNtfyWithoutATokenSendsNoAuthorization(t *testing.T) {
+	srv, got := capture(t)
+	if err := (ntfy{url: srv.URL, topic: "t", client: newClient(time.Second)}).Send(context.Background(), "s", "b"); err != nil {
+		t.Fatal(err)
+	}
+	if got.auth != "" {
+		t.Errorf("Authorization = %q", got.auth)
+	}
+}
+
+func TestNtfyCutsALongMessageWithoutBreakingACharacter(t *testing.T) {
+	srv, got := capture(t)
+	long := strings.Repeat("ж", 3000) // 6000 bytes
+	if err := (ntfy{url: srv.URL, topic: "t", client: newClient(time.Second)}).Send(context.Background(), "s", long); err != nil {
+		t.Fatal(err)
+	}
+	msg, _ := got.body["message"].(string)
+	if len(msg) > ntfyBytes || len(msg) < ntfyBytes-1 || strings.ContainsRune(msg, '\uFFFD') || len([]rune(msg))*2 != len(msg) {
+		t.Errorf("message of %d bytes and %d characters", len(msg), len([]rune(msg)))
+	}
+}
+
+func TestGotifyPostsToMessageWithTheKeyInAHeader(t *testing.T) {
+	srv, got := capture(t)
+	g := gotify{url: srv.URL + "/", token: "gotify-key", client: newClient(time.Second)}
+	if err := g.Send(context.Background(), "Subject", "Body"); err != nil {
+		t.Fatal(err)
+	}
+	if got.path != "/message" || got.query != "" {
+		t.Errorf("request to %q?%q, want /message with no query", got.path, got.query)
+	}
+	if got.gotifyKey != "gotify-key" {
+		t.Errorf("X-Gotify-Key = %q", got.gotifyKey)
+	}
+	if got.body["title"] != "Subject" || got.body["message"] != "Body" || got.body["priority"] != float64(5) {
+		t.Errorf("body = %v", got.body)
+	}
+}
+
+func TestWebhookFormatsSendOneTextFieldInTheShapeOfTheService(t *testing.T) {
+	for _, tc := range []struct {
+		format, field string
+		keys          []string
+	}{
+		{"slack", "text", []string{"text"}},
+		{"teams", "text", []string{"text"}},
+		{"discord", "content", []string{"content"}},
+	} {
+		t.Run(tc.format, func(t *testing.T) {
+			srv, got := capture(t)
+			w := webhook{url: srv.URL + "/hook", format: tc.format, client: newClient(time.Second)}
+			if err := w.Send(context.Background(), "Subject", "Body"); err != nil {
+				t.Fatal(err)
+			}
+			if got.path != "/hook" || got.contentType != "application/json" {
+				t.Errorf("path %q, content type %q", got.path, got.contentType)
+			}
+			if len(got.body) != len(tc.keys) || got.body[tc.field] != "Subject\nBody" {
+				t.Errorf("body = %v, want only %s = %q", got.body, tc.field, "Subject\nBody")
+			}
+		})
+	}
+}
+
+func TestWebhookWithoutAFormatKeepsTheOldBody(t *testing.T) {
+	for _, format := range []string{"", "json"} {
+		srv, got := capture(t)
+		if err := (webhook{url: srv.URL, format: format, client: newClient(time.Second)}).Send(context.Background(), "s", "b"); err != nil {
+			t.Fatal(err)
+		}
+		if len(got.body) != 2 || got.body["subject"] != "s" || got.body["text"] != "b" {
+			t.Errorf("format %q: body = %v", format, got.body)
+		}
+	}
+}
+
+func TestDiscordTextIsCutBelowItsLimit(t *testing.T) {
+	srv, got := capture(t)
+	w := webhook{url: srv.URL, format: "discord", client: newClient(time.Second)}
+	if err := w.Send(context.Background(), "s", strings.Repeat("x", 5000)); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := got.body["content"].(string); len([]rune(c)) != discordRunes {
+		t.Errorf("content has %d characters, want %d", len([]rune(c)), discordRunes)
+	}
+}
+
+func TestNewChannelsFailWithoutAnAddressInTheError(t *testing.T) {
+	failing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusForbidden) }))
+	defer failing.Close()
+	n := New(fakeSource{}, nil, nil)
+	n.retryDelay = time.Millisecond
+	for _, ch := range []config.ChannelConfig{
+		{Name: "p", Type: config.ChannelNtfy, URL: config.Secret(failing.URL), Topic: "topic-secret", Token: "token-secret"},
+		{Name: "g", Type: config.ChannelGotify, URL: config.Secret(failing.URL + "/gotify-secret-path"), Token: "token-secret"},
+		{Name: "s", Type: config.ChannelWebhook, Format: "slack", URL: config.Secret(failing.URL + "/slack-secret-path")},
+	} {
+		err := n.deliver(context.Background(), ch, "s", "b")
+		if err == nil {
+			t.Fatalf("%s: want an error", ch.Name)
+		}
+		for _, secret := range []string{"topic-secret", "token-secret", "secret-path", failing.URL} {
+			if strings.Contains(err.Error(), secret) {
+				t.Errorf("%s: the error holds %q: %v", ch.Name, secret, err)
+			}
+		}
+	}
+}
+
+func TestNewSenderPicksTheSenderOfEachType(t *testing.T) {
+	for typ, want := range map[string]string{
+		config.ChannelWebhook: "notify.webhook", config.ChannelNtfy: "notify.ntfy", config.ChannelGotify: "notify.gotify",
+		config.ChannelTelegram: "notify.telegram", config.ChannelEmail: "notify.email",
+	} {
+		if got := fmt.Sprintf("%T", newSender(config.ChannelConfig{Type: typ})); got != want {
+			t.Errorf("%s: %s, want %s", typ, got, want)
+		}
+	}
 }

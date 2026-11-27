@@ -547,17 +547,28 @@ export const en = {
   "notificationsCard.channelGone": "This channel is not in the config any more.",
   "notificationsCard.description":
     "Messages about new devices, devices that went offline, new open ports and failed scans. Channels hold addresses and tokens, so they are set under {notify} in the config file.",
+  "notificationsCard.editInTheFile": "Edit these in the config file.",
+  "notificationsCard.flapRule":
+    "A device that changes state {count} times within an hour is reported once as flapping (event device_flapping).",
   "notificationsCard.loadingTheChannels": "Loading the channels",
   "notificationsCard.noChannelIsConfigured": "No channel is configured.",
   "notificationsCard.noEvents": "no events selected",
+  "notificationsCard.noMaintenance": "No maintenance window.",
+  "notificationsCard.noQuietHours": "No quiet hours.",
   "notificationsCard.notifications": "Notifications",
   "notificationsCard.notify": "notify",
+  "notificationsCard.quietHoursAre":
+    "Quiet hours {range}: messages wait and go out as one summary.",
   "notificationsCard.sendTest": "Send test",
   "notificationsCard.sendTestTo": "Send a test message to {name}",
+  "notificationsCard.steadyAlerts": "Steady alerts",
   "notificationsCard.testFailed": "The test message could not be sent.",
   "notificationsCard.testRecent": "A test message was sent a moment ago. Wait a few seconds.",
   "notificationsCard.testSent": "The test message was sent.",
   "notificationsCard.theChannelsCouldNotBe": "The channels could not be loaded.",
+  "notificationsCard.wholeNetwork": "the whole network",
+  "notificationsCard.window": "Maintenance {from} to {to}: {group}",
+  "notificationsCard.windowOver": "over",
   "overview.allChanges": "All changes",
   "overview.allFinished": {
     one: "The last scan finished.",

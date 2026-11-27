@@ -31,7 +31,11 @@ const (
 func newSender(ch config.ChannelConfig) sender {
 	switch ch.Type {
 	case config.ChannelWebhook:
-		return webhook{url: string(ch.URL), client: newClient(requestTimeout)}
+		return webhook{url: string(ch.URL), format: ch.Format, client: newClient(requestTimeout)}
+	case config.ChannelNtfy:
+		return ntfy{url: string(ch.URL), topic: string(ch.Topic), token: string(ch.Token), client: newClient(requestTimeout)}
+	case config.ChannelGotify:
+		return gotify{url: string(ch.URL), token: string(ch.Token), client: newClient(requestTimeout)}
 	case config.ChannelTelegram:
 		return telegram{base: "https://api.telegram.org", token: string(ch.BotToken), chat: string(ch.ChatID), client: newClient(requestTimeout)}
 	default:
@@ -63,7 +67,7 @@ func classify(err error) error {
 }
 
 // post sends a JSON body and reads at most maxAnswer bytes of the answer.
-func post(ctx context.Context, client *http.Client, url string, payload any) error {
+func post(ctx context.Context, client *http.Client, url string, payload any, headers ...[2]string) error {
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return errors.New("the message could not be encoded")
@@ -73,6 +77,9 @@ func post(ctx context.Context, client *http.Client, url string, payload any) err
 		return errors.New("the address is not usable")
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for _, h := range headers {
+		req.Header.Set(h[0], h[1])
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return classify(err)
@@ -87,11 +94,82 @@ func post(ctx context.Context, client *http.Client, url string, payload any) err
 
 type webhook struct {
 	url    string
+	format string // "" and json are the body of old
 	client *http.Client
 }
 
+const (
+	discordRunes = 1900 // Discord refuses a content of more than 2000 characters
+	chatRunes    = 3500 // Slack and Teams take more; this keeps one message readable
+)
+
 func (w webhook) Send(ctx context.Context, subject, body string) error {
-	return post(ctx, w.client, w.url, map[string]string{"subject": subject, "text": body})
+	return post(ctx, w.client, w.url, w.payload(subject, body))
+}
+
+// payload is the body in the shape the service expects. Each chat format is one text field,
+// with the subject on its own line, and no markup: the text holds names from the network.
+func (w webhook) payload(subject, body string) any {
+	text := subject + "\n" + body
+	switch w.format {
+	case config.FormatSlack:
+		return map[string]string{"text": cut(text, chatRunes)}
+	case config.FormatTeams:
+		return map[string]string{"text": cut(text, chatRunes)}
+	case config.FormatDiscord:
+		return map[string]string{"content": cut(text, discordRunes)}
+	}
+	return map[string]string{"subject": subject, "text": body}
+}
+
+// cut keeps the first n runes.
+func cut(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
+}
+
+// ntfyBytes is the largest message ntfy takes, 4096 bytes, with room to spare.
+const ntfyBytes = 4000
+
+type ntfy struct {
+	url, topic, token string
+	client            *http.Client
+}
+
+// Send publishes with the JSON form of the ntfy API: the topic is in the body, so it is in
+// no URL that an error or a log could show.
+func (n ntfy) Send(ctx context.Context, subject, body string) error {
+	payload := map[string]string{"topic": n.topic, "title": subject, "message": cutBytes(body, ntfyBytes)}
+	if n.token != "" {
+		return post(ctx, n.client, n.url, payload, [2]string{"Authorization", "Bearer " + n.token})
+	}
+	return post(ctx, n.client, n.url, payload)
+}
+
+// cutBytes keeps at most n bytes and never ends in the middle of a character.
+func cutBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
+
+type gotify struct {
+	url, token string
+	client     *http.Client
+}
+
+// Send posts to /message with the key in a header and not in the query, which would put it
+// in the URL of every error.
+func (g gotify) Send(ctx context.Context, subject, body string) error {
+	return post(ctx, g.client, strings.TrimRight(g.url, "/")+"/message",
+		map[string]any{"title": subject, "message": body, "priority": 5},
+		[2]string{"X-Gotify-Key", g.token})
 }
 
 type telegram struct {
