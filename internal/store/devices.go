@@ -33,6 +33,10 @@ func (s *Store) ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device
 	if err != nil {
 		return nil, err
 	}
+	details, err := s.loadAllDetails(ctx)
+	if err != nil {
+		return nil, err
+	}
 	query := strings.ToLower(strings.TrimSpace(f.Query))
 	out := make([]model.Device, 0, len(rows))
 	for _, r := range rows {
@@ -41,6 +45,10 @@ func (s *Store) ListDevices(ctx context.Context, f DeviceFilter) ([]model.Device
 			return nil, err
 		}
 		resolveGroup(&d, groups)
+		details.apply(&d)
+		if f.Tag != "" && !hasTag(d, f.Tag) {
+			continue
+		}
 		if f.Group != nil && groupID(d) != *f.Group {
 			continue
 		}
@@ -75,7 +83,11 @@ func (s *Store) GetDevice(ctx context.Context, id int64) (model.Device, error) {
 	if err != nil {
 		return model.Device{}, err
 	}
-	return s.withGroup(ctx, d)
+	d, err = s.withGroup(ctx, d)
+	if err != nil {
+		return model.Device{}, err
+	}
+	return s.withDetails(ctx, d)
 }
 
 // groupID is the id of the effective group of a device, 0 for none.
@@ -120,7 +132,12 @@ func (s *Store) Topology(ctx context.Context) (model.Topology, error) {
 }
 
 func matches(d model.Device, lowerQuery string) bool {
-	for _, field := range []string{d.IP, d.IP6, d.MAC, d.Hostname, d.Vendor, d.Label} {
+	texts := []string{d.IP, d.IP6, d.MAC, d.Hostname, d.Vendor, d.Label, d.Owner, d.Location, d.Serial}
+	texts = append(texts, d.Tags...)
+	for _, f := range d.Fields {
+		texts = append(texts, f.Value)
+	}
+	for _, field := range texts {
 		if strings.Contains(strings.ToLower(field), lowerQuery) {
 			return true
 		}
@@ -195,6 +212,13 @@ func toDevice(r dbgen.Device) (model.Device, error) {
 		Version:     r.Version,
 		FirstSeenAt: first,
 		LastSeenAt:  last,
+
+		Owner:         r.Owner,
+		Location:      r.Location,
+		Serial:        r.Serial,
+		WarrantyUntil: r.WarrantyUntil,
+		Tags:          []string{},
+		Fields:        []model.DeviceField{},
 	}
 	if r.X.Valid {
 		d.X = &r.X.Float64

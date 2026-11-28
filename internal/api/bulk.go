@@ -24,6 +24,9 @@ type bulkBody struct {
 	Trusted *bool   `json:"trusted"`
 	Kind    *string `json:"kind"`
 	GroupID *int64  `json:"groupId"`
+	// AddTags and RemoveTags change the tags of every listed device.
+	AddTags    []string `json:"addTags"`
+	RemoveTags []string `json:"removeTags"`
 }
 
 // bulkEdit answers POST /api/devices/bulk with {"updated": n}. It changes every listed
@@ -46,8 +49,8 @@ func (s *server) bulkEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[id] = true
 	}
-	if body.Trusted == nil && body.Kind == nil && body.GroupID == nil {
-		writeError(w, http.StatusBadRequest, "nothing to change: send trusted, kind or groupId")
+	if body.Trusted == nil && body.Kind == nil && body.GroupID == nil && len(body.AddTags) == 0 && len(body.RemoveTags) == 0 {
+		writeError(w, http.StatusBadRequest, "nothing to change: send trusted, kind, groupId, addTags or removeTags")
 		return
 	}
 	change := store.BulkChange{Trusted: body.Trusted, GroupID: body.GroupID}
@@ -71,6 +74,24 @@ func (s *server) bulkEdit(w http.ResponseWriter, r *http.Request) {
 		}
 		fields = append(fields, "groupId")
 	}
+	if len(body.AddTags) > 0 {
+		tags, err := model.CheckTags(body.AddTags)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		change.AddTags = tags
+		fields = append(fields, "addTags")
+	}
+	if len(body.RemoveTags) > 0 {
+		tags, err := model.CheckTags(body.RemoveTags)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		change.RemoveTags = tags
+		fields = append(fields, "removeTags")
+	}
 	p, _ := principal(r)
 	n, err := s.repo.BulkEdit(r.Context(), body.IDs, change, p.User.ID)
 	switch {
@@ -79,6 +100,9 @@ func (s *server) bulkEdit(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, store.ErrNoSuchGroup):
 		writeError(w, http.StatusBadRequest, "the group does not exist")
+		return
+	case errors.Is(err, model.ErrTooManyTags):
+		writeError(w, http.StatusBadRequest, "a device would have more than 12 tags, nothing was changed")
 		return
 	case errors.Is(err, model.ErrVersionConflict):
 		writeError(w, http.StatusConflict, "a device was changed by someone else, try again")

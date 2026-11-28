@@ -57,32 +57,43 @@ type Container struct {
 }
 
 type Device struct {
-	ID          int64
-	Mac         string
-	Ip          string
-	Hostname    string
-	Vendor      string
-	Kind        string
-	Description string
-	Source      string
-	Online      int64
-	FirstSeenAt string
-	LastSeenAt  string
-	X           sql.NullFloat64
-	Y           sql.NullFloat64
-	Manual      int64
-	Label       string
-	Notes       string
-	KindLocked  int64
-	Version     int64
-	UpdatedBy   sql.NullInt64
-	OsGuess     string
-	Trusted     int64
-	GroupID     sql.NullInt64
-	Ip6         string
-	KindScore   int64
-	KindReasons string
-	MissedScans int64
+	ID            int64
+	Mac           string
+	Ip            string
+	Hostname      string
+	Vendor        string
+	Kind          string
+	Description   string
+	Source        string
+	Online        int64
+	FirstSeenAt   string
+	LastSeenAt    string
+	X             sql.NullFloat64
+	Y             sql.NullFloat64
+	Manual        int64
+	Label         string
+	Notes         string
+	KindLocked    int64
+	Version       int64
+	UpdatedBy     sql.NullInt64
+	OsGuess       string
+	Trusted       int64
+	GroupID       sql.NullInt64
+	Ip6           string
+	KindScore     int64
+	KindReasons   string
+	MissedScans   int64
+	Owner         string
+	Location      string
+	Serial        string
+	WarrantyUntil string
+}
+
+type DeviceField struct {
+	DeviceID int64
+	Name     string
+	Value    string
+	Seq      int64
 }
 
 type DeviceGroup struct {
@@ -100,6 +111,11 @@ type DevicePresence struct {
 	DeviceID int64
 	Online   int64
 	Ip       string
+}
+
+type DeviceTag struct {
+	DeviceID int64
+	Tag      string
 }
 
 type Interface struct {

@@ -47,14 +47,22 @@ type Device struct {
 	Trusted bool `json:"trusted"`
 	// GroupID is the group a person chose, nil when none was chosen. Group is the effective
 	// group: the chosen one, else the first group whose ranges contain the address.
-	GroupID     *int64    `json:"groupId"`
-	Group       *GroupRef `json:"group"`
-	GroupAuto   bool      `json:"groupAuto"`
-	Version     int64     `json:"version"`
-	FirstSeenAt time.Time `json:"firstSeenAt"`
-	LastSeenAt  time.Time `json:"lastSeenAt"`
-	X           *float64  `json:"x"`
-	Y           *float64  `json:"y"`
+	GroupID *int64    `json:"groupId"`
+	Group   *GroupRef `json:"group"`
+	// What a person knows about the device (slice 49). A scan never writes it. Tags are in
+	// lower case and sorted, Fields are in the order they were made. Neither is ever nil.
+	Owner         string        `json:"owner"`
+	Location      string        `json:"location"`
+	Serial        string        `json:"serial"`
+	WarrantyUntil string        `json:"warrantyUntil"` // YYYY-MM-DD or empty
+	Tags          []string      `json:"tags"`
+	Fields        []DeviceField `json:"fields"`
+	GroupAuto     bool          `json:"groupAuto"`
+	Version       int64         `json:"version"`
+	FirstSeenAt   time.Time     `json:"firstSeenAt"`
+	LastSeenAt    time.Time     `json:"lastSeenAt"`
+	X             *float64      `json:"x"`
+	Y             *float64      `json:"y"`
 }
 
 type Interface struct {
@@ -226,6 +234,7 @@ type AuditEntry struct {
 type ManualDevice struct {
 	MAC, IP, IP6, Hostname, Label, Notes string
 	Kind                                 DeviceKind
+	Details                              Details
 }
 
 type DeviceEdit struct { // a nil field stays unchanged
@@ -234,7 +243,11 @@ type DeviceEdit struct { // a nil field stays unchanged
 	Kind    *DeviceKind // a non-empty value sets kind_locked = 1
 	Trusted *bool
 	GroupID *int64 // 0 removes the group, nil keeps it
-	Version int64  // version the editor saw, required
+	// A nil field stays as it is. Tags and Fields replace the whole list, already checked.
+	Owner, Location, Serial, WarrantyUntil *string
+	Tags                                   *[]string
+	Fields                                 *[]DeviceField
+	Version                                int64 // version the editor saw, required
 }
 
 type ManualLink struct {

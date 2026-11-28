@@ -171,7 +171,7 @@ func (s *server) deleteDevice(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// listDevices answers GET /api/devices?online=true|false&trusted=true|false&kind=router&q=text with {"devices": [...]}.
+// listDevices answers GET /api/devices?online=true|false&trusted=true|false&kind=router&tag=core&q=text with {"devices": [...]}.
 func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	var f store.DeviceFilter
@@ -214,6 +214,14 @@ func (s *server) listDevices(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.Kind = kind
+	}
+	if v := q.Get("tag"); v != "" {
+		tag, err := model.CheckTag(v)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "tag is not valid")
+			return
+		}
+		f.Tag = tag
 	}
 	f.Query = strings.TrimSpace(q.Get("q"))
 	if len(f.Query) > maxQueryLength {
