@@ -450,7 +450,7 @@ export const en = {
   "importDialog.importN": { one: "Import {n} device", other: "Import {n} devices" },
   "importDialog.line": "Line {line}: {error}",
   "importDialog.theFirstLineNamesThe":
-    "The first line names the columns: label, ip, ip6, mac, hostname, kind, group, notes. A row needs a label, an ip, an ip6 or a mac. The group must exist. Either every row is imported or none.",
+    "The first line names the columns: label, ip, ip6, mac, hostname, kind, group, notes, owner, location, serial, warranty, tags (several tags are separated by ;). A row needs a label, an ip, an ip6 or a mac. The group must exist. Either every row is imported or none.",
   "interfacesTable.down": "Down",
   "interfacesTable.ip": "IP",
   "interfacesTable.mac": "MAC",

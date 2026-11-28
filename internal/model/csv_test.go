@@ -21,7 +21,7 @@ func TestCSVReadsColumnsInAnyOrderAndKeepsTheLineNumbers(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("rows = %+v", rows)
 	}
-	if rows[0] != (ImportRow{Line: 2, Label: "cam1", IP: "192.168.1.5", Notes: "front door"}) {
+	if r := rows[0]; r.Line != 2 || r.Label != "cam1" || r.IP != "192.168.1.5" || r.Notes != "front door" {
 		t.Errorf("row 0 = %+v", rows[0])
 	}
 	if rows[1].Line != 4 || rows[1].Label != "cam2" || rows[1].Notes != "" {
@@ -77,5 +77,22 @@ func TestCSVLimitsTheNumberOfRows(t *testing.T) {
 	}
 	if _, err := ParseDeviceCSV(strings.NewReader(build(MaxImportRows + 1))); !errors.Is(err, ErrCSVTooMany) {
 		t.Errorf("1001 rows: %v", err)
+	}
+}
+
+func TestCSVReadsTheDetailColumns(t *testing.T) {
+	rows := parse(t, "label,Owner,location,serial,warranty,tags\ncam1,Anna,Rack 2,SN-1,2030-05-31,\"a; b;;c \"\ncam2,,,,,\n")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	r := rows[0]
+	if r.Owner != "Anna" || r.Location != "Rack 2" || r.Serial != "SN-1" || r.Warranty != "2030-05-31" {
+		t.Errorf("row 0 = %+v", r)
+	}
+	if strings.Join(r.Tags, "|") != "a|b|c" {
+		t.Errorf("tags = %q, want a, b and c with the blanks dropped", r.Tags)
+	}
+	if rows[1].Tags != nil {
+		t.Errorf("an empty tags cell gave %q, want none", rows[1].Tags)
 	}
 }
