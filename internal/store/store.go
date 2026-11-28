@@ -135,6 +135,7 @@ type DeviceFilter struct {
 	Query   string
 	Trusted *bool
 	Group   *int64 // the id of the effective group, 0 for devices without one
+	Tag     string // a tag in lower case, empty for any
 }
 
 // Store is the SQLite implementation of Repo.

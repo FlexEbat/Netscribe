@@ -56,7 +56,7 @@ func CheckFilterName(name string) (string, error) {
 }
 
 var filterKeys = map[string]map[string]bool{
-	PageInventory:  {"q": true, "status": true, "trust": true, "group": true},
+	PageInventory:  {"q": true, "status": true, "trust": true, "group": true, "tag": true},
 	PageServices:   {"q": true},
 	PageContainers: {"q": true},
 }
@@ -111,6 +111,10 @@ func checkFilterValue(key, v string) error {
 	case "trust":
 		if v != "unknown" && v != "trusted" {
 			return errors.New("trust must be unknown or trusted")
+		}
+	case "tag":
+		if _, err := CheckTag(v); err != nil {
+			return err
 		}
 	case "group":
 		if n, err := strconv.ParseInt(v, 10, 64); v != "none" && (err != nil || n < 1 || strconv.FormatInt(n, 10) != v) {

@@ -156,11 +156,26 @@ export interface Device {
   group: GroupRef | null
   /** True when `group` comes from the ranges and nobody chose it. */
   groupAuto: boolean
+  /** What a person knows about the device. A scan never writes these. */
+  owner: string
+  location: string
+  serial: string
+  /** The end of the warranty as YYYY-MM-DD, or empty. */
+  warrantyUntil: string
+  /** Lower case, sorted. */
+  tags: string[]
+  /** Fields of the person's own, in the order they were made. */
+  fields: DeviceField[]
   version: number
   firstSeenAt: string
   lastSeenAt: string
   x: number | null
   y: number | null
+}
+
+export interface DeviceField {
+  name: string
+  value: string
 }
 
 export interface DeviceQuery {

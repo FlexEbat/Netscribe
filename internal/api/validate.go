@@ -110,13 +110,42 @@ func validNotes(s string) error {
 }
 
 type deviceBody struct {
-	MAC      string `json:"mac"`
-	IP       string `json:"ip"`
-	IP6      string `json:"ip6"`
-	Hostname string `json:"hostname"`
-	Label    string `json:"label"`
-	Notes    string `json:"notes"`
-	Kind     string `json:"kind"`
+	MAC           string              `json:"mac"`
+	IP            string              `json:"ip"`
+	IP6           string              `json:"ip6"`
+	Hostname      string              `json:"hostname"`
+	Label         string              `json:"label"`
+	Notes         string              `json:"notes"`
+	Kind          string              `json:"kind"`
+	Owner         string              `json:"owner"`
+	Location      string              `json:"location"`
+	Serial        string              `json:"serial"`
+	WarrantyUntil string              `json:"warrantyUntil"`
+	Tags          []string            `json:"tags"`
+	Fields        []model.DeviceField `json:"fields"`
+}
+
+// details checks what a person writes about a device. A missing list is an empty one.
+func (b deviceBody) details() (model.Details, error) {
+	var d model.Details
+	var err error
+	if d.Owner, err = model.CheckOwner(b.Owner); err != nil {
+		return d, err
+	}
+	if d.Location, err = model.CheckLocation(b.Location); err != nil {
+		return d, err
+	}
+	if d.Serial, err = model.CheckSerial(b.Serial); err != nil {
+		return d, err
+	}
+	if d.WarrantyUntil, err = model.CheckWarranty(b.WarrantyUntil); err != nil {
+		return d, err
+	}
+	if d.Tags, err = model.CheckTags(b.Tags); err != nil {
+		return d, err
+	}
+	d.Fields, err = model.CheckFields(b.Fields)
+	return d, err
 }
 
 // manualDevice validates the body of POST /api/devices.
@@ -161,16 +190,26 @@ func (b deviceBody) manualDevice() (model.ManualDevice, error) {
 	if !validKind(kind) {
 		return model.ManualDevice{}, errKindUnknown
 	}
-	return model.ManualDevice{MAC: mac, IP: ip, IP6: ip6, Hostname: hostname, Label: label, Notes: notes, Kind: kind}, nil
+	details, err := b.details()
+	if err != nil {
+		return model.ManualDevice{}, err
+	}
+	return model.ManualDevice{MAC: mac, IP: ip, IP6: ip6, Hostname: hostname, Label: label, Notes: notes, Kind: kind, Details: details}, nil
 }
 
 type editBody struct {
-	Label   *string `json:"label"`
-	Notes   *string `json:"notes"`
-	Kind    *string `json:"kind"`
-	Trusted *bool   `json:"trusted"`
-	GroupID *int64  `json:"groupId"`
-	Version int64   `json:"version"`
+	Label         *string              `json:"label"`
+	Notes         *string              `json:"notes"`
+	Kind          *string              `json:"kind"`
+	Trusted       *bool                `json:"trusted"`
+	GroupID       *int64               `json:"groupId"`
+	Owner         *string              `json:"owner"`
+	Location      *string              `json:"location"`
+	Serial        *string              `json:"serial"`
+	WarrantyUntil *string              `json:"warrantyUntil"`
+	Tags          *[]string            `json:"tags"`
+	Fields        *[]model.DeviceField `json:"fields"`
+	Version       int64                `json:"version"`
 }
 
 // deviceEdit validates the body of PATCH /api/devices/{id}.
@@ -199,6 +238,48 @@ func (b editBody) deviceEdit() (model.DeviceEdit, error) {
 			return model.DeviceEdit{}, errKindUnknown
 		}
 		e.Kind = &k
+	}
+	if b.Owner != nil {
+		v, err := model.CheckOwner(*b.Owner)
+		if err != nil {
+			return model.DeviceEdit{}, err
+		}
+		e.Owner = &v
+	}
+	if b.Location != nil {
+		v, err := model.CheckLocation(*b.Location)
+		if err != nil {
+			return model.DeviceEdit{}, err
+		}
+		e.Location = &v
+	}
+	if b.Serial != nil {
+		v, err := model.CheckSerial(*b.Serial)
+		if err != nil {
+			return model.DeviceEdit{}, err
+		}
+		e.Serial = &v
+	}
+	if b.WarrantyUntil != nil {
+		v, err := model.CheckWarranty(*b.WarrantyUntil)
+		if err != nil {
+			return model.DeviceEdit{}, err
+		}
+		e.WarrantyUntil = &v
+	}
+	if b.Tags != nil {
+		v, err := model.CheckTags(*b.Tags)
+		if err != nil {
+			return model.DeviceEdit{}, err
+		}
+		e.Tags = &v
+	}
+	if b.Fields != nil {
+		v, err := model.CheckFields(*b.Fields)
+		if err != nil {
+			return model.DeviceEdit{}, err
+		}
+		e.Fields = &v
 	}
 	e.Trusted = b.Trusted
 	if b.GroupID != nil {

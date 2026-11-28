@@ -24,7 +24,11 @@ func (s *Store) CreateDevice(ctx context.Context, in model.ManualDevice, userID 
 	if err != nil {
 		return model.Device{}, err
 	}
-	return s.withGroup(ctx, d)
+	d, err = s.withGroup(ctx, d)
+	if err != nil {
+		return model.Device{}, err
+	}
+	return s.withDetails(ctx, d)
 }
 
 // createManual inserts one manual device through q, which may belong to a transaction.
@@ -66,6 +70,11 @@ func (s *Store) createManual(ctx context.Context, q *dbgen.Queries, in model.Man
 		FirstSeenAt: ts,
 		LastSeenAt:  ts,
 		GroupID:     groupArg(group),
+
+		Owner:         in.Details.Owner,
+		Location:      in.Details.Location,
+		Serial:        in.Details.Serial,
+		WarrantyUntil: in.Details.WarrantyUntil,
 	})
 	if isUniqueViolation(err) {
 		return dbgen.Device{}, ErrConflict
@@ -73,17 +82,24 @@ func (s *Store) createManual(ctx context.Context, q *dbgen.Queries, in model.Man
 	if err != nil {
 		return dbgen.Device{}, fmt.Errorf("create device: %w", err)
 	}
+	if err := replaceTags(ctx, q, row.ID, in.Details.Tags); err != nil {
+		return dbgen.Device{}, err
+	}
+	if err := replaceFields(ctx, q, row.ID, in.Details.Fields); err != nil {
+		return dbgen.Device{}, err
+	}
 	return row, nil
 }
 
 // UpdateDevice applies an edit if the editor saw the current version. A stale version is
-// ErrVersionConflict and changes nothing.
+// ErrVersionConflict and changes nothing, tags and fields included.
 func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, userID int64) (model.Device, error) {
 	cur, err := s.GetDevice(ctx, id)
 	if err != nil {
 		return model.Device{}, err
 	}
 	label, notes, kind, locked, trusted := cur.Label, cur.Notes, cur.Kind, cur.KindLocked, cur.Trusted
+	owner, location, serial, warranty := cur.Owner, cur.Location, cur.Serial, cur.WarrantyUntil
 	group := cur.GroupID
 	if e.GroupID != nil {
 		group = nil
@@ -105,6 +121,18 @@ func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, 
 	if e.Notes != nil {
 		notes = *e.Notes
 	}
+	if e.Owner != nil {
+		owner = *e.Owner
+	}
+	if e.Location != nil {
+		location = *e.Location
+	}
+	if e.Serial != nil {
+		serial = *e.Serial
+	}
+	if e.WarrantyUntil != nil {
+		warranty = *e.WarrantyUntil
+	}
 	if e.Kind != nil {
 		if *e.Kind == "" {
 			locked = false
@@ -112,26 +140,54 @@ func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, 
 			kind, locked = *e.Kind, true
 		}
 	}
-	n, err := s.q.UpdateDeviceEdit(ctx, dbgen.UpdateDeviceEditParams{
-		Label:      label,
-		Notes:      notes,
-		Kind:       string(kind),
-		KindLocked: boolToInt(locked),
-		Trusted:    boolToInt(trusted),
-		GroupID:    groupArg(group),
-		UpdatedBy:  sql.NullInt64{Int64: userID, Valid: userID > 0},
-		ID:         id,
-		Version:    e.Version,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Device{}, fmt.Errorf("update device: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // after Commit this is a no-op
+	q := s.q.WithTx(tx)
+	n, err := q.UpdateDeviceEdit(ctx, dbgen.UpdateDeviceEditParams{
+		Label:         label,
+		Notes:         notes,
+		Kind:          string(kind),
+		KindLocked:    boolToInt(locked),
+		Trusted:       boolToInt(trusted),
+		GroupID:       groupArg(group),
+		Owner:         owner,
+		Location:      location,
+		Serial:        serial,
+		WarrantyUntil: warranty,
+		UpdatedBy:     sql.NullInt64{Int64: userID, Valid: userID > 0},
+		ID:            id,
+		Version:       e.Version,
 	})
 	if err != nil {
 		return model.Device{}, fmt.Errorf("update device: %w", err)
 	}
 	if n == 0 {
+		// Nothing was written. Give the connection back before reading: the in-memory
+		// database has exactly one, and GetDevice would wait for it for ever.
+		if err := tx.Rollback(); err != nil {
+			return model.Device{}, fmt.Errorf("update device: %w", err)
+		}
 		// The row is there (it was read above), so the version is what did not match.
 		if _, err := s.GetDevice(ctx, id); err != nil {
 			return model.Device{}, err
 		}
 		return model.Device{}, ErrVersionConflict
+	}
+	if e.Tags != nil {
+		if err := replaceTags(ctx, q, id, *e.Tags); err != nil {
+			return model.Device{}, err
+		}
+	}
+	if e.Fields != nil {
+		if err := replaceFields(ctx, q, id, *e.Fields); err != nil {
+			return model.Device{}, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return model.Device{}, fmt.Errorf("update device: %w", err)
 	}
 	return s.GetDevice(ctx, id)
 }

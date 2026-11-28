@@ -15,6 +15,9 @@ type BulkChange struct {
 	Trusted *bool
 	Kind    *model.DeviceKind // a non-empty value locks the kind, as a single edit does
 	GroupID *int64            // 0 removes the group
+	// AddTags and RemoveTags are checked tags in lower case. A device that would end with
+	// more than model.MaxTags tags is model.ErrTooManyTags and nothing is changed.
+	AddTags, RemoveTags []string
 }
 
 // BulkEdit changes every listed device in one transaction. ids must hold distinct ids.
@@ -63,6 +66,7 @@ func (s *Store) BulkEdit(ctx context.Context, ids []int64, c BulkChange, userID 
 		}
 		n, err := q.UpdateDeviceEdit(ctx, dbgen.UpdateDeviceEditParams{
 			Label: cur.Label, Notes: cur.Notes, Kind: kind, KindLocked: locked, Trusted: trusted, GroupID: groupID,
+			Owner: cur.Owner, Location: cur.Location, Serial: cur.Serial, WarrantyUntil: cur.WarrantyUntil,
 			UpdatedBy: sql.NullInt64{Int64: userID, Valid: userID > 0}, ID: id, Version: cur.Version,
 		})
 		if err != nil {
@@ -71,6 +75,25 @@ func (s *Store) BulkEdit(ctx context.Context, ids []int64, c BulkChange, userID 
 		if n == 0 {
 			// Someone else changed the device between the read and the write.
 			return 0, ErrVersionConflict
+		}
+		for _, t := range c.RemoveTags {
+			if err := q.DeleteDeviceTag(ctx, dbgen.DeleteDeviceTagParams{DeviceID: id, Tag: t}); err != nil {
+				return 0, fmt.Errorf("bulk edit: %w", err)
+			}
+		}
+		for _, t := range c.AddTags {
+			if err := q.InsertDeviceTag(ctx, dbgen.InsertDeviceTagParams{DeviceID: id, Tag: t}); err != nil {
+				return 0, fmt.Errorf("bulk edit: %w", err)
+			}
+		}
+		if len(c.AddTags) > 0 {
+			count, err := q.CountDeviceTags(ctx, id)
+			if err != nil {
+				return 0, fmt.Errorf("bulk edit: %w", err)
+			}
+			if count > model.MaxTags {
+				return 0, model.ErrTooManyTags
+			}
 		}
 	}
 	if err := tx.Commit(); err != nil {
