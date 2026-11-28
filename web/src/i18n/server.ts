@@ -59,7 +59,8 @@ const daysLeft = (n: number) => `${n} ${pluralRu(n, "день", "дня", "дн�
 const csvLine: Rule[] = [
   [
     /^"(.*)" is not a column, use label, ip, ip6, mac, hostname, kind, group, notes, owner, location, serial, warranty or tags$/,
-    (m) => `«${m[1]}» не столбец, используйте label, ip, ip6, mac, hostname, kind, group, notes, owner, location, serial, warranty или tags`,
+    (m) =>
+      `«${m[1]}» не столбец, используйте label, ip, ip6, mac, hostname, kind, group, notes, owner, location, serial, warranty или tags`,
   ],
   [/^the column "(.*)" is listed twice$/, (m) => `столбец «${m[1]}» указан дважды`],
   [
