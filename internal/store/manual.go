@@ -165,6 +165,11 @@ func (s *Store) UpdateDevice(ctx context.Context, id int64, e model.DeviceEdit, 
 		return model.Device{}, fmt.Errorf("update device: %w", err)
 	}
 	if n == 0 {
+		// Nothing was written. Give the connection back before reading: the in-memory
+		// database has exactly one, and GetDevice would wait for it for ever.
+		if err := tx.Rollback(); err != nil {
+			return model.Device{}, fmt.Errorf("update device: %w", err)
+		}
 		// The row is there (it was read above), so the version is what did not match.
 		if _, err := s.GetDevice(ctx, id); err != nil {
 			return model.Device{}, err
