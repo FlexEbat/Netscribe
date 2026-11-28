@@ -17,6 +17,8 @@ const MaxImportRows = 1000
 type ImportRow struct {
 	Line                                              int
 	Label, IP, IP6, MAC, Hostname, Kind, Group, Notes string
+	Owner, Location, Serial, Warranty                 string
+	Tags                                              []string // the cell split at ";", every part trimmed, blanks dropped
 }
 
 // The errors of ParseDeviceCSV.
@@ -25,10 +27,12 @@ var (
 	ErrCSVTooMany  = fmt.Errorf("a file may have at most %d rows", MaxImportRows)
 )
 
-var importColumns = map[string]bool{"label": true, "ip": true, "ip6": true, "mac": true, "hostname": true, "kind": true, "group": true, "notes": true}
+var importColumns = map[string]bool{"label": true, "ip": true, "ip6": true, "mac": true, "hostname": true, "kind": true, "group": true, "notes": true,
+	"owner": true, "location": true, "serial": true, "warranty": true, "tags": true}
 
 // ParseDeviceCSV reads an import file. The first line names the columns, in any order, from
-// label, ip, mac, hostname, kind, group and notes. Blank lines are skipped. A byte order
+// label, ip, ip6, mac, hostname, kind, group, notes, owner, location, serial, warranty and
+// tags (several tags are separated by ";"). Blank lines are skipped. A byte order
 // mark and CRLF line endings are accepted. Nothing is checked about the cells except that
 // every row has as many as the header.
 func ParseDeviceCSV(r io.Reader) ([]ImportRow, error) {
@@ -53,7 +57,7 @@ func ParseDeviceCSV(r io.Reader) ([]ImportRow, error) {
 		name := strings.ToLower(strings.TrimSpace(h))
 		switch {
 		case !importColumns[name]:
-			return nil, fmt.Errorf("line 1: %q is not a column, use label, ip, ip6, mac, hostname, kind, group or notes", strings.TrimSpace(h))
+			return nil, fmt.Errorf("line 1: %q is not a column, use label, ip, ip6, mac, hostname, kind, group, notes, owner, location, serial, warranty or tags", strings.TrimSpace(h))
 		case seen[name]:
 			return nil, fmt.Errorf("line 1: the column %q is listed twice", name)
 		}
@@ -94,6 +98,20 @@ func ParseDeviceCSV(r io.Reader) ([]ImportRow, error) {
 				row.Group = cell
 			case "notes":
 				row.Notes = cell
+			case "owner":
+				row.Owner = cell
+			case "location":
+				row.Location = cell
+			case "serial":
+				row.Serial = cell
+			case "warranty":
+				row.Warranty = cell
+			case "tags":
+				for _, t := range strings.Split(cell, ";") {
+					if t = strings.TrimSpace(t); t != "" {
+						row.Tags = append(row.Tags, t)
+					}
+				}
 			}
 		}
 		rows = append(rows, row)

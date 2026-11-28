@@ -172,7 +172,8 @@ func (s *server) importDevices(w http.ResponseWriter, r *http.Request) {
 	items := make([]store.ImportItem, 0, len(rows))
 	firstLine := map[string]int{} // a MAC or an address -> the line that had it first
 	for _, row := range rows {
-		in, err := (deviceBody{MAC: row.MAC, IP: row.IP, IP6: row.IP6, Hostname: row.Hostname, Label: row.Label, Notes: row.Notes, Kind: row.Kind}).manualDevice()
+		in, err := (deviceBody{MAC: row.MAC, IP: row.IP, IP6: row.IP6, Hostname: row.Hostname, Label: row.Label, Notes: row.Notes, Kind: row.Kind,
+			Owner: row.Owner, Location: row.Location, Serial: row.Serial, WarrantyUntil: row.Warranty, Tags: row.Tags}).manualDevice()
 		var group *int64
 		if err == nil && row.Group != "" {
 			id, ok := byName[strings.ToLower(row.Group)]

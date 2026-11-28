@@ -481,7 +481,7 @@ export const ru: Record<Key, Entry> = {
   },
   "importDialog.line": "Строка {line}: {error}",
   "importDialog.theFirstLineNamesThe":
-    "Первая строка называет столбцы: label, ip, ip6, mac, hostname, kind, group, notes. В строке нужен label, ip, ip6 или mac. Группа должна существовать. Импортируются либо все строки, либо ни одной.",
+    "Первая строка называет столбцы: label, ip, ip6, mac, hostname, kind, group, notes, owner, location, serial, warranty, tags (несколько тегов через ;). В строке нужен label, ip, ip6 или mac. Группа должна существовать. Импортируются либо все строки, либо ни одной.",
   "interfacesTable.down": "Выключен",
   "interfacesTable.ip": "IP",
   "interfacesTable.mac": "MAC",
